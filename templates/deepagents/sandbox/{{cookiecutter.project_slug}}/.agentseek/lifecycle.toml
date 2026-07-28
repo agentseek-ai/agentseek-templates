@@ -1,0 +1,83 @@
+version = 2
+template = "deepagents/sandbox"
+name = "{{ cookiecutter.project_name }}"
+description = "DeepAgents coding application with an isolated Daytona or LangSmith sandbox and a browser frontend."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv", "node", "npm"]
+
+[paths]
+required = ["pyproject.toml", "langgraph.json", "frontend/package.json", "frontend/node_modules"]
+
+[env.AGENTSEEK_MODEL_PROVIDER]
+required = true
+default = "{{ cookiecutter.default_model_provider }}"
+description = "Model provider used by the generated LangChain agent."
+
+[env.AGENTSEEK_MODEL]
+required = true
+default = "{{ cookiecutter.default_model }}"
+description = "Model id passed to LangChain chat model initialization."
+aliases = ["DEEPAGENTS_MODEL", "BUB_MODEL"]
+
+[env.AGENTSEEK_SANDBOX_PROVIDER]
+required = true
+default = "daytona"
+description = "Sandbox backend: daytona (default) or langsmith (charged usage)."
+
+[env.DAYTONA_API_KEY]
+required = false
+description = "Required at runtime when AGENTSEEK_SANDBOX_PROVIDER=daytona."
+
+[env.LANGSMITH_API_KEY]
+required = false
+description = "Required for the charged LangSmith Sandbox alternative or optional tracing."
+
+[services.backend]
+name = "LangGraph API"
+url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+kind = "api"
+display = "advanced"
+primary = false
+description = "LangGraph development API that runs the sandbox-backed coding agent."
+tech = "langgraph"
+links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
+
+[services.frontend]
+name = "Sandbox coding application"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Browser application for coding requests and streamed sandbox activity."
+tech = "vite"
+links = { docs = "https://vite.dev/guide/" }
+
+[processes.backend]
+command = ["uv", "run", "langgraph", "dev", "--no-browser", "--port", "{{ cookiecutter.langgraph_port }}"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+
+[checks.backend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+timeout = 2
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+timeout = 2
+attempts = 3
+
+[tasks.sync]
+description = "Install Python dependencies with uv."
+command = ["uv", "sync"]
+
+[tasks.frontend]
+description = "Install frontend dependencies."
+command = ["npm", "install", "--prefix", "frontend"]

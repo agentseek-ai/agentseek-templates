@@ -1,0 +1,81 @@
+version = 2
+template = "deepagents/content-builder"
+name = "{{ cookiecutter.project_name }}"
+description = "DeepAgents content workflow with a browser frontend and LangGraph development API."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv", "node", "npm"]
+
+[paths]
+required = ["pyproject.toml", "langgraph.json", "frontend/package.json", "frontend/node_modules"]
+
+[env.AGENTSEEK_MODEL_PROVIDER]
+required = true
+default = "{{ cookiecutter.default_model_provider }}"
+description = "LangChain model provider used by the DeepAgents graph."
+
+[env.AGENTSEEK_MODEL]
+required = true
+default = "{{ cookiecutter.default_model }}"
+description = "Model id used by the main DeepAgents graph."
+aliases = ["DEEPAGENTS_MODEL", "BUB_MODEL"]
+
+[env.OPENAI_API_KEY]
+required = true
+description = "Credential for the selected model provider."
+aliases = ["ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "BUB_OPENAI_API_KEY"]
+
+[env.TAVILY_API_KEY]
+required = false
+description = "Tavily key used by the researcher subagent."
+
+[env.GOOGLE_API_KEY]
+required = false
+description = "Gemini key used by image generation and google_genai models."
+
+[services.frontend]
+name = "Content Builder"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Browser application for creating and reviewing generated content."
+
+[services.langgraph]
+name = "LangGraph API"
+url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+kind = "api"
+display = "advanced"
+primary = false
+description = "LangGraph development API used by the frontend."
+tech = "langgraph"
+links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
+
+[processes.langgraph]
+command = ["uv", "run", "langgraph", "dev", "--port", "{{ cookiecutter.langgraph_port }}", "--no-browser"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+
+[checks.langgraph]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+timeout = 2.0
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+timeout = 2.0
+attempts = 3
+
+[tasks.frontend]
+description = "Install frontend dependencies."
+command = ["npm", "install", "--prefix", "frontend"]
+
+[tasks.sync]
+description = "Install Python dependencies with uv."
+command = ["uv", "sync"]

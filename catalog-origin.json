@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "source_repository": "https://github.com/ob-labs/agentseek.git",
+  "source_commit": "883addad1e2993c4be6fc8ba053f87f25fb5057a",
+  "source_registry_sha256": "d16027882500eb03c1aa8b3157c03dbb17eba6e34c74d6d7f0f285787f799907",
+  "included_templates": [
+    "bub/default",
+    "deepagents/content-builder",
+    "deepagents/default",
+    "deepagents/research",
+    "deepagents/sandbox",
+    "langchain/agentic-rag",
+    "langchain/agentic-rag-hybrid",
+    "langchain/agentic-rag-openvino",
+    "langchain/cli-remote",
+    "langchain/default",
+    "langchain/markdown-messages"
+  ],
+  "excluded_templates": [
+    {
+      "path": "templates/bub/contextseek",
+      "reason": "Unregistered compatibility source remains quarantined until its development locking is remediated and reviewed."
+    }
+  ]
+}

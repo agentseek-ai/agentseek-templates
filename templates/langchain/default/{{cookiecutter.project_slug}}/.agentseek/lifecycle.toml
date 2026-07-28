@@ -1,0 +1,125 @@
+version = 2
+template = "langchain/default"
+name = "{{ cookiecutter.project_name }}"
+description = "Local LangChain agent stack with a browser UI, AG-UI gateway, CopilotKit runtime, Phoenix tracing, and OceanBase seekdb."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["docker"]
+
+[paths]
+required = ["docker-compose.yml", "pyproject.toml", "frontend/package.json"]
+
+[env.BUB_MODEL]
+required = true
+default = "{{ cookiecutter.default_model }}"
+description = "Model identifier used by the generated LangChain agent."
+
+[env.BUB_API_KEY]
+required = true
+aliases = ["OPENAI_API_KEY"]
+description = "API key for the configured model provider."
+
+[env.BUB_API_BASE]
+required = false
+aliases = ["OPENAI_API_BASE", "OPENAI_BASE_URL"]
+description = "Optional OpenAI-compatible API base URL."
+
+[env.BUB_LANGCHAIN_SPEC]
+required = true
+default = "{{ cookiecutter.project_slug }}.demo_binding:build_spec"
+description = "Import path for the LangChain RunnableSpec loaded by Bub."
+
+[services.gateway]
+name = "AG-UI gateway"
+url = "http://127.0.0.1:{{ cookiecutter.gateway_port }}/agent"
+kind = "protocol"
+display = "advanced"
+description = "AG-UI protocol endpoint used by the browser application and other compatible clients."
+tech = "ag-ui"
+links = { docs = "https://docs.ag-ui.com/introduction" }
+
+[services.copilotkit]
+name = "CopilotKit runtime"
+url = "http://127.0.0.1:{{ cookiecutter.copilotkit_port }}/api/copilotkit"
+kind = "api"
+display = "hidden"
+description = "Internal CopilotKit runtime API used by the browser frontend."
+tech = "copilotkit"
+links = { docs = "https://docs.copilotkit.ai/concepts/architecture" }
+
+[services.frontend]
+name = "Application"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Browser application and normal entry point for the generated agent."
+tech = "vite"
+
+[services.phoenix]
+name = "Phoenix"
+url = "http://127.0.0.1:6006"
+kind = "web"
+display = "advanced"
+description = "Developer UI for inspecting traces emitted by the LangChain application."
+tech = "phoenix"
+links = { docs = "https://arize.com/docs/phoenix" }
+
+[services.seekdb]
+name = "Phoenix trace database"
+url = "mysql://127.0.0.1:2884/phoenix"
+kind = "database"
+display = "hidden"
+description = "OceanBase seekdb instance used internally by Phoenix for trace storage."
+tech = "seekdb"
+links = { docs = "https://www.oceanbase.ai/docs/" }
+
+[processes.stack]
+command = [
+  "sh",
+  "-lc",
+  "mkdir -p .agentseek/tmp; TMPDIR=${TMPDIR:-$PWD/.agentseek/tmp} docker compose up --build",
+]
+cwd = "."
+provides = ["gateway", "copilotkit", "frontend", "phoenix", "seekdb"]
+
+[checks.gateway]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.gateway_port }}/agent/health"
+timeout = 2
+attempts = 3
+
+[checks.copilotkit]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.copilotkit_port }}/health"
+timeout = 2
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+timeout = 2
+attempts = 3
+
+[checks.phoenix]
+type = "http"
+target = "http://127.0.0.1:6006"
+timeout = 2
+attempts = 10
+
+[tasks.setup]
+description = "Build the full compose stack."
+command = ["docker", "compose", "build"]
+cwd = "."
+
+[tasks.frontend]
+description = "Install frontend dependencies for non-compose local runs."
+command = ["npm", "install", "--prefix", "frontend"]
+cwd = "."
+
+[tasks.seekdb-skills]
+description = "Install recommended OceanBase seekdb agent skills."
+command = ["npx", "skills", "add", "oceanbase/seekdb-ecology-plugins", "--all"]
+cwd = "."

@@ -1,0 +1,12 @@
+{
+  "project_name": "My DeepAgent",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_') }}",
+  "author": "Your Name",
+  "system_prompt": "You are a pragmatic engineering assistant. Answer in the same language as the user's question.",
+  "default_model": "openai:gpt-4o-mini",
+  "_gateway_port": "18088",
+  "_agentseek_source_path": "",
+  "_agentseek_source_path_posix": "",
+  "_agentseek_source_url": "https://github.com/ob-labs/agentseek.git",
+  "_agentseek_source_ref": "883addad1e2993c4be6fc8ba053f87f25fb5057a"
+}

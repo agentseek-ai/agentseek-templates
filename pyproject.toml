@@ -1,0 +1,28 @@
+[project]
+name = "agentseek-templates"
+version = "0.1.0"
+description = "Versioned lifecycle-v2 template catalog for AgentSeek"
+requires-python = ">=3.12,<3.14"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "agentseek @ git+https://github.com/ob-labs/agentseek.git@883addad1e2993c4be6fc8ba053f87f25fb5057a",
+    "cookiecutter>=2.6.0,<3",
+    "pytest>=8.4,<10",
+    "ruff>=0.12,<1",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+extend-exclude = ["templates"]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]

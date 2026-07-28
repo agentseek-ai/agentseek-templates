@@ -1,0 +1,31 @@
+[project]
+name = "{{ cookiecutter.project_slug }}"
+version = "0.1.0"
+description = "{{ cookiecutter.project_name }} — remote LangGraph CLI agent bridged through agentseek-langchain."
+authors = [{ name = "{{ cookiecutter.author }}" }]
+requires-python = ">=3.12"
+dependencies = [
+    "agentseek-langchain",
+    "langchain>=1.0.0",
+    "langchain-openai>=0.3.0",
+    "httpx[socks]>=0.28",
+    "langgraph-cli[inmem]",
+    "pydantic-settings>=2.0.0",
+]
+
+[tool.uv.sources]
+{% if cookiecutter._agentseek_source_path_posix %}
+agentseek-langchain = { path = {{ (cookiecutter._agentseek_source_path_posix ~ "/contrib/agentseek-langchain") | tojson }}, editable = true }
+{% else %}
+agentseek-langchain = { git = "{{ cookiecutter._agentseek_source_url }}", rev = "{{ cookiecutter._agentseek_source_ref }}", subdirectory = "contrib/agentseek-langchain" }
+{% endif %}
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

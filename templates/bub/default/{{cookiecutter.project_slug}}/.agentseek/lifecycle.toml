@@ -1,0 +1,81 @@
+version = 2
+template = "bub/default"
+name = "{{ cookiecutter.project_name }}"
+description = "Bub agent with a browser UI, CopilotKit runtime, and AG-UI gateway."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv", "node", "npm"]
+
+[paths]
+required = ["frontend/package.json", "frontend/node_modules"]
+
+[env.BUB_MODEL]
+required = true
+default = "{{ cookiecutter.default_model }}"
+description = "Model id used by Bub."
+
+[env.BUB_API_KEY]
+required = true
+description = "Generic model provider key."
+aliases = ["BUB_OPENAI_API_KEY"]
+
+[services.app]
+name = "Application"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Browser application for this template."
+
+[services.gateway]
+name = "AG-UI gateway"
+url = "http://127.0.0.1:{{ cookiecutter.gateway_port }}/agent"
+kind = "protocol"
+display = "advanced"
+primary = false
+description = "AG-UI endpoint used by the application runtime."
+tech = "ag-ui"
+links = { docs = "https://docs.ag-ui.com/introduction" }
+
+[services.copilotkit]
+name = "CopilotKit runtime"
+url = "http://127.0.0.1:{{ cookiecutter.copilotkit_port }}/api/copilotkit"
+kind = "api"
+display = "hidden"
+primary = false
+description = "Internal CopilotKit runtime used by the frontend."
+tech = "copilotkit"
+links = { docs = "https://docs.copilotkit.ai/concepts/architecture" }
+
+[processes.gateway]
+command = ["uv", "run", "bub", "gateway", "--enable-channel", "ag-ui"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+provides = ["app", "copilotkit"]
+
+[checks.gateway]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.gateway_port }}/agent/health"
+timeout = 2.0
+attempts = 3
+
+[checks.copilotkit]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.copilotkit_port }}/health"
+timeout = 2.0
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+timeout = 2.0
+attempts = 3
+service = "app"
+
+[tasks.frontend]
+description = "Install frontend dependencies."
+command = ["npm", "install", "--prefix", "frontend"]

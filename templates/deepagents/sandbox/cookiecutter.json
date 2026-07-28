@@ -1,0 +1,11 @@
+{
+  "project_name": "Sandbox Coding Agent",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_') }}",
+  "author": "Your Name",
+  "default_model_provider": "openai",
+  "default_model": "gpt-4.1-mini",
+  "langgraph_port": "2024",
+  "frontend_port": "5175",
+  "_agentseek_source_url": "https://github.com/ob-labs/agentseek.git",
+  "_agentseek_source_ref": "883addad1e2993c4be6fc8ba053f87f25fb5057a"
+}
