@@ -56,7 +56,7 @@ tech = "vite"
 
 [services.calculator-http]
 name = "Calculator MCP server"
-url = "http://127.0.0.1:{{ cookiecutter.calculator_http_port }}/health"
+url = "http://127.0.0.1:{{ cookiecutter.calculator_http_port }}/mcp"
 kind = "protocol"
 display = "hidden"
 primary = false

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import stat
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,8 @@ INDEX_PATH = TEMPLATES_ROOT / "index.json"
 ORIGIN_PATH = REPOSITORY_ROOT / "catalog-origin.json"
 RELEASE_PATH = REPOSITORY_ROOT / "catalog-release.json"
 SOURCE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "source-index.json"
+PYPROJECT_PATH = REPOSITORY_ROOT / "pyproject.toml"
+LOCK_PATH = REPOSITORY_ROOT / "uv.lock"
 EXPECTED_SOURCE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
 EXPECTED_SOURCE_REGISTRY_SHA256 = "5695b14933fa4be57f77f6838c85dff1be72d8813aa715e50e51869dcf65d639"
 EXPECTED_CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
@@ -127,3 +130,19 @@ def test_paired_release_metadata_separates_core_dependencies_from_import_provena
         "templates_root": "templates",
         "index_path": "templates/index.json",
     }
+
+
+def test_release_metadata_matches_project_and_lock_coordinates() -> None:
+    release = json.loads(RELEASE_PATH.read_text(encoding="utf-8"))
+    project = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
+    lock = tomllib.loads(LOCK_PATH.read_text(encoding="utf-8"))
+    locked_packages = {package["name"]: package for package in lock["package"]}
+
+    catalog_version = release["catalog_release"].removeprefix("v")
+    expected_core_dependency = f"agentseek @ git+{release['core_repository']}@{release['core_commit']}"
+    expected_core_lock_source = f"{release['core_repository']}?rev={release['core_commit']}#{release['core_commit']}"
+
+    assert project["project"]["version"] == catalog_version
+    assert expected_core_dependency in project["dependency-groups"]["dev"]
+    assert locked_packages["agentseek-templates"]["version"] == catalog_version
+    assert locked_packages["agentseek"]["source"] == {"git": expected_core_lock_source}

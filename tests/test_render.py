@@ -447,6 +447,23 @@ def test_generated_core_dependencies_are_immutable(
         }
 
 
+def test_mcp_lifecycle_advertises_protocol_url_and_separate_health_check(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/mcp", output_root, tmp_path)
+    spec = read_lifecycle_spec(
+        generated_path / ".agentseek" / "lifecycle.toml",
+        project_root=generated_path,
+    )
+    normalized = normalize_lifecycle(spec, project_root=generated_path)
+
+    calculator_service = next(service for service in normalized.services if service.id == "calculator-http")
+    calculator_check = next(check for check in normalized.checks if check.id == "calculator-http")
+
+    assert calculator_service.url == "http://127.0.0.1:8765/mcp"
+    assert calculator_check.target == "http://127.0.0.1:8765/health"
+
+
 def test_cli_remote_does_not_claim_that_local_dev_provides_an_external_server(tmp_path: Path) -> None:
     template_root = TEMPLATES_ROOT / "langchain/cli-remote"
     output_root = tmp_path / "output"

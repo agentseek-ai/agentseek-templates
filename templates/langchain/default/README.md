@@ -5,7 +5,7 @@ agentseek via `agentseek-langchain`, for local AG-UI development, and also
 includes first-class Feishu and WeCom (企业微信) gateway paths plus optional
 OpenTelemetry export to Phoenix backed by OceanBase seekdb.
 
-The generated project uses the AgentSeek dev lifecycle v1 contract:
+The generated project uses the AgentSeek dev lifecycle v2 contract:
 
 ```bash
 agentseek info

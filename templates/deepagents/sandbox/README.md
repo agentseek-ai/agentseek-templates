@@ -18,7 +18,7 @@ The generated project includes:
   filesystem inside an isolated sandbox.
 - **Frontend** — React + Vite chat UI with streaming tool-call cards, join &
   rejoin support for long-running sandbox tasks, and markdown rendering.
-- **Lifecycle** — an AgentSeek lifecycle v1 spec for `info`, `doctor`, `dev`,
+- **Lifecycle** — an AgentSeek lifecycle v2 spec for `info`, `doctor`, `dev`,
   and project setup tasks.
 
 ## Prerequisites
