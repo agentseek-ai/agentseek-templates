@@ -1,0 +1,105 @@
+version = 2
+template = "deepagents/mcp"
+name = "{{ cookiecutter.project_name }}"
+description = "DeepAgents MCP Tools application with validated stdio and Streamable HTTP servers."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv", "node", "npm"]
+
+[paths]
+required = ["pyproject.toml", "langgraph.json", ".mcp.json", "frontend/package.json", "frontend/node_modules"]
+
+[env.AGENTSEEK_MODEL_PROVIDER]
+required = true
+default = "{{ cookiecutter.default_model_provider }}"
+description = "LangChain model provider used by the DeepAgents graph."
+
+[env.AGENTSEEK_MODEL]
+required = true
+default = "{{ cookiecutter.default_model }}"
+description = "Model id used by the DeepAgents graph."
+aliases = ["DEEPAGENTS_MODEL", "BUB_MODEL"]
+
+[env.AGENTSEEK_MODEL_API_KEY]
+required = true
+description = "Provider-independent credential passed to the selected model adapter."
+
+[env.LANGGRAPH_HOST]
+required = false
+default = "127.0.0.1"
+description = "Bind address for the LangGraph development server."
+
+[env.FRONTEND_HOST]
+required = false
+default = "127.0.0.1"
+description = "Bind address for the Vite development server."
+
+[services.langgraph]
+name = "LangGraph API"
+url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+kind = "api"
+display = "advanced"
+description = "LangGraph development API that runs the MCP-enabled DeepAgent."
+tech = "langgraph"
+links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
+
+[services.frontend]
+name = "MCP Tools application"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Browser application for invoking MCP-backed tools and reviewing streamed execution."
+tech = "vite"
+
+[services.calculator-http]
+name = "Calculator MCP server"
+url = "http://127.0.0.1:{{ cookiecutter.calculator_http_port }}/health"
+kind = "protocol"
+display = "hidden"
+primary = false
+description = "Local Streamable HTTP MCP server used by the model-free smoke path."
+tech = "mcp"
+links = { docs = "https://modelcontextprotocol.io/docs/learn/server-concepts" }
+
+[processes.langgraph]
+command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.langgraph_dev"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+
+[processes.calculator-http]
+command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.calculator_http_server", "--host", "127.0.0.1", "--port", "{{ cookiecutter.calculator_http_port }}"]
+
+[checks.langgraph]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+timeout = 2
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+timeout = 2
+attempts = 3
+
+[checks.calculator-http]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.calculator_http_port }}/health"
+timeout = 2
+attempts = 10
+
+[tasks.sync]
+description = "Install Python dependencies with uv."
+command = ["uv", "sync"]
+
+[tasks.frontend]
+description = "Install frontend dependencies."
+command = ["npm", "install", "--prefix", "frontend"]
+
+[tasks.mcp-smoke]
+description = "Verify real stdio and Streamable HTTP MCP discovery and invocation without a model key."
+command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.mcp_smoke"]

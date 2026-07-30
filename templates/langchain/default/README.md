@@ -2,8 +2,8 @@
 
 Scaffolds a `create_agent` project with CopilotKit middleware bound to
 agentseek via `agentseek-langchain`, for local AG-UI development, and also
-includes a first-class Feishu gateway path plus optional OpenTelemetry export
-to Phoenix backed by OceanBase seekdb.
+includes first-class Feishu and WeCom (企业微信) gateway paths plus optional
+OpenTelemetry export to Phoenix backed by OceanBase seekdb.
 
 The generated project uses the AgentSeek dev lifecycle v1 contract:
 
@@ -70,6 +70,7 @@ Browser (CopilotKit v2)
     observability.py
     settings.py
     feishu.py
+    wecom.py
     dev.py
   frontend/
     README.md
@@ -123,7 +124,9 @@ in one `agentseek dev` run. Phoenix uses
 `ghcr.io/agentseek-ai/agentseek-phoenix:main` and can be overridden with
 `AGENTSEEK_PHOENIX_IMAGE`. Its optional `feishu` profile starts the Feishu
 gateway with the same LangChain spec and environment surface; enable it with
-`COMPOSE_PROFILES=feishu` in `.env`.
+`COMPOSE_PROFILES=feishu` in `.env`. WeCom is available through the generated
+local `serve-wecom` entry point; a Compose profile is deliberately not added
+because a WeCom AI bot permits only one active long connection at a time.
 
 The repository CI job `agentseek-phoenix-compose` protects this contract. It
 renders this template, starts Phoenix with OceanBase seekdb, emits three

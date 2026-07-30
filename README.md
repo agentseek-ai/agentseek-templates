@@ -5,10 +5,11 @@ for [AgentSeek](https://github.com/ob-labs/agentseek). Catalog releases are
 immutable inputs to AgentSeek releases: the CLI resolves an exact catalog
 commit, never a mutable branch.
 
-## Use a reviewed catalog commit
+## Use the catalog
 
-Until AgentSeek 0.1.0 makes this catalog the bundled default, use the explicit
-catalog option with a full commit SHA:
+AgentSeek 0.1.x uses a reviewed release of this repository as its bundled
+default catalog. To inspect or create from another reviewed catalog commit,
+select the repository and full commit SHA explicitly:
 
 ```bash
 agentseek create --list-templates \
@@ -30,11 +31,11 @@ is unavailable or invalid.
 - Every registered `templates/<type>/<name>` subtree is self-contained and
   renders a strict lifecycle-v2 project.
 - `catalog-origin.json` records the immutable core source commit, registry
-  digest, included templates, and intentional exclusions for the initial copy.
+  digest, imported templates, and intentional exclusions.
 - Generated Git dependencies point to the core AgentSeek repository at an exact
   commit; they never point back to this catalog repository.
 - The legacy lifecycle-v1 mirror remains in the core repository for AgentSeek
-  0.0.x compatibility and is not updated from this repository.
+  0.0.x compatibility. New catalog changes belong in this repository.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before changing the registry or a
 template.

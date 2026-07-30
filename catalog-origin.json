@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
   "source_repository": "https://github.com/ob-labs/agentseek.git",
-  "source_commit": "883addad1e2993c4be6fc8ba053f87f25fb5057a",
-  "source_registry_sha256": "d16027882500eb03c1aa8b3157c03dbb17eba6e34c74d6d7f0f285787f799907",
+  "source_commit": "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc",
+  "source_registry_sha256": "5695b14933fa4be57f77f6838c85dff1be72d8813aa715e50e51869dcf65d639",
   "included_templates": [
     "bub/default",
     "deepagents/content-builder",
     "deepagents/default",
+    "deepagents/mcp",
     "deepagents/research",
     "deepagents/sandbox",
     "langchain/agentic-rag",

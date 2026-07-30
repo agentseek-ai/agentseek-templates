@@ -13,11 +13,11 @@ INDEX_PATH = TEMPLATES_ROOT / "index.json"
 ORIGIN_PATH = REPOSITORY_ROOT / "catalog-origin.json"
 RELEASE_PATH = REPOSITORY_ROOT / "catalog-release.json"
 SOURCE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "source-index.json"
-EXPECTED_SOURCE_COMMIT = "883addad1e2993c4be6fc8ba053f87f25fb5057a"
-EXPECTED_SOURCE_REGISTRY_SHA256 = "d16027882500eb03c1aa8b3157c03dbb17eba6e34c74d6d7f0f285787f799907"
+EXPECTED_SOURCE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
+EXPECTED_SOURCE_REGISTRY_SHA256 = "5695b14933fa4be57f77f6838c85dff1be72d8813aa715e50e51869dcf65d639"
 EXPECTED_CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
-EXPECTED_CORE_COMMIT = "883addad1e2993c4be6fc8ba053f87f25fb5057a"
-EXPECTED_CORE_RELEASE = "core-snapshot-v0.1.0"
+EXPECTED_CORE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
+EXPECTED_CORE_RELEASE = "v0.1.1"
 
 
 def _registry() -> dict[str, str]:
@@ -88,7 +88,7 @@ def test_every_template_carries_the_reviewed_core_dependency_coordinate() -> Non
         assert context["_agentseek_source_ref"] == EXPECTED_CORE_COMMIT, key
 
 
-def test_initial_catalog_provenance_matches_the_frozen_source_inventory() -> None:
+def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
     origin = json.loads(ORIGIN_PATH.read_text(encoding="utf-8"))
     source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
     assert origin == {
@@ -119,7 +119,7 @@ def test_paired_release_metadata_separates_core_dependencies_from_import_provena
     release = json.loads(RELEASE_PATH.read_text(encoding="utf-8"))
     assert release == {
         "schema_version": 1,
-        "catalog_release": "v0.1.0",
+        "catalog_release": "v0.1.1",
         "lifecycle_version": 2,
         "core_repository": EXPECTED_CORE_REPOSITORY,
         "core_commit": EXPECTED_CORE_COMMIT,
