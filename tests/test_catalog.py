@@ -145,4 +145,5 @@ def test_release_metadata_matches_project_and_lock_coordinates() -> None:
     assert project["project"]["version"] == catalog_version
     assert expected_core_dependency in project["dependency-groups"]["dev"]
     assert locked_packages["agentseek-templates"]["version"] == catalog_version
+    assert locked_packages["agentseek"]["version"] == release["core_release"].removeprefix("v")
     assert locked_packages["agentseek"]["source"] == {"git": expected_core_lock_source}

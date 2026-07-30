@@ -76,8 +76,8 @@ compatible gateway (e.g. SiliconFlow) works out of the box.
 
 The lifecycle spec checks `.env`, frontend dependencies, and the stable
 OceanBase seekdb connection variables. Provider API keys are documented in `.env.example` but
-are not lifecycle-required because lifecycle v1 does not support conditional
-requirements by selected provider.
+are not lifecycle-required because the spec does not declare conditional
+requirements by selected model provider.
 
 ## Ingest
 
