@@ -27,7 +27,7 @@ CANDIDATES = [
     {
         "grading_run_id": "grading-1",
         "version": 1,
-        "iteration": 1,
+        "iteration": 0,
         "candidate_id": CANDIDATE_ID,
         "source": SOURCE,
     }
@@ -36,7 +36,7 @@ CURRENT_EVIDENCE = [
     {
         "event_id": "evidence-1",
         "grading_run_id": "grading-1",
-        "iteration": 1,
+        "iteration": 0,
         "candidate_version": 1,
         "requested_candidate_id": CANDIDATE_ID,
         "candidate_id": CANDIDATE_ID,
@@ -86,13 +86,13 @@ def test_identical_source_remains_two_correlated_candidate_versions() -> None:
     first = build_candidate_record(
         grading_run_id="grading-1",
         version=1,
-        iteration=1,
+        iteration=0,
         source="x = 1\r\n",
     )
     second = build_candidate_record(
         grading_run_id="grading-1",
         version=2,
-        iteration=2,
+        iteration=1,
         source="```python\nx = 1\n```",
     )
 
@@ -100,21 +100,38 @@ def test_identical_source_remains_two_correlated_candidate_versions() -> None:
     assert (first["grading_run_id"], first["version"], first["iteration"]) == (
         "grading-1",
         1,
-        1,
+        0,
     )
     assert (second["grading_run_id"], second["version"], second["iteration"]) == (
         "grading-1",
         2,
-        2,
+        1,
     )
     assert first["source"] == second["source"] == "x = 1\n"
+
+
+def test_candidate_record_accepts_zero_iteration() -> None:
+    record = build_candidate_record(
+        grading_run_id="grading-1",
+        version=1,
+        iteration=0,
+        source="x = 1\n",
+    )
+
+    assert record["iteration"] == 0
+
+
+def test_run_report_accepts_candidate_history_starting_at_zero() -> None:
+    report = build_run_report(terminal_status="satisfied", **REPORT_FIELDS)
+
+    assert report["accepted"] is True
 
 
 def test_candidate_record_accepts_exact_normalized_source_limit() -> None:
     record = build_candidate_record(
         grading_run_id="grading-1",
         version=1,
-        iteration=1,
+        iteration=0,
         source="x" * 3499,
     )
 
@@ -126,7 +143,7 @@ def test_candidate_record_rejects_normalized_source_above_limit() -> None:
         build_candidate_record(
             grading_run_id="grading-1",
             version=1,
-            iteration=1,
+            iteration=0,
             source="x" * 3500,
         )
 
@@ -137,14 +154,14 @@ def test_candidate_record_rejects_non_positive_or_non_integer_versions(version: 
         build_candidate_record(
             grading_run_id="grading-1",
             version=version,  # type: ignore[arg-type]
-            iteration=1,
+            iteration=0,
             source="x = 1\n",
         )
 
 
-@pytest.mark.parametrize("iteration", [0, -1, True, False, 1.0, 1.5, "1"])
-def test_candidate_record_rejects_non_positive_or_non_integer_iterations(iteration: object) -> None:
-    with pytest.raises(ValueError, match="iteration must be a positive integer"):
+@pytest.mark.parametrize("iteration", [-1, True, False, 1.0, 1.5, "1"])
+def test_candidate_record_rejects_negative_or_non_integer_iterations(iteration: object) -> None:
+    with pytest.raises(ValueError, match="iteration must be a non-negative integer"):
         build_candidate_record(
             grading_run_id="grading-1",
             version=1,
@@ -181,13 +198,13 @@ def test_run_report_rejects_non_monotonic_or_non_integer_candidate_versions(
         )
 
 
-@pytest.mark.parametrize("iteration", [0, True, 1.5])
-def test_run_report_rejects_non_positive_or_non_integer_candidate_iterations(
+@pytest.mark.parametrize("iteration", [-1, True, 1.5, "0"])
+def test_run_report_rejects_negative_or_non_integer_candidate_iterations(
     iteration: object,
 ) -> None:
     candidate = {**CANDIDATES[0], "iteration": iteration}
 
-    with pytest.raises(ValueError, match="iteration must be a positive integer"):
+    with pytest.raises(ValueError, match="iteration must be a non-negative integer"):
         build_run_report(
             terminal_status="satisfied",
             **{**REPORT_FIELDS, "candidates": [candidate]},  # type: ignore[arg-type]

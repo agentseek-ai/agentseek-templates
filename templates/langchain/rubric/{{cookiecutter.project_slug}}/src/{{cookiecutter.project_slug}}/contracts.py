@@ -183,6 +183,12 @@ def _require_positive_integer(value: object, name: str) -> int:
     return value
 
 
+def _require_non_negative_integer(value: object, name: str) -> int:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{name} must be a non-negative integer")
+    return value
+
+
 def _require_candidate_source_limit(source: str) -> None:
     if len(source) > MAX_CANDIDATE_CHARS:
         raise ValueError(f"normalized candidate source must be at most {MAX_CANDIDATE_CHARS} characters")
@@ -196,7 +202,7 @@ def build_candidate_record(
     source: object,
 ) -> CandidateRecord:
     version = _require_positive_integer(version, "candidate version")
-    iteration = _require_positive_integer(iteration, "candidate iteration")
+    iteration = _require_non_negative_integer(iteration, "candidate iteration")
     normalized = normalize_candidate_source(source)
     _require_candidate_source_limit(normalized)
     return {
@@ -219,7 +225,7 @@ def _validate_candidate_history(
         version = candidate["version"]
         if type(version) is not int or version <= previous_version:
             raise ValueError("candidate versions must be strictly increasing positive integers")
-        _require_positive_integer(candidate["iteration"], "candidate iteration")
+        _require_non_negative_integer(candidate["iteration"], "candidate iteration")
         normalized_source = normalize_candidate_source(candidate["source"])
         _require_candidate_source_limit(normalized_source)
         previous_version = version
