@@ -45,7 +45,8 @@ export type CandidateEvent = EventBase & {
   type: "candidate";
   candidateVersion: number;
   candidateId: string;
-  source: string;
+  source: string | null;
+  sourceOmitted?: boolean;
 };
 
 export type GraderFeedbackEvent = EventBase & {
@@ -105,7 +106,8 @@ export type CandidateRecord = {
   version: number;
   iteration: number;
   candidateId: string;
-  source: string;
+  source: string | null;
+  sourceOmitted?: boolean;
 };
 
 export type EvidenceRecord = EvidenceResult & {
@@ -184,6 +186,14 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isCandidateId(value: unknown): value is string {
   return typeof value === "string" && CANDIDATE_ID.test(value);
+}
+
+function candidateSource(
+  value: unknown,
+  sourceOmitted: boolean,
+): string | null | undefined {
+  if (sourceOmitted) return value === null ? null : undefined;
+  return typeof value === "string" ? value : undefined;
 }
 
 function isNonNegativeInteger(value: unknown): value is number {
@@ -308,9 +318,17 @@ export function decodeUIEvent(value: unknown): UIEvent | null {
   switch (wire.type) {
     case "candidate":
       if (
+        payload.source_omitted !== undefined &&
+        typeof payload.source_omitted !== "boolean"
+      ) {
+        return null;
+      }
+      const sourceOmitted = payload.source_omitted === true;
+      const source = candidateSource(payload.source, sourceOmitted);
+      if (
         binding.candidateVersion === null ||
         binding.candidateId === null ||
-        typeof payload.source !== "string"
+        source === undefined
       ) {
         return null;
       }
@@ -319,7 +337,8 @@ export function decodeUIEvent(value: unknown): UIEvent | null {
         type: "candidate",
         candidateVersion: binding.candidateVersion,
         candidateId: binding.candidateId,
-        source: payload.source,
+        source,
+        sourceOmitted,
       };
     case "grader_feedback":
       if (typeof payload.message !== "string") return null;
@@ -379,11 +398,19 @@ export function decodeUIEvent(value: unknown): UIEvent | null {
 function candidateRecord(value: unknown): CandidateRecord | null {
   if (
     !isObject(value) ||
+    (value.source_omitted !== undefined &&
+      typeof value.source_omitted !== "boolean")
+  ) {
+    return null;
+  }
+  const sourceOmitted = value.source_omitted === true;
+  const source = candidateSource(value.source, sourceOmitted);
+  if (
     !isNonEmptyString(value.grading_run_id) ||
     !isPositiveInteger(value.version) ||
     !isNonNegativeInteger(value.iteration) ||
     !isCandidateId(value.candidate_id) ||
-    typeof value.source !== "string"
+    source === undefined
   ) {
     return null;
   }
@@ -392,7 +419,8 @@ function candidateRecord(value: unknown): CandidateRecord | null {
     version: value.version,
     iteration: value.iteration,
     candidateId: value.candidate_id,
-    source: value.source,
+    source,
+    sourceOmitted,
   };
 }
 
@@ -561,6 +589,7 @@ function normalizedReportToWire(value: Record<string, unknown>): Record<string, 
               iteration: item.iteration,
               candidate_id: item.candidateId,
               source: item.source,
+              source_omitted: item.sourceOmitted ?? false,
             }
           : item,
       )

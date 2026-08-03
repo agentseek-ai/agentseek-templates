@@ -60,9 +60,13 @@ function CandidateCard({ timeline }: { timeline: CandidateTimeline }) {
         <code title={candidate.candidateId}>{candidate.candidateId.slice(0, 8)}</code>
         <p>Evidence: {evidenceStatus(timeline)}</p>
       </header>
-      <pre>
-        <code>{candidate.source}</code>
-      </pre>
+      {candidate.sourceOmitted === true ? (
+        <p>Candidate source omitted because it exceeded the 3,500-character limit.</p>
+      ) : (
+        <pre>
+          <code>{candidate.source}</code>
+        </pre>
+      )}
       {timeline.evidence.map((event) => (
         <section key={event.eventId} aria-label="Structured evidence">
           {event.evidence.behaviorFailures.map((failure, index) => (

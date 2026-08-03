@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Mapping, Sequence
-from typing import Literal, TypedDict, cast
+from typing import Literal, NotRequired, TypedDict, cast
 
 RunMode = Literal["demo", "live"]
 RubricResult = Literal[
@@ -74,7 +74,8 @@ class CandidateRecord(TypedDict):
     version: int
     iteration: int
     candidate_id: str
-    source: str
+    source: str | None
+    source_omitted: NotRequired[bool]
 
 
 class EvidenceRecord(EvidenceResult):
@@ -150,6 +151,10 @@ _COMPLETE_PYTHON_FENCE = re.compile(
 _ALLOWED_INPUT_FIELDS = frozenset({"rubric", "max_iterations"})
 
 
+class CandidateTooLongError(ValueError):
+    """The normalized Worker output cannot cross the public/execution boundary."""
+
+
 def _extract_text_content(value: object) -> str:
     if isinstance(value, str):
         return value
@@ -191,7 +196,7 @@ def _require_non_negative_integer(value: object, name: str) -> int:
 
 def _require_candidate_source_limit(source: str) -> None:
     if len(source) > MAX_CANDIDATE_CHARS:
-        raise ValueError(f"normalized candidate source must be at most {MAX_CANDIDATE_CHARS} characters")
+        raise CandidateTooLongError(f"normalized candidate source must be at most {MAX_CANDIDATE_CHARS} characters")
 
 
 def build_candidate_record(
@@ -214,6 +219,29 @@ def build_candidate_record(
     }
 
 
+def build_rejected_candidate_record(
+    *,
+    grading_run_id: str,
+    version: int,
+    iteration: int,
+    source: object,
+) -> CandidateRecord:
+    """Retain only identity for an oversized candidate, never an executable prefix."""
+    version = _require_positive_integer(version, "candidate version")
+    iteration = _require_non_negative_integer(iteration, "candidate iteration")
+    normalized = normalize_candidate_source(source)
+    if len(normalized) <= MAX_CANDIDATE_CHARS:
+        raise ValueError("rejected candidate source must exceed the public source limit")
+    return {
+        "grading_run_id": grading_run_id,
+        "version": version,
+        "iteration": iteration,
+        "candidate_id": candidate_id(normalized),
+        "source": None,
+        "source_omitted": True,
+    }
+
+
 def _validate_candidate_history(
     grading_run_id: str,
     candidates: Sequence[CandidateRecord],
@@ -226,10 +254,14 @@ def _validate_candidate_history(
         if type(version) is not int or version <= previous_version:
             raise ValueError("candidate versions must be strictly increasing positive integers")
         _require_non_negative_integer(candidate["iteration"], "candidate iteration")
-        normalized_source = normalize_candidate_source(candidate["source"])
-        _require_candidate_source_limit(normalized_source)
-        if candidate["candidate_id"] != candidate_id(normalized_source):
-            raise ValueError("candidate ID must match normalized source")
+        if candidate.get("source_omitted") is True:
+            if candidate["source"] is not None or re.fullmatch(r"[0-9a-f]{64}", candidate["candidate_id"]) is None:
+                raise ValueError("omitted candidate source must retain only a valid candidate ID")
+        else:
+            normalized_source = normalize_candidate_source(candidate["source"])
+            _require_candidate_source_limit(normalized_source)
+            if candidate["candidate_id"] != candidate_id(normalized_source):
+                raise ValueError("candidate ID must match normalized source")
         previous_version = version
 
 
@@ -271,6 +303,8 @@ def _has_current_passing_evidence(
         return False
 
     current = candidates[-1]
+    if current.get("source_omitted") is True or current["source"] is None:
+        return False
     normalized_final = normalize_candidate_source(final_candidate)
     current_id = candidate_id(normalized_final)
     if (

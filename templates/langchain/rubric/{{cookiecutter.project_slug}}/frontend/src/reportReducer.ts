@@ -138,6 +138,7 @@ function candidateFromEvent(event: CandidateEvent): CandidateRecord {
     iteration: event.iteration,
     candidateId: event.candidateId,
     source: event.source,
+    sourceOmitted: event.sourceOmitted,
   };
 }
 
@@ -150,7 +151,8 @@ function addCandidate(
   if (existing !== undefined) {
     const matches =
       existing.candidate.candidateId === event.candidateId &&
-      existing.candidate.source === event.source;
+      existing.candidate.source === event.source &&
+      existing.candidate.sourceOmitted === event.sourceOmitted;
     return {
       run,
       diagnostic: matches

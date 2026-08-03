@@ -29,6 +29,7 @@ from .contracts import (
     DEFAULT_MAX_ITERATIONS,
     TASK_PROMPT,
     CandidateRecord,
+    CandidateTooLongError,
     EvaluationEvent,
     FeedbackRecord,
     PublicError,
@@ -194,11 +195,14 @@ class _RunContext:
 def _emit_new_candidates(context: _RunContext) -> None:
     while context.candidate_count < len(context.ledger.candidates):
         candidate = context.ledger.candidates[context.candidate_count]
+        payload: dict[str, object] = {"source": candidate["source"]}
+        if candidate.get("source_omitted") is True:
+            payload["source_omitted"] = True
         context.emit(
             "candidate",
             iteration=candidate["iteration"],
             candidate=candidate,
-            payload={"source": candidate["source"]},
+            payload=payload,
         )
         context.candidate_count += 1
 
@@ -415,6 +419,9 @@ def _project_evidence(ledger: RunEvidenceLedger) -> list[dict[str, Any]]:
 def _report_events(report: RunReport) -> list[UIEvent]:
     events: list[UIEvent] = []
     for sequence, candidate in enumerate(report["candidates"]):
+        payload: dict[str, object] = {"source": candidate["source"]}
+        if candidate.get("source_omitted") is True:
+            payload["source_omitted"] = True
         events.append(
             {
                 "event_id": _event_id(
@@ -429,7 +436,7 @@ def _report_events(report: RunReport) -> list[UIEvent]:
                 "iteration": candidate["iteration"],
                 "candidate_version": candidate["version"],
                 "candidate_id": candidate["candidate_id"],
-                "payload": {"source": candidate["source"]},
+                "payload": payload,
             }
         )
     for feedback in report["feedback"]:
@@ -591,6 +598,27 @@ def build_application_graph(*, mode: RunMode, model_factory: Callable[[], object
                 normalize_inner_chunk(stream_mode, chunk, context)
         except asyncio.CancelledError:
             raise
+        except CandidateTooLongError:
+            _emit_new_candidates(context)
+            _emit_new_evidence(context)
+            candidates = [cast(CandidateRecord, dict(item)) for item in ledger.candidates]
+            try:
+                report = build_run_report(
+                    mode=mode,
+                    thread_id=outer_thread_id,
+                    inner_thread_id=inner_thread_id,
+                    grading_run_id=grading_run_id,
+                    terminal_status="failed",
+                    iterations=candidates[-1]["iteration"] + 1,
+                    candidates=candidates,
+                    final_candidate=None,
+                    evidence=cast(Any, _project_evidence(ledger)),
+                    evaluations=[],
+                    feedback=[],
+                )
+            except (IndexError, TypeError, ValueError):
+                return {"error": _public_runtime_error()}
+            return {"report": report}
         except Exception:
             return {"error": _public_runtime_error()}
         finally:

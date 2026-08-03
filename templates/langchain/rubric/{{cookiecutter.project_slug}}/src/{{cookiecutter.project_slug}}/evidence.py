@@ -8,9 +8,11 @@ from langgraph.config import get_stream_writer
 
 from .contracts import (
     CandidateRecord,
+    CandidateTooLongError,
     EvidenceRecord,
     EvidenceResult,
     build_candidate_record,
+    build_rejected_candidate_record,
     candidate_id,
 )
 from .runner import execute_candidate
@@ -27,14 +29,39 @@ class RunEvidenceLedger:
         return self.candidates[-1] if self.candidates else None
 
     def record_candidate(self, source: str, iteration: int) -> CandidateRecord:
-        candidate = build_candidate_record(
-            grading_run_id=self.grading_run_id,
-            version=len(self.candidates) + 1,
-            iteration=iteration,
-            source=source,
-        )
-        self.candidates.append(candidate)
-        return candidate
+        version = len(self.candidates) + 1
+        try:
+            candidate = build_candidate_record(
+                grading_run_id=self.grading_run_id,
+                version=version,
+                iteration=iteration,
+                source=source,
+            )
+        except CandidateTooLongError:
+            candidate = build_rejected_candidate_record(
+                grading_run_id=self.grading_run_id,
+                version=version,
+                iteration=iteration,
+                source=source,
+            )
+            self.candidates.append(candidate)
+            self.record_evidence(
+                {
+                    "candidate_id": candidate["candidate_id"],
+                    "ok": False,
+                    "behavior_failures": [],
+                    "profile_failures": ["candidate_too_long"],
+                    "duration_ms": 0,
+                    "timed_out": False,
+                    "output_truncated": False,
+                },
+                candidate=candidate,
+                requested_candidate_id=candidate["candidate_id"],
+            )
+            raise
+        else:
+            self.candidates.append(candidate)
+            return candidate
 
     def record_evidence(
         self,
@@ -90,11 +117,12 @@ def make_run_test_suite(ledger: RunEvidenceLedger) -> BaseTool:
         requested_id = candidate_id(code)
         tracked_candidate = ledger.current_candidate
         current = cast(CandidateRecord, dict(tracked_candidate)) if tracked_candidate is not None else None
-        current_source_id = candidate_id(current["source"]) if current is not None else None
+        current_source = current["source"] if current is not None else None
+        current_source_id = candidate_id(current_source) if isinstance(current_source, str) else None
         if current is None or current_source_id != current["candidate_id"] or requested_id != current["candidate_id"]:
             result = candidate_binding_failure(requested_id, current)
         else:
-            result = execute_candidate(current["source"])
+            result = execute_candidate(cast(str, current["source"]))
         record = ledger.record_evidence(
             result,
             candidate=current,

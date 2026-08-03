@@ -171,6 +171,100 @@ describe("wire decoders", () => {
     ).toBeNull();
   });
 
+  it("decodes and renders an oversized candidate as omitted rejected source", () => {
+    const wire = {
+      mode: "live",
+      thread_id: "outer-oversized",
+      inner_thread_id: "inner-oversized",
+      grading_run_id: "run-oversized",
+      terminal_status: "failed",
+      accepted: false,
+      gate_reason: "terminal_status_not_satisfied",
+      iterations: 1,
+      candidates: [
+        {
+          grading_run_id: "run-oversized",
+          version: 1,
+          iteration: 0,
+          candidate_id: HASH_A,
+          source: null,
+          source_omitted: true,
+        },
+      ],
+      final_candidate: null,
+      evidence: [
+        {
+          event_id: "run-oversized:rubric_evidence:0:1:0",
+          grading_run_id: "run-oversized",
+          iteration: 0,
+          candidate_version: 1,
+          candidate_id: HASH_A,
+          requested_candidate_id: HASH_A,
+          ok: false,
+          behavior_failures: [],
+          profile_failures: ["candidate_too_long"],
+          duration_ms: 0,
+          timed_out: false,
+          output_truncated: false,
+        },
+      ],
+      evaluations: [],
+      feedback: [],
+    };
+    const candidateEventWire = {
+      event_id: "run-oversized:candidate:0:1:0",
+      type: "candidate",
+      grading_run_id: "run-oversized",
+      iteration: 0,
+      candidate_version: 1,
+      candidate_id: HASH_A,
+      payload: { source: null, source_omitted: true },
+    };
+    expect(decodeUIEvent(candidateEventWire)).toMatchObject({
+      source: null,
+      sourceOmitted: true,
+    });
+    expect(
+      decodeUIEvent({
+        ...candidateEventWire,
+        payload: { source: null },
+      }),
+    ).toBeNull();
+    expect(
+      decodeUIEvent({
+        ...candidateEventWire,
+        payload: { source: "truncated-prefix", source_omitted: true },
+      }),
+    ).toBeNull();
+    expect(decodeRunReport(wire)).toMatchObject({
+      terminalStatus: "failed",
+      accepted: false,
+      candidates: [{ source: null, sourceOmitted: true }],
+    });
+    expect(
+      decodeRunReport({
+        ...wire,
+        candidates: [{ ...wire.candidates[0], source_omitted: false }],
+      }),
+    ).toBeNull();
+
+    const state = reportReducer(createReportState(), {
+      type: "report_received",
+      value: wire,
+    });
+    render(
+      createElement(EvaluationTimeline, {
+        run: state.runsById["run-oversized"],
+      }),
+    );
+    expect(
+      screen.getByText(
+        "Candidate source omitted because it exceeded the 3,500-character limit.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("candidate_too_long")).toBeTruthy();
+  });
+
   it("rejects passing Evidence requested for a different candidate", () => {
     const mismatchedEvidence = {
       event_id: "run-new:rubric_evidence:0:1:0",

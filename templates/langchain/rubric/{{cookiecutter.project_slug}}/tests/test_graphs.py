@@ -11,7 +11,8 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import BaseTool
 from pydantic import PrivateAttr
-from {{ cookiecutter.project_slug }}.contracts import BASELINE_RUBRIC, build_run_report
+from {{ cookiecutter.project_slug }} import evidence
+from {{ cookiecutter.project_slug }}.contracts import BASELINE_RUBRIC, build_run_report, candidate_id
 from {{ cookiecutter.project_slug }}.demo_models import DemoWorkerModel, build_demo_models
 from {{ cookiecutter.project_slug }}.graphs import (
     build_application_graph,
@@ -205,6 +206,130 @@ async def test_grader_failure_is_terminal_and_sanitized_at_outer_boundary() -> N
     assert report["accepted"] is False
     assert SENTINEL not in json.dumps(events)
     assert SENTINEL not in json.dumps(report)
+
+
+class OversizedWorker(BaseChatModel):
+    source: str
+
+    @property
+    def _llm_type(self) -> str:
+        return "oversized-worker"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        del messages, stop, run_manager, kwargs
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=self.source))])
+
+
+class ForbiddenGrader(BaseChatModel):
+    _invocation_count: int = PrivateAttr(default=0)
+
+    @property
+    def _llm_type(self) -> str:
+        return "forbidden-grader"
+
+    @property
+    def invocation_count(self) -> int:
+        return self._invocation_count
+
+    def bind_tools(self, tools: list[dict[str, Any] | type | BaseTool], **kwargs: Any) -> ForbiddenGrader:
+        del tools, kwargs
+        return self
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        del messages, stop, run_manager, kwargs
+        self._invocation_count += 1
+        raise AssertionError("oversized candidate reached the grader")
+
+
+def _public_strings(value: object) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [text for item in value.values() for text in _public_strings(item)]
+    if isinstance(value, list):
+        return [text for item in value for text in _public_strings(item)]
+    return []
+
+
+@pytest.mark.asyncio
+async def test_oversized_worker_candidate_returns_a_typed_rejected_report_without_grading_or_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    oversized = "x" * 3500 + "\n"
+    assert len(oversized) == 3501
+    grader = ForbiddenGrader(profile={"structured_output": False})
+    executed: list[str] = []
+    monkeypatch.setattr(evidence, "execute_candidate", executed.append)
+    graph = build_application_graph(
+        mode="live",
+        model_factory=lambda: SimpleNamespace(
+            worker=OversizedWorker(source=oversized),
+            grader=grader,
+        ),
+    )
+
+    events, report, error = await _stream(
+        graph,
+        {"rubric": BASELINE_RUBRIC, "max_iterations": 3},
+        "outer-oversized",
+    )
+
+    assert error is None
+    assert report is not None
+    assert report["terminal_status"] == "failed"
+    assert report["accepted"] is False
+    assert report["gate_reason"] == "terminal_status_not_satisfied"
+    assert report["iterations"] == 1
+    assert report["final_candidate"] is None
+    assert report["evaluations"] == []
+    assert report["feedback"] == []
+    rejected = report["candidates"]
+    assert rejected == [
+        {
+            "grading_run_id": report["grading_run_id"],
+            "version": 1,
+            "iteration": 0,
+            "candidate_id": candidate_id(oversized),
+            "source": None,
+            "source_omitted": True,
+        }
+    ]
+    assert report["evidence"] == [
+        {
+            "event_id": f"{report['grading_run_id']}:rubric_evidence:0:1:0",
+            "grading_run_id": report["grading_run_id"],
+            "iteration": 0,
+            "candidate_version": 1,
+            "candidate_id": rejected[0]["candidate_id"],
+            "requested_candidate_id": rejected[0]["candidate_id"],
+            "ok": False,
+            "behavior_failures": [],
+            "profile_failures": ["candidate_too_long"],
+            "duration_ms": 0,
+            "timed_out": False,
+            "output_truncated": False,
+        }
+    ]
+    assert [event["type"] for event in events] == ["candidate", "rubric_evidence"]
+    assert events[0]["candidate_id"] == rejected[0]["candidate_id"]
+    assert events[0]["payload"] == {"source": None, "source_omitted": True}
+    assert events[1]["payload"]["profile_failures"] == ["candidate_too_long"]
+    assert grader.invocation_count == 0
+    assert executed == []
+    assert oversized not in json.dumps({"events": events, "report": report})
+    assert max(map(len, _public_strings({"events": events, "report": report}))) <= 3500
 
 
 def test_report_rejects_candidate_id_that_does_not_match_normalized_source() -> None:
