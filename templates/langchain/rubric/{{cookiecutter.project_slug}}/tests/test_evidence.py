@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import subprocess
+import threading
+from typing import Any
+
 import pytest
-from {{ cookiecutter.project_slug }} import evidence
+
+from {{ cookiecutter.project_slug }} import evidence, runner
 from {{ cookiecutter.project_slug }}.contracts import candidate_id, normalize_candidate_source
 from {{ cookiecutter.project_slug }}.evidence import RunEvidenceLedger, make_run_test_suite
 
@@ -21,6 +27,12 @@ def find_duplicates(values):
 FAILING_SOURCE = """\
 def find_duplicates(values):
     return []
+"""
+
+INFINITE_SOURCE = """\
+def find_duplicates(values):
+    while True:
+        pass
 """
 
 
@@ -196,3 +208,66 @@ def test_recording_evidence_without_a_candidate_is_rejected() -> None:
             candidate=None,
             requested_candidate_id=candidate_id(PASSING_SOURCE),
         )
+
+
+@pytest.mark.asyncio
+async def test_async_tool_cancellation_reaps_real_candidate_before_returning(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    processes: list[subprocess.Popen[bytes]] = []
+    process_started = threading.Event()
+    execution_finished = threading.Event()
+    loop_errors: list[dict[str, Any]] = []
+    real_execute_candidate = evidence.execute_candidate
+    loop = asyncio.get_running_loop()
+    previous_exception_handler = loop.get_exception_handler()
+
+    def capture_loop_error(
+        event_loop: asyncio.AbstractEventLoop,
+        context: dict[str, Any],
+    ) -> None:
+        del event_loop
+        loop_errors.append(context)
+
+    def process_factory(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+        process = subprocess.Popen(*args, **kwargs)
+        processes.append(process)
+        process_started.set()
+        return process
+
+    def observed_execute_candidate(source: str, **kwargs: Any) -> dict[str, object]:
+        try:
+            return real_execute_candidate(source, **kwargs)
+        finally:
+            execution_finished.set()
+
+    monkeypatch.setattr(runner, "_PROCESS_FACTORY", process_factory)
+    monkeypatch.setattr(evidence, "execute_candidate", observed_execute_candidate)
+    monkeypatch.setattr(evidence, "emit_custom_event", lambda event: None)
+    ledger = RunEvidenceLedger(grading_run_id="grading-cancel")
+    ledger.record_candidate(INFINITE_SOURCE, iteration=0)
+    suite = make_run_test_suite(ledger)
+    task = asyncio.create_task(suite.ainvoke({"code": INFINITE_SOURCE}))
+    loop.set_exception_handler(capture_loop_error)
+
+    try:
+        assert await asyncio.wait_for(asyncio.to_thread(process_started.wait, 1.0), timeout=1.5)
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=1.0)
+
+        assert execution_finished.is_set()
+        assert processes and all(process.poll() is not None for process in processes)
+        assert not any(thread.is_alive() and thread.name.startswith("rubric-") for thread in threading.enumerate())
+        assert getattr(suite, "coroutine", None) is not None
+        assert ledger.evidence == []
+        await asyncio.sleep(0)
+        assert loop_errors == []
+    finally:
+        for process in processes:
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=1.0)
+        await asyncio.to_thread(execution_finished.wait, 3.0)
+        loop.set_exception_handler(previous_exception_handler)

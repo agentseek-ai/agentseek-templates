@@ -7,7 +7,8 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextvars import ContextVar
 from pathlib import Path
 from typing import BinaryIO, cast
 
@@ -34,6 +35,24 @@ _CHILD_PROFILE_FAILURES = frozenset(
     }
 )
 _CASE_NAMES = frozenset({"basic", "empty", "no_duplicates", "unhashable", "repeated_three_times"})
+_CANCELLATION_EVENT: ContextVar[threading.Event | None] = ContextVar(
+    "rubric_candidate_cancellation_event",
+    default=None,
+)
+
+
+class CandidateExecutionCancelled(BaseException):
+    """Stop one owned candidate process without turning cancellation into Evidence."""
+
+
+@contextlib.contextmanager
+def candidate_cancellation_scope(event: threading.Event) -> Iterator[None]:
+    """Bind an async tool's cancellation signal to its worker-thread execution."""
+    token = _CANCELLATION_EVENT.set(event)
+    try:
+        yield
+    finally:
+        _CANCELLATION_EVENT.reset(token)
 
 
 def _result(
@@ -80,6 +99,7 @@ def _drain_process(
     process: subprocess.Popen[bytes],
     request: bytes,
     timeout: float,
+    cancellation_event: threading.Event | None = None,
 ) -> tuple[bytes, bytes, bool]:
     if process.stdin is None or process.stdout is None or process.stderr is None:
         raise RuntimeError("child process pipes are required")
@@ -128,6 +148,8 @@ def _drain_process(
         except BrokenPipeError:
             pass
         while process.poll() is None:
+            if cancellation_event is not None and cancellation_event.is_set():
+                raise CandidateExecutionCancelled
             if output_limit_reached.is_set() or reader_failed.is_set():
                 _terminate_and_reap(process)
                 break
@@ -188,6 +210,9 @@ def execute_candidate(source: str) -> EvidenceResult:
     started_at = time.monotonic()
     normalized = normalize_candidate_source(source)
     identifier = candidate_id(normalized)
+    cancellation_event = _CANCELLATION_EVENT.get()
+    if cancellation_event is not None and cancellation_event.is_set():
+        raise CandidateExecutionCancelled
     if len(normalized) > MAX_CANDIDATE_CHARS:
         return _result(identifier, started_at, profile_failures=("candidate_too_long",))
 
@@ -204,7 +229,12 @@ def execute_candidate(source: str) -> EvidenceResult:
             start_new_session=False,
         )
         try:
-            stdout, stderr, output_truncated = _drain_process(process, request, _TIMEOUT_SECONDS)
+            stdout, stderr, output_truncated = _drain_process(
+                process,
+                request,
+                _TIMEOUT_SECONDS,
+                cancellation_event,
+            )
             if output_truncated:
                 _terminate_and_reap(process)
                 return _result(

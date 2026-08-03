@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+import contextvars
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import cast
 
-from langchain_core.tools import BaseTool, tool
+from langchain_core.tools import BaseTool, StructuredTool
 from langgraph.config import get_stream_writer
 
 from .contracts import (
@@ -15,7 +19,7 @@ from .contracts import (
     build_rejected_candidate_record,
     candidate_id,
 )
-from .runner import execute_candidate
+from .runner import CandidateExecutionCancelled, candidate_cancellation_scope, execute_candidate
 
 
 @dataclass(slots=True)
@@ -110,25 +114,107 @@ def emit_custom_event(payload: dict[str, object]) -> None:
     writer(payload)
 
 
+def _prepare_execution(
+    ledger: RunEvidenceLedger,
+    code: str,
+) -> tuple[str, CandidateRecord | None, EvidenceResult | None]:
+    requested_id = candidate_id(code)
+    tracked_candidate = ledger.current_candidate
+    current = cast(CandidateRecord, dict(tracked_candidate)) if tracked_candidate is not None else None
+    current_source = current["source"] if current is not None else None
+    current_source_id = candidate_id(current_source) if isinstance(current_source, str) else None
+    if current is None or current_source_id != current["candidate_id"] or requested_id != current["candidate_id"]:
+        return requested_id, current, candidate_binding_failure(requested_id, current)
+    return requested_id, current, None
+
+
+def _record_result(
+    ledger: RunEvidenceLedger,
+    result: EvidenceResult,
+    *,
+    current: CandidateRecord | None,
+    requested_id: str,
+) -> dict[str, object]:
+    record = ledger.record_evidence(
+        result,
+        candidate=current,
+        requested_candidate_id=requested_id,
+    )
+    emit_custom_event({"type": "rubric_evidence", **record})
+    return record
+
+
+@dataclass(slots=True)
+class _CandidateExecutionOutcome:
+    result: EvidenceResult | None = None
+    error: BaseException | None = None
+
+
+def _capture_candidate_execution(source: str) -> _CandidateExecutionOutcome:
+    try:
+        return _CandidateExecutionOutcome(result=execute_candidate(source))
+    except BaseException as error:
+        return _CandidateExecutionOutcome(error=error)
+
+
+async def _execute_candidate_async(source: str) -> EvidenceResult:
+    cancellation_event = threading.Event()
+    executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rubric-candidate")
+    try:
+        with candidate_cancellation_scope(cancellation_event):
+            context = contextvars.copy_context()
+        concurrent_future = executor.submit(context.run, _capture_candidate_execution, source)
+        execution = asyncio.wrap_future(concurrent_future)
+        try:
+            outcome = await asyncio.shield(execution)
+        except asyncio.CancelledError as cancellation:
+            cancellation_event.set()
+            while not execution.done():
+                try:
+                    await asyncio.shield(execution)
+                except asyncio.CancelledError:
+                    continue
+            outcome = execution.result()
+            if outcome.error is not None and not isinstance(outcome.error, CandidateExecutionCancelled):
+                cancellation.add_note(f"candidate cleanup raised {type(outcome.error).__name__}")
+            raise
+        if outcome.error is not None:
+            raise outcome.error
+        if outcome.result is None:
+            raise RuntimeError("candidate execution produced no result")
+        return outcome.result
+    finally:
+        executor.shutdown(wait=True, cancel_futures=False)
+
+
 def make_run_test_suite(ledger: RunEvidenceLedger) -> BaseTool:
-    @tool("run_test_suite")
     def run_test_suite(code: str) -> dict[str, object]:
         """Run the fixed find_duplicates evidence suite for this candidate source."""
-        requested_id = candidate_id(code)
-        tracked_candidate = ledger.current_candidate
-        current = cast(CandidateRecord, dict(tracked_candidate)) if tracked_candidate is not None else None
-        current_source = current["source"] if current is not None else None
-        current_source_id = candidate_id(current_source) if isinstance(current_source, str) else None
-        if current is None or current_source_id != current["candidate_id"] or requested_id != current["candidate_id"]:
-            result = candidate_binding_failure(requested_id, current)
-        else:
+        requested_id, current, result = _prepare_execution(ledger, code)
+        if result is None:
             result = execute_candidate(cast(str, current["source"]))
-        record = ledger.record_evidence(
+        return _record_result(
+            ledger,
             result,
-            candidate=current,
-            requested_candidate_id=requested_id,
+            current=current,
+            requested_id=requested_id,
         )
-        emit_custom_event({"type": "rubric_evidence", **record})
-        return record
 
-    return run_test_suite
+    async def arun_test_suite(code: str) -> dict[str, object]:
+        """Run the fixed suite and synchronously reap its child when cancelled."""
+        requested_id, current, result = _prepare_execution(ledger, code)
+        if result is None:
+            result = await _execute_candidate_async(cast(str, current["source"]))
+        return _record_result(
+            ledger,
+            result,
+            current=current,
+            requested_id=requested_id,
+        )
+
+    return StructuredTool.from_function(
+        func=run_test_suite,
+        coroutine=arun_test_suite,
+        name="run_test_suite",
+        description="Run the fixed find_duplicates evidence suite for this candidate source.",
+    )
