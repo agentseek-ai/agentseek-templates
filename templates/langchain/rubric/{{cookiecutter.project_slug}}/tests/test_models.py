@@ -1,18 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import subprocess
 import sys
+from collections.abc import AsyncIterator, Iterator, Sequence
+from typing import Any
 
 import pytest
 from langchain_anthropic import ChatAnthropic
+from langchain_core.callbacks import AsyncCallbackHandler, BaseCallbackHandler
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
+from langchain_core.runnables import Runnable, RunnableBinding, RunnableParallel, RunnableSequence
+from langchain_core.tools import BaseTool
+from langchain_core.utils.function_calling import convert_to_openai_tool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
-from pydantic import PrivateAttr
+from pydantic import BaseModel, PrivateAttr
 from rubric_lab.models import (
     LiveConfigurationError,
     LiveModelConfig,
@@ -246,11 +253,206 @@ class RaisingChatModel(BaseChatModel):
         self,
         messages: list[BaseMessage],
         stop: list[str] | None = None,
+        run_manager: object | None = None,
         **kwargs: object,
     ) -> ChatResult:
-        del messages, stop, kwargs
+        del messages, stop, run_manager, kwargs
         self._calls += 1
         raise RuntimeError(self.message)
+
+
+RawProviderError = type(
+    "RawProviderError_SENTINEL_SECRET_7f2c",
+    (RuntimeError,),
+    {},
+)
+
+
+class GradePayload(BaseModel):
+    verdict: str
+
+
+class ProviderBindingModel(RaisingChatModel):
+    """A provider-like model using LangChain's real tool-binding machinery."""
+
+    def bind_tools(
+        self,
+        tools: Sequence[dict[str, Any] | type | BaseTool],
+        *,
+        tool_choice: str | None = None,
+        **kwargs: object,
+    ):
+        formatted_tools = [convert_to_openai_tool(tool) for tool in tools]
+        return self.bind(tools=formatted_tools, tool_choice=tool_choice, **kwargs)
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: object | None = None,
+        **kwargs: object,
+    ) -> ChatResult:
+        del messages, stop, run_manager, kwargs
+        self._calls += 1
+        error = RawProviderError("provider body=raw-body-marker authorization=Bearer SENTINEL_SECRET_7f2c")
+        error.headers = {"authorization": "Bearer SENTINEL_SECRET_7f2c"}
+        error.body = {"detail": "raw-body-marker SENTINEL_SECRET_7f2c"}
+        raise error
+
+
+class WorkingProviderBindingModel(ProviderBindingModel):
+    _seen_tools: list[object] = PrivateAttr(default_factory=list)
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: object | None = None,
+        **kwargs: object,
+    ) -> ChatResult:
+        del messages, stop, run_manager
+        self._seen_tools.append(kwargs.get("tools"))
+        return ChatResult(
+            generations=[
+                ChatGeneration(
+                    message=AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "GradePayload",
+                                "args": {"verdict": "satisfied"},
+                                "id": "grade-call",
+                                "type": "tool_call",
+                            }
+                        ],
+                    )
+                )
+            ]
+        )
+
+
+class StreamingProviderBindingModel(WorkingProviderBindingModel):
+    def _stream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: object | None = None,
+        **kwargs: object,
+    ) -> Iterator[ChatGenerationChunk]:
+        del messages, stop, run_manager, kwargs
+        yield ChatGenerationChunk(message=AIMessageChunk(content="sync-stream"))
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: object | None = None,
+        **kwargs: object,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        del messages, stop, run_manager, kwargs
+        yield ChatGenerationChunk(message=AIMessageChunk(content="async-stream"))
+
+
+class BlockingProviderBindingModel(ProviderBindingModel):
+    _started: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+    _finished: asyncio.Event = PrivateAttr(default_factory=asyncio.Event)
+
+    async def _agenerate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: object | None = None,
+        **kwargs: object,
+    ) -> ChatResult:
+        del messages, stop, run_manager, kwargs
+        self._started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            self._finished.set()
+
+
+def _error_trace_projection(error: BaseException) -> str:
+    """Approximate the exception material a callback-backed trace can inspect."""
+    projection: list[dict[str, Any]] = []
+    current: BaseException | None = error
+    visited: set[int] = set()
+    while current is not None and id(current) not in visited:
+        visited.add(id(current))
+        projection.append(
+            {
+                "type": type(current).__name__,
+                "message": str(current),
+                "attributes": vars(current),
+            }
+        )
+        current = current.__cause__ or current.__context__
+    return repr(projection)
+
+
+class RecordingTraceHandler(BaseCallbackHandler):
+    def __init__(self) -> None:
+        self.llm_errors: list[BaseException] = []
+        self.chain_errors: list[BaseException] = []
+
+    def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
+        del kwargs
+        self.llm_errors.append(error)
+
+    def on_chain_error(self, error: BaseException, **kwargs: Any) -> None:
+        del kwargs
+        self.chain_errors.append(error)
+
+
+class AsyncRecordingTraceHandler(AsyncCallbackHandler):
+    def __init__(self) -> None:
+        self.llm_errors: list[BaseException] = []
+        self.chain_errors: list[BaseException] = []
+
+    async def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
+        del kwargs
+        self.llm_errors.append(error)
+
+    async def on_chain_error(self, error: BaseException, **kwargs: Any) -> None:
+        del kwargs
+        self.chain_errors.append(error)
+
+
+def _assert_provider_failure_is_sanitized_everywhere(
+    public_error: BaseException,
+    callback_errors: list[BaseException],
+    logs: str,
+) -> None:
+    assert callback_errors, "the sanitized model failure must remain observable"
+    assert isinstance(public_error, SafeModelError)
+    assert all(isinstance(error, SafeModelError) for error in callback_errors)
+
+    observed = "\n".join(
+        [_error_trace_projection(public_error), *map(_error_trace_projection, callback_errors), logs]
+    ).lower()
+    for forbidden in (
+        "sentinel_secret_7f2c",
+        "raw-body-marker",
+        "authorization",
+        RawProviderError.__name__.lower(),
+    ):
+        assert forbidden not in observed
+
+
+def _model_bindings(runnable: Runnable[Any, Any]) -> list[RunnableBinding[Any, Any]]:
+    if isinstance(runnable, RunnableBinding):
+        if isinstance(runnable.bound, BaseChatModel):
+            return [runnable]
+        return []
+    if isinstance(runnable, RunnableSequence):
+        bindings = _model_bindings(runnable.first)
+        for step in runnable.middle:
+            bindings.extend(_model_bindings(step))
+        bindings.extend(_model_bindings(runnable.last))
+        return bindings
+    if isinstance(runnable, RunnableParallel):
+        return [binding for step in runnable.steps__.values() for binding in _model_bindings(step)]
+    return []
 
 
 def test_sanitizing_model_hides_provider_exception_from_public_error_and_logs(
@@ -287,26 +489,183 @@ async def test_sanitizing_model_preserves_async_invocation_and_sanitizes_errors(
     assert "SENTINEL_SECRET_7f2c" not in str(error.value)
 
 
-def test_bound_and_structured_model_paths_keep_the_sanitizing_boundary() -> None:
-    class BindingModel(RaisingChatModel):
-        def bind_tools(self, tools: object, **kwargs: object):
-            del tools, kwargs
-            return self
-
-        def with_structured_output(self, schema: object, **kwargs: object):
-            del schema, kwargs
-            return self
-
+def test_bound_tools_callback_observes_only_the_sanitized_sync_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    observer = RecordingTraceHandler()
     model = SanitizingChatModel(
-        delegate=BindingModel(message="SENTINEL_SECRET_7f2c"),
+        delegate=ProviderBindingModel(message="unused"),
         provider="google",
         role="grader",
     )
 
-    for runnable in (model.bind_tools([]), model.with_structured_output(dict)):
-        with pytest.raises(SafeModelError) as error:
-            runnable.invoke("grade this")
-        assert "SENTINEL_SECRET_7f2c" not in str(error.value)
+    with caplog.at_level(logging.ERROR), pytest.raises(SafeModelError) as error:
+        model.bind_tools([GradePayload]).invoke(
+            "grade this",
+            config={"callbacks": [observer]},
+        )
+
+    assert len(observer.llm_errors) == 1
+    _assert_provider_failure_is_sanitized_everywhere(
+        error.value,
+        [*observer.llm_errors, *observer.chain_errors],
+        caplog.text,
+    )
+
+
+@pytest.mark.asyncio
+async def test_structured_output_trace_observes_only_the_sanitized_async_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    observer = AsyncRecordingTraceHandler()
+    model = SanitizingChatModel(
+        delegate=ProviderBindingModel(message="unused"),
+        provider="anthropic",
+        role="grader",
+    )
+
+    with caplog.at_level(logging.ERROR), pytest.raises(SafeModelError) as error:
+        await model.with_structured_output(GradePayload).ainvoke(
+            "grade this",
+            config={"callbacks": [observer]},
+        )
+
+    assert len(observer.llm_errors) == 1
+    _assert_provider_failure_is_sanitized_everywhere(
+        error.value,
+        [*observer.llm_errors, *observer.chain_errors],
+        caplog.text,
+    )
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "google"])
+def test_supported_provider_tool_bindings_keep_formatted_schemas_inside_safe_model(
+    provider: str,
+) -> None:
+    model = build_live_models(
+        LiveModelConfig(
+            provider=provider,  # type: ignore[arg-type]
+            api_key="test-key",
+            api_base=None,
+            worker_model="worker-model",
+            grader_model="grader-model",
+        )
+    ).grader
+    assert isinstance(model, SanitizingChatModel)
+
+    raw = model.delegate.bind_tools([GradePayload])
+    safe = model.bind_tools([GradePayload])
+
+    assert isinstance(raw, RunnableBinding)
+    assert isinstance(safe, RunnableBinding)
+    assert type(safe) is type(raw)
+    assert safe.bound is model
+    assert safe.kwargs == raw.kwargs
+    assert safe.config == raw.config
+    assert safe.config_factories == raw.config_factories
+    assert safe.custom_input_type is raw.custom_input_type
+    assert safe.custom_output_type is raw.custom_output_type
+    assert all(node.data is not model.delegate for node in safe.get_graph().nodes.values())
+
+
+@pytest.mark.parametrize(
+    ("provider", "structured_kwargs"),
+    [
+        ("openai", {}),
+        ("openai", {"method": "function_calling", "strict": True}),
+        ("anthropic", {}),
+        ("anthropic", {"method": "json_schema"}),
+        ("google", {}),
+        ("google", {"method": "function_calling"}),
+    ],
+)
+@pytest.mark.parametrize("include_raw", [False, True])
+def test_supported_provider_structured_output_keeps_native_runnable_graph(
+    provider: str,
+    structured_kwargs: dict[str, object],
+    include_raw: bool,
+) -> None:
+    model = build_live_models(
+        LiveModelConfig(
+            provider=provider,  # type: ignore[arg-type]
+            api_key="test-key",
+            api_base=None,
+            worker_model="worker-model",
+            grader_model="grader-model",
+        )
+    ).grader
+    assert isinstance(model, SanitizingChatModel)
+
+    raw = model.delegate.with_structured_output(
+        GradePayload,
+        include_raw=include_raw,
+        **structured_kwargs,
+    )
+    safe = model.with_structured_output(
+        GradePayload,
+        include_raw=include_raw,
+        **structured_kwargs,
+    )
+    raw_bindings = _model_bindings(raw)
+    safe_bindings = _model_bindings(safe)
+
+    assert type(safe) is type(raw)
+    assert len(raw_bindings) == len(safe_bindings) == 1
+    assert type(safe_bindings[0]) is type(raw_bindings[0])
+    assert safe_bindings[0].bound is model
+    assert safe_bindings[0].kwargs == raw_bindings[0].kwargs
+    assert safe_bindings[0].config == raw_bindings[0].config
+    assert safe_bindings[0].config_factories == raw_bindings[0].config_factories
+    assert safe_bindings[0].custom_input_type is raw_bindings[0].custom_input_type
+    assert safe_bindings[0].custom_output_type is raw_bindings[0].custom_output_type
+    assert all(node.data is not model.delegate for node in safe.get_graph().nodes.values())
+    if isinstance(raw, RunnableSequence) and isinstance(safe, RunnableSequence):
+        assert type(safe.last) is type(raw.last)
+
+
+def test_structured_output_success_preserves_provider_tool_schema_and_parser() -> None:
+    delegate = WorkingProviderBindingModel(message="unused")
+    model = SanitizingChatModel(delegate=delegate, provider="openai", role="grader")
+
+    result = model.with_structured_output(GradePayload).invoke("grade this")
+
+    assert result == GradePayload(verdict="satisfied")
+    assert isinstance(delegate._seen_tools[0], list)
+    assert delegate._seen_tools[0][0]["function"]["name"] == "GradePayload"  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+async def test_bound_tools_preserves_sync_and_async_provider_streaming() -> None:
+    model = SanitizingChatModel(
+        delegate=StreamingProviderBindingModel(message="unused"),
+        provider="google",
+        role="worker",
+    )
+    bound = model.bind_tools([GradePayload])
+
+    sync_content = "".join(str(chunk.content) for chunk in bound.stream("write code"))
+    async_content = "".join([str(chunk.content) async for chunk in bound.astream("write code")])
+
+    assert sync_content == "sync-stream"
+    assert async_content == "async-stream"
+
+
+@pytest.mark.asyncio
+async def test_structured_output_does_not_convert_cancellation_into_model_failure() -> None:
+    delegate = BlockingProviderBindingModel(message="unused")
+    model = SanitizingChatModel(
+        delegate=delegate,
+        provider="anthropic",
+        role="grader",
+    )
+    task = asyncio.create_task(model.with_structured_output(GradePayload).ainvoke("grade this"))
+
+    await asyncio.wait_for(delegate._started.wait(), timeout=1)
+    task.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert delegate._finished.is_set()
 
 
 def test_successful_model_result_is_not_changed_by_the_sanitizing_boundary() -> None:

@@ -9,8 +9,15 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.callbacks import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun
 from langchain_core.language_models.chat_models import BaseChatModel, LanguageModelInput
 from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.outputs import ChatResult
-from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_core.outputs import ChatGenerationChunk, ChatResult
+from langchain_core.runnables import (
+    Runnable,
+    RunnableAssign,
+    RunnableBinding,
+    RunnableParallel,
+    RunnableSequence,
+    RunnableWithFallbacks,
+)
 from langchain_core.tools import BaseTool
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
@@ -150,60 +157,80 @@ def _safe_model_message(role: ModelRole, provider: Provider, exc: Exception) -> 
     )
 
 
-def _raise_safe_model_error(role: ModelRole, provider: Provider, exc: Exception) -> None:
-    raise SafeModelError(_safe_model_message(role, provider, exc)) from None
+def _safe_model_error(role: ModelRole, provider: Provider, exc: Exception) -> SafeModelError:
+    return SafeModelError(_safe_model_message(role, provider, exc))
 
 
-class _SanitizingRunnable(Runnable[Any, Any]):
-    def __init__(self, delegate: Runnable[Any, Any], *, provider: Provider, role: ModelRole) -> None:
-        self._delegate = delegate
-        self._provider = provider
-        self._role = role
+def _replace_model_binding(
+    runnable: Runnable[Any, Any],
+    *,
+    delegate: BaseChatModel,
+    replacement: BaseChatModel,
+) -> tuple[Runnable[Any, Any], bool]:
+    """Copy a provider-built runnable graph with its model leaf made safe."""
+    memo: dict[int, Runnable[Any, Any]] = {}
+    active: set[int] = set()
+    replacements = 0
 
-    def invoke(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> Any:
+    def visit(node: Runnable[Any, Any]) -> Runnable[Any, Any]:
+        nonlocal replacements
+        node_id = id(node)
+        if node_id in memo:
+            return memo[node_id]
+        if node_id in active:
+            raise TypeError("Cyclic provider binding graph")
+        if node is delegate:
+            raise TypeError("Unbound provider model in runnable graph")
+
+        active.add(node_id)
         try:
-            return self._delegate.invoke(input, config=config, **kwargs)
-        except Exception as exc:
-            _raise_safe_model_error(self._role, self._provider, exc)
+            updated: Runnable[Any, Any] = node
+            if isinstance(node, RunnableBinding):
+                if node.bound is delegate:
+                    replacements += 1
+                    updated = node.model_copy(update={"bound": replacement})
+                else:
+                    bound = visit(node.bound)
+                    if bound is not node.bound:
+                        updated = node.model_copy(update={"bound": bound})
+            elif isinstance(node, RunnableSequence):
+                first = visit(node.first)
+                middle = [visit(step) for step in node.middle]
+                last = visit(node.last)
+                if (
+                    first is not node.first
+                    or last is not node.last
+                    or any(new is not old for new, old in zip(middle, node.middle, strict=True))
+                ):
+                    updated = node.model_copy(update={"first": first, "middle": middle, "last": last})
+            elif isinstance(node, RunnableParallel):
+                steps = {key: visit(step) for key, step in node.steps__.items()}
+                if any(steps[key] is not step for key, step in node.steps__.items()):
+                    updated = node.model_copy(update={"steps__": steps})
+            elif isinstance(node, RunnableWithFallbacks):
+                primary = visit(node.runnable)
+                fallbacks = [visit(fallback) for fallback in node.fallbacks]
+                if primary is not node.runnable or any(
+                    new is not old for new, old in zip(fallbacks, node.fallbacks, strict=True)
+                ):
+                    updated = node.model_copy(update={"runnable": primary, "fallbacks": fallbacks})
+            elif isinstance(node, RunnableAssign):
+                mapper = visit(node.mapper)
+                if mapper is not node.mapper:
+                    updated = node.model_copy(update={"mapper": mapper})
+            memo[node_id] = updated
+            return updated
+        finally:
+            active.remove(node_id)
 
-    async def ainvoke(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        try:
-            return await self._delegate.ainvoke(input, config=config, **kwargs)
-        except Exception as exc:
-            _raise_safe_model_error(self._role, self._provider, exc)
-
-    def stream(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> Iterator[Any]:
-        try:
-            yield from self._delegate.stream(input, config=config, **kwargs)
-        except Exception as exc:
-            _raise_safe_model_error(self._role, self._provider, exc)
-
-    async def astream(
-        self,
-        input: Any,
-        config: RunnableConfig | None = None,
-        **kwargs: Any,
-    ) -> AsyncIterator[Any]:
-        try:
-            async for chunk in self._delegate.astream(input, config=config, **kwargs):
-                yield chunk
-        except Exception as exc:
-            _raise_safe_model_error(self._role, self._provider, exc)
+    rebound = visit(runnable)
+    try:
+        contains_raw_delegate = any(graph_node.data is delegate for graph_node in rebound.get_graph().nodes.values())
+    except Exception as exc:
+        raise TypeError("Unable to verify provider binding graph") from exc
+    if contains_raw_delegate:
+        raise TypeError("Raw provider remained in runnable graph")
+    return rebound, replacements > 0
 
 
 class SanitizingChatModel(BaseChatModel):
@@ -236,7 +263,8 @@ class SanitizingChatModel(BaseChatModel):
                 **kwargs,
             )
         except Exception as exc:
-            _raise_safe_model_error(self.role, self.provider, exc)
+            safe_error = _safe_model_error(self.role, self.provider, exc)
+        raise safe_error
 
     async def _agenerate(
         self,
@@ -253,7 +281,62 @@ class SanitizingChatModel(BaseChatModel):
                 **kwargs,
             )
         except Exception as exc:
-            _raise_safe_model_error(self.role, self.provider, exc)
+            safe_error = _safe_model_error(self.role, self.provider, exc)
+        raise safe_error
+
+    def _should_stream(
+        self,
+        *,
+        async_api: bool,
+        run_manager: CallbackManagerForLLMRun | AsyncCallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> bool:
+        return self.delegate._should_stream(  # noqa: SLF001
+            async_api=async_api,
+            run_manager=run_manager,
+            **kwargs,
+        )
+
+    def _stream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> Iterator[ChatGenerationChunk]:
+        try:
+            yield from self.delegate._stream(  # noqa: SLF001
+                messages,
+                stop=stop,
+                run_manager=run_manager,
+                **kwargs,
+            )
+        except Exception as exc:
+            safe_error = _safe_model_error(self.role, self.provider, exc)
+        else:
+            return
+        raise safe_error
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: AsyncCallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        try:
+            async for chunk in self.delegate._astream(  # noqa: SLF001
+                messages,
+                stop=stop,
+                run_manager=run_manager,
+                **kwargs,
+            ):
+                yield chunk
+        except Exception as exc:
+            safe_error = _safe_model_error(self.role, self.provider, exc)
+        else:
+            return
+        raise safe_error
 
     def bind_tools(
         self,
@@ -265,8 +348,25 @@ class SanitizingChatModel(BaseChatModel):
         try:
             bound = self.delegate.bind_tools(tools, tool_choice=tool_choice, **kwargs)
         except Exception as exc:
-            _raise_safe_model_error(self.role, self.provider, exc)
-        return _SanitizingRunnable(bound, provider=self.provider, role=self.role)
+            safe_error = _safe_model_error(self.role, self.provider, exc)
+        else:
+            try:
+                rebound, replaced = _replace_model_binding(
+                    bound,
+                    delegate=self.delegate,
+                    replacement=self,
+                )
+            except Exception as exc:
+                safe_error = _safe_model_error(self.role, self.provider, exc)
+            else:
+                if replaced:
+                    return rebound
+                safe_error = _safe_model_error(
+                    self.role,
+                    self.provider,
+                    TypeError("Unsupported provider tool binding"),
+                )
+        raise safe_error
 
     def with_structured_output(
         self,
@@ -282,8 +382,25 @@ class SanitizingChatModel(BaseChatModel):
                 **kwargs,
             )
         except Exception as exc:
-            _raise_safe_model_error(self.role, self.provider, exc)
-        return _SanitizingRunnable(bound, provider=self.provider, role=self.role)
+            safe_error = _safe_model_error(self.role, self.provider, exc)
+        else:
+            try:
+                rebound, replaced = _replace_model_binding(
+                    bound,
+                    delegate=self.delegate,
+                    replacement=self,
+                )
+            except Exception as exc:
+                safe_error = _safe_model_error(self.role, self.provider, exc)
+            else:
+                if replaced:
+                    return rebound
+                safe_error = _safe_model_error(
+                    self.role,
+                    self.provider,
+                    TypeError("Unsupported provider structured-output binding"),
+                )
+        raise safe_error
 
 
 def _build_provider_model(config: LiveModelConfig, model_id: str) -> BaseChatModel:
