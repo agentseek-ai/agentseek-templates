@@ -1,14 +1,45 @@
 from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
 from {{ cookiecutter.project_slug }}.demo_binding import (
     MAX_PRESENTATION_RESEARCH_CHARS,
+    PRESENTATION_SYSTEM_PROMPT,
+    build_presentation_agent,
+    build_research_agent,
     _has_tavily_evidence,
     _research_failure,
     _search_requested,
     build_presentation_input,
 )
+
+
+class _Settings:
+    model = "openai:gpt-4o-mini"
+    relay_enabled = False
+
+
+def _middleware_names(agent: object) -> list[str]:
+    return [
+        getattr(item, "__name__", type(item).__name__)
+        for item in getattr(agent, "middleware", [])
+    ]
+
+
+def test_presentation_agent_does_not_force_provider_strategy() -> None:
+    agent = build_presentation_agent(_Settings())
+
+    assert "apply_structured_output_schema" not in _middleware_names(agent)
+    assert agent.tools == []
+    assert "普通 Markdown" in PRESENTATION_SYSTEM_PROMPT
+    assert "不要输出 JSON" in PRESENTATION_SYSTEM_PROMPT
+
+
+def test_research_agent_keeps_tavily_and_think_tool() -> None:
+    agent = build_research_agent(_Settings())
+
+    tool_names = {getattr(tool, "name", "") for tool in agent.tools}
+    assert {"tavily_search", "think_tool"} <= tool_names
+    assert "apply_structured_output_schema" not in _middleware_names(agent)
 
 
 def test_presentation_input_preserves_question_and_research_evidence() -> None:

@@ -14,7 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig, RunnableLambda
 from langchain_core.runnables.config import patch_config
 
-from .middleware import apply_structured_output_schema, normalize_context
+from .middleware import normalize_context
 from .relay import configure_relay, relay_config_builder, relay_middleware
 from .settings import get_settings
 from .tools import tavily_search, think_tool
@@ -38,12 +38,22 @@ RESEARCH_SYSTEM_PROMPT = """你是研究阶段 Agent。
 
 PRESENTATION_SYSTEM_PROMPT = """你是最终展示阶段 Agent。
 
-请根据研究阶段已经返回的内容生成最终 UI。
+请根据研究阶段已经返回的内容生成最终回答。
+使用普通 Markdown 输出，确保前端可以直接展示。
+
 研究阶段的结果必须被完整、准确地展示。
 不要自行编造搜索结果。
 不要再次调用搜索工具。
+不要输出 JSON。
+不要输出 ui、Markdown、props 等结构化 UI 字段。
 不要输出“正在搜索”“正在检索”“请稍候”等占位内容。
-如果研究阶段失败，请用 Markdown 清楚展示失败原因和建议。"""
+
+最终结果应当包含：
+- 对用户问题的直接回答；
+- 搜索结果标题；
+- 搜索结果 URL；
+- 必要时提供简短摘要；
+- 如果研究阶段失败，明确说明失败原因和重试建议。"""
 
 MAX_PRESENTATION_RESEARCH_CHARS = 12_000
 _SEARCH_TERMS = (
@@ -84,7 +94,7 @@ def build_research_agent(settings: Any | None = None) -> Any:
 
 
 def build_presentation_agent(settings: Any | None = None) -> Any:
-    """Build the schema-enabled stage; it cannot make a second web request."""
+    """Build the Markdown-only stage; it cannot make a second web request."""
     settings = settings or get_settings()
     return create_agent(
         **_base_agent_options(settings),
@@ -92,7 +102,6 @@ def build_presentation_agent(settings: Any | None = None) -> Any:
         middleware=[
             normalize_context,
             CopilotKitMiddleware(),
-            apply_structured_output_schema,
             *relay_middleware(settings),
         ],
         system_prompt=PRESENTATION_SYSTEM_PROMPT,
@@ -178,7 +187,7 @@ def build_presentation_input(
     messages.append(
         HumanMessage(
             content=(
-                "请把以下已完成的研究结果转换为最终 UI。\n\n"
+                "请把以下已完成的研究结果转换为最终 Markdown 回答。\n\n"
                 f"原始用户问题：\n{original_question}\n\n"
                 f"研究阶段结果：\n{research}\n\n"
                 f"研究阶段错误：\n{research_error}"

@@ -7,7 +7,7 @@ LangChain `create_agent` with the default AgentSeek middleware and CopilotKit/Bu
 ```text
 Browser → CopilotKit → Bub / AG-UI → research_then_present runnable
   ├─ Research Agent: Tavily + think_tool, without a structured-output constraint
-  ├─ Presentation Agent: structured CopilotKit UI, without web tools
+  ├─ Presentation Agent: ordinary Markdown output, without web tools
   └─ shared request-scoped Relay callback
     ├─ ATOF JSONL: .nemo-relay/atof/events.jsonl
     └─ OpenInference over OTLP → Phoenix → OceanBase SeekDB
@@ -31,7 +31,7 @@ The browser is at `http://127.0.0.1:{{ cookiecutter.frontend_port }}`; Phoenix i
 检索 NeMo Relay 和 OpenInference 的关系，给出两个来源并简要比较。
 ```
 
-Search, current-information, and fact-verification requests run in a dedicated Research Agent. It must produce `tavily_search` evidence before the Presentation Agent receives bounded titles, URLs, and page excerpts. The Presentation Agent has no web tools: it converts only the completed research result into the CopilotKit UI schema, preventing strict structured output from suppressing a required tool call. If research fails, the Presentation Agent renders the explicit failure instead of leaving a progress placeholder.
+Search, current-information, and fact-verification requests run in a dedicated Research Agent. It must produce `tavily_search` evidence before the Presentation Agent receives bounded titles, URLs, and page excerpts. The Presentation Agent has no web tools: it renders only the completed research result as ordinary Markdown, preventing strict structured output from suppressing a required tool call. If research fails, the Presentation Agent renders the explicit failure instead of leaving a progress placeholder.
 
 ## End-to-end verification
 
@@ -41,7 +41,7 @@ Submit this message in the browser:
 请使用联网搜索工具搜索 NVIDIA NeMo Relay 官方文档，并列出前两个搜索结果的标题和 URL，不要凭记忆回答。
 ```
 
-The final UI must show retrieved titles, URLs, and summaries rather than “正在搜索” or “请稍候”. Then verify Relay and persistence:
+The final UI must show retrieved titles, URLs, and summaries rather than “正在搜索” or “请稍候”. The Presentation Agent uses ordinary Markdown instead of forcing LangChain `ProviderStrategy`, so the template remains compatible with Claude, DeepSeek, NVIDIA NIM, and other OpenAI-compatible models. This prioritizes cross-model compatibility for the search and observability path. If you enable structured UI output, confirm that the selected model and provider support `response_format`/JSON Schema. Then verify Relay and persistence:
 
 ```bash
 wc -l .nemo-relay/atof/events.jsonl
