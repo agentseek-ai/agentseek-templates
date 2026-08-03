@@ -41,6 +41,9 @@ def _verify(events: list[dict[str, object]], report: RunReport) -> None:
     assert report["iterations"] == 2
     assert report["gate_reason"] == "satisfied_with_current_evidence"
     assert evidence_by_version[report["candidates"][-1]["version"]]["ok"] is True
+    assert evidence_by_version[report["candidates"][-1]["version"]]["output_truncated"] is False, (
+        "final Evidence output was truncated"
+    )
 
 
 def _print_summary(report: RunReport) -> None:

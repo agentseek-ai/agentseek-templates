@@ -288,6 +288,7 @@ def _has_current_passing_evidence(
         and record["requested_candidate_id"] == current_id
         and record["ok"] is True
         and record["timed_out"] is False
+        and record["output_truncated"] is False
         for record in evidence
     )
 

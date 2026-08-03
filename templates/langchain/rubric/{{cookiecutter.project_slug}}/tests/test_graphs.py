@@ -276,6 +276,50 @@ def test_timed_out_evidence_cannot_open_the_acceptance_gate() -> None:
     assert report["gate_reason"] == "current_evidence_missing"
 
 
+def test_truncated_evidence_cannot_open_the_acceptance_gate() -> None:
+    source = "def find_duplicates(values):\n    return []\n"
+    candidate_id = "d99a66c638782bf38e02a818855afd652b45952c2d26676ba85ec941a617a1f3"
+    report = build_run_report(
+        mode="demo",
+        thread_id="outer",
+        inner_thread_id="inner",
+        grading_run_id="run",
+        terminal_status="satisfied",
+        iterations=1,
+        candidates=[
+            {
+                "grading_run_id": "run",
+                "version": 1,
+                "iteration": 0,
+                "candidate_id": candidate_id,
+                "source": source,
+            }
+        ],
+        final_candidate=source,
+        evidence=[
+            {
+                "event_id": "run:rubric_evidence:0:1:0",
+                "grading_run_id": "run",
+                "iteration": 0,
+                "candidate_version": 1,
+                "candidate_id": candidate_id,
+                "requested_candidate_id": candidate_id,
+                "ok": True,
+                "behavior_failures": [],
+                "profile_failures": [],
+                "duration_ms": 1000,
+                "timed_out": False,
+                "output_truncated": True,
+            }
+        ],
+        evaluations=[],
+        feedback=[],
+    )
+
+    assert report["accepted"] is False
+    assert report["gate_reason"] == "current_evidence_missing"
+
+
 class BlockingWorker(BaseChatModel):
     started: asyncio.Event
 
@@ -345,3 +389,19 @@ def test_keyless_smoke_executes_the_evidence_backed_revision_loop(
     assert "evaluation_results=needs_revision,satisfied" in output
     assert "evidence_version=2 ok=true" in output
     assert "gate=satisfied_with_current_evidence accepted=true" in output
+
+
+def test_smoke_verifier_rejects_truncated_final_evidence() -> None:
+    from {{ cookiecutter.project_slug }}.smoke import _verify
+
+    report = {
+        "terminal_status": "satisfied",
+        "accepted": True,
+        "iterations": 2,
+        "gate_reason": "satisfied_with_current_evidence",
+        "candidates": [{"version": 2}],
+        "evaluations": [{"result": "needs_revision"}, {"result": "satisfied"}],
+        "evidence": [{"candidate_version": 2, "ok": True, "output_truncated": True}],
+    }
+    with pytest.raises(AssertionError, match="truncated"):
+        _verify([], report)  # type: ignore[arg-type]
