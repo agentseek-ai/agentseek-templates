@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import selectors
 import subprocess
 import sys
 import tempfile
@@ -16,6 +19,7 @@ _PROCESS_FACTORY = subprocess.Popen
 _TIMEOUT_SECONDS = 2.0
 _REAP_TIMEOUT_SECONDS = 0.5
 _MAX_OUTPUT_BYTES = 64 * 1024
+_READ_CHUNK_BYTES = 8 * 1024
 _CHILD_ENV = {
     "PYTHONIOENCODING": "utf-8",
     "RUBRIC_CHILD_PROFILE": "restricted-v1",
@@ -62,6 +66,61 @@ def _terminate_and_reap(process: subprocess.Popen[bytes]) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=_REAP_TIMEOUT_SECONDS)
+
+
+def _close_process_pipes(process: subprocess.Popen[bytes]) -> None:
+    for pipe in (process.stdin, process.stdout, process.stderr):
+        if pipe is not None:
+            with contextlib.suppress(OSError):
+                pipe.close()
+
+
+def _drain_process(
+    process: subprocess.Popen[bytes],
+    request: bytes,
+    timeout: float,
+) -> tuple[bytes, bytes, bool]:
+    if process.stdin is None or process.stdout is None or process.stderr is None:
+        raise RuntimeError("child process pipes are required")
+
+    deadline = time.monotonic() + timeout
+    try:
+        process.stdin.write(request)
+        process.stdin.close()
+    except BrokenPipeError:
+        pass
+
+    stdout = bytearray()
+    stderr = bytearray()
+    selector = selectors.DefaultSelector()
+    selector.register(process.stdout, selectors.EVENT_READ, stdout)
+    selector.register(process.stderr, selectors.EVENT_READ, stderr)
+    try:
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(process.args, timeout)
+            events = selector.select(remaining)
+            if not events:
+                raise subprocess.TimeoutExpired(process.args, timeout)
+            for key, _ in events:
+                chunk = os.read(key.fd, _READ_CHUNK_BYTES)
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                captured = key.data
+                available = _MAX_OUTPUT_BYTES - len(captured)
+                captured.extend(chunk[:available])
+                if len(chunk) > available:
+                    return bytes(stdout), bytes(stderr), True
+
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(process.args, timeout)
+        process.wait(timeout=remaining)
+        return bytes(stdout), bytes(stderr), False
+    finally:
+        selector.close()
 
 
 def _parse_child_result(payload: bytes) -> tuple[list[str], list[str], bool] | None:
@@ -117,7 +176,15 @@ def execute_candidate(source: str) -> EvidenceResult:
             start_new_session=False,
         )
         try:
-            stdout, stderr = process.communicate(input=request, timeout=_TIMEOUT_SECONDS)
+            stdout, stderr, output_truncated = _drain_process(process, request, _TIMEOUT_SECONDS)
+            if output_truncated:
+                _terminate_and_reap(process)
+                return _result(
+                    identifier,
+                    started_at,
+                    profile_failures=("child_protocol",),
+                    output_truncated=True,
+                )
         except subprocess.TimeoutExpired:
             _terminate_and_reap(process)
             return _result(
@@ -129,12 +196,9 @@ def execute_candidate(source: str) -> EvidenceResult:
         except BaseException:
             _terminate_and_reap(process)
             raise
+        finally:
+            _close_process_pipes(process)
 
-    stdout_truncated = len(stdout) > _MAX_OUTPUT_BYTES
-    stderr_truncated = len(stderr) > _MAX_OUTPUT_BYTES
-    stdout = stdout[:_MAX_OUTPUT_BYTES]
-    _ = stderr[:_MAX_OUTPUT_BYTES]
-    output_truncated = stdout_truncated or stderr_truncated
     if process.returncode != 0:
         return _result(
             identifier,

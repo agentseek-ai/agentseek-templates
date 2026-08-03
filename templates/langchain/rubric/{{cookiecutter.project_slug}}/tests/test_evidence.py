@@ -127,6 +127,37 @@ def test_hash_equivalent_request_executes_the_normalized_ledger_source(
     assert executed[0] == normalize_candidate_source(PASSING_SOURCE)
 
 
+def test_evidence_remains_bound_when_ledger_advances_during_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = RunEvidenceLedger(grading_run_id="grading-atomic")
+    current = ledger.record_candidate(PASSING_SOURCE, iteration=0)
+    monkeypatch.setattr(evidence, "emit_custom_event", lambda event: None)
+
+    def execute(source: str) -> dict[str, object]:
+        ledger.record_candidate(FAILING_SOURCE, iteration=1)
+        return {
+            "candidate_id": candidate_id(source),
+            "ok": True,
+            "behavior_failures": [],
+            "profile_failures": [],
+            "duration_ms": 1,
+            "timed_out": False,
+            "output_truncated": False,
+        }
+
+    monkeypatch.setattr(evidence, "execute_candidate", execute)
+
+    record = make_run_test_suite(ledger).invoke({"code": PASSING_SOURCE})
+
+    assert record["candidate_version"] == current["version"] == 1
+    assert record["iteration"] == current["iteration"] == 0
+    assert record["candidate_id"] == current["candidate_id"]
+    assert record["event_id"] == "grading-atomic:evidence:1:0"
+    assert ledger.current_candidate is not None
+    assert ledger.current_candidate["version"] == 2
+
+
 def test_identical_source_across_iterations_keeps_version_at_execution_time(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -160,4 +191,8 @@ def test_recording_evidence_without_a_candidate_is_rejected() -> None:
     }
 
     with pytest.raises(RuntimeError, match="candidate must be recorded before evidence"):
-        ledger.record_evidence(result, requested_candidate_id=candidate_id(PASSING_SOURCE))
+        ledger.record_evidence(
+            result,
+            candidate=None,
+            requested_candidate_id=candidate_id(PASSING_SOURCE),
+        )

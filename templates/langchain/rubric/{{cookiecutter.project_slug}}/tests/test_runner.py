@@ -187,6 +187,50 @@ def test_oversized_candidate_result_is_safely_summarized_and_flagged() -> None:
     assert len(repr(result)) < 4096
 
 
+def test_large_integer_result_remains_a_concise_behavior_failure() -> None:
+    source = "def find_duplicates(values):\n    return 10 ** 2000\n"
+
+    result = execute_candidate(source)
+
+    assert result["ok"] is False
+    assert result["profile_failures"] == []
+    assert result["behavior_failures"]
+    assert result["output_truncated"] is True
+    assert len(repr(result)) < 4096
+
+
+def test_abnormal_child_output_is_terminated_at_the_capture_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    completion_marker = tmp_path / "child-finished"
+    child = tmp_path / "oversized_child.py"
+    child.write_text(
+        "import pathlib, sys\n"
+        "sys.stdin.buffer.read()\n"
+        "sys.stdout.buffer.write(b'x' * (4 * 1024 * 1024))\n"
+        "sys.stdout.buffer.flush()\n"
+        f"pathlib.Path({str(completion_marker)!r}).write_text('finished')\n",
+        encoding="utf-8",
+    )
+    processes: list[subprocess.Popen[bytes]] = []
+
+    def process_factory(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+        process = subprocess.Popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(runner, "_CHILD_PATH", child)
+    monkeypatch.setattr(runner, "_PROCESS_FACTORY", process_factory)
+
+    result = execute_candidate(PASSING_SOURCE)
+
+    assert result["profile_failures"] == ["child_protocol"]
+    assert result["output_truncated"] is True
+    assert completion_marker.exists() is False
+    assert processes and all(process.poll() is not None for process in processes)
+
+
 def test_each_execution_uses_and_removes_a_distinct_temporary_cwd(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -229,33 +273,20 @@ def test_child_protocol_failures_never_expose_stderr_or_candidate_source(
 def test_cancellation_terminates_and_reaps_only_the_owned_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class InterruptedProcess:
-        returncode = None
-        terminated = False
-        waited = False
+    processes: list[subprocess.Popen[bytes]] = []
 
-        def communicate(self, input: bytes, timeout: float) -> tuple[bytes, bytes]:
-            raise KeyboardInterrupt
+    def process_factory(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+        process = subprocess.Popen(*args, **kwargs)
+        processes.append(process)
+        return process
 
-        def poll(self) -> None:
-            return None
+    def interrupt(*args: Any, **kwargs: Any) -> tuple[bytes, bytes, bool]:
+        raise KeyboardInterrupt
 
-        def terminate(self) -> None:
-            self.terminated = True
-
-        def wait(self, timeout: float) -> int:
-            self.waited = True
-            self.returncode = -15
-            return self.returncode
-
-        def kill(self) -> None:
-            raise AssertionError("terminate-and-reap should be sufficient")
-
-    process = InterruptedProcess()
-    monkeypatch.setattr(runner, "_PROCESS_FACTORY", lambda *args, **kwargs: process)
+    monkeypatch.setattr(runner, "_PROCESS_FACTORY", process_factory)
+    monkeypatch.setattr(runner, "_drain_process", interrupt, raising=False)
 
     with pytest.raises(KeyboardInterrupt):
         execute_candidate(PASSING_SOURCE)
 
-    assert process.terminated is True
-    assert process.waited is True
+    assert processes and all(process.poll() is not None for process in processes)

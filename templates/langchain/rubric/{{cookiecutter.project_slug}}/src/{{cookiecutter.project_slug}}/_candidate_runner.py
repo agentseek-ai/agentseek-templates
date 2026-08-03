@@ -94,7 +94,14 @@ def _load_candidate(source: str, sink: _BoundedTextSink) -> tuple[Callable[[list
 
 
 def _summarize(value: object, *, depth: int = 0) -> tuple[str, bool]:
-    if value is None or isinstance(value, bool | int | float):
+    if value is None or isinstance(value, bool):
+        return repr(value), False
+    if isinstance(value, int):
+        bit_length = value.bit_length()
+        if bit_length > 256:
+            return f"<int bits={bit_length}>", True
+        return repr(value), False
+    if isinstance(value, float):
         return repr(value), False
     if isinstance(value, str):
         return f"<str len={len(value)}>", len(value) > 256

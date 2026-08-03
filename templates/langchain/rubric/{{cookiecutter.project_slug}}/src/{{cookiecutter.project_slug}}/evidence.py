@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import cast
 
 from langchain_core.tools import BaseTool, tool
 from langgraph.config import get_stream_writer
@@ -39,17 +40,17 @@ class RunEvidenceLedger:
         self,
         result: EvidenceResult,
         *,
+        candidate: CandidateRecord | None,
         requested_candidate_id: str,
     ) -> EvidenceRecord:
-        current = self.current_candidate
-        if current is None:
+        if candidate is None:
             raise RuntimeError("candidate must be recorded before evidence")
         record: EvidenceRecord = {
-            "event_id": f"{self.grading_run_id}:evidence:{current['version']}:{len(self.evidence)}",
-            "grading_run_id": self.grading_run_id,
-            "candidate_version": current["version"],
-            "iteration": current["iteration"],
-            "candidate_id": current["candidate_id"],
+            "event_id": f"{candidate['grading_run_id']}:evidence:{candidate['version']}:{len(self.evidence)}",
+            "grading_run_id": candidate["grading_run_id"],
+            "candidate_version": candidate["version"],
+            "iteration": candidate["iteration"],
+            "candidate_id": candidate["candidate_id"],
             "requested_candidate_id": requested_candidate_id,
             "ok": result["ok"],
             "behavior_failures": list(result["behavior_failures"]),
@@ -87,13 +88,18 @@ def make_run_test_suite(ledger: RunEvidenceLedger) -> BaseTool:
     def run_test_suite(code: str) -> dict[str, object]:
         """Run the fixed find_duplicates evidence suite for this candidate source."""
         requested_id = candidate_id(code)
-        current = ledger.current_candidate
+        tracked_candidate = ledger.current_candidate
+        current = cast(CandidateRecord, dict(tracked_candidate)) if tracked_candidate is not None else None
         current_source_id = candidate_id(current["source"]) if current is not None else None
         if current is None or current_source_id != current["candidate_id"] or requested_id != current["candidate_id"]:
             result = candidate_binding_failure(requested_id, current)
         else:
             result = execute_candidate(current["source"])
-        record = ledger.record_evidence(result, requested_candidate_id=requested_id)
+        record = ledger.record_evidence(
+            result,
+            candidate=current,
+            requested_candidate_id=requested_id,
+        )
         emit_custom_event({"type": "rubric_evidence", **record})
         return record
 
