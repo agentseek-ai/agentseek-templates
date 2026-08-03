@@ -243,6 +243,31 @@ def test_abnormal_child_output_is_terminated_at_the_capture_limit(
     assert processes and all(process.poll() is not None for process in processes)
 
 
+def test_first_byte_over_capture_limit_terminates_before_child_continues(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    completion_marker = tmp_path / "cap-plus-one-child-finished"
+    child = tmp_path / "cap_plus_one_child.py"
+    child.write_text(
+        "import pathlib, sys, time\n"
+        "sys.stdin.buffer.read()\n"
+        "sys.stdout.buffer.write(b'x' * ((64 * 1024) + 1))\n"
+        "sys.stdout.buffer.flush()\n"
+        "time.sleep(0.25)\n"
+        f"pathlib.Path({str(completion_marker)!r}).write_text('finished')\n"
+        "time.sleep(10)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runner, "_CHILD_PATH", child)
+
+    result = execute_candidate(PASSING_SOURCE)
+
+    assert result["profile_failures"] == ["child_protocol"]
+    assert result["output_truncated"] is True
+    assert completion_marker.exists() is False
+
+
 def test_combined_child_output_is_terminated_at_the_capture_limit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

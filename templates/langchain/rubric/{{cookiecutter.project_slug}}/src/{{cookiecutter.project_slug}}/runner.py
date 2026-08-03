@@ -96,7 +96,7 @@ def _drain_process(
         nonlocal combined_bytes
         try:
             while not output_limit_reached.is_set():
-                chunk = pipe.read(_READ_CHUNK_BYTES)
+                chunk = pipe.read1(_READ_CHUNK_BYTES)
                 if not chunk:
                     return
                 with capture_lock:
