@@ -1,38 +1,42 @@
 # langchain/rubric
 
-Scaffolds a LangChain `create_agent` teaching application for designing and
-revising evidence-backed grading rubrics. The template lives under LangChain
-because its runnable boundary is `RubricMiddleware` around `create_agent`;
-DeepAgents in Action Chapter 13 is the teaching source, not a required runtime
-wrapper.
+Scaffold an evidence-backed rubric revision lab for LangChain. A first-time
+evaluator can run the complete Guided Demo without a model key. An application
+developer can then configure the same fixed task for provider-backed grading.
+
+## Why this template is under `langchain/`
+
+`RubricMiddleware` is a generic LangChain `AgentMiddleware`. The generated
+application places it in the middleware list passed to `create_agent`.
+`create_deep_agent` would add planning, filesystem, and sub-agent concepts that
+are unrelated to the rubric lesson.
+
+The generated project pins `deepagents==0.7.1`, `langchain==1.3.14`, and
+`langgraph==1.2.10`. `RubricMiddleware` is **Beta**. Before changing any exact
+pin, maintainers must rerun the generated characterization suite, keyless smoke,
+frontend tests and build, and lifecycle validation.
 
 ## Learning modes
 
-- **Guided Demo** runs one fixed rubric-revision task with deterministic,
-  pre-recorded evidence so the complete loop is inspectable without a model
-  credential.
-- **Live Model** runs the same teaching flow with the configured worker and
-  grader models. It requires a provider credential and may produce different
-  revisions between runs.
+- **Guided Demo** uses one fixed task, fixed rubric, positive iteration cap,
+  deterministic candidates, and recorded Evidence. It needs no model key.
+- **Live Model** keeps the task fixed. You can edit only the rubric and positive
+  iteration cap. Provider and model settings stay on the LangGraph server.
 
-The generated `rubric-smoke` lifecycle task exercises the keyless path. The
-fixed Guided Demo task is deliberately not user-editable: it keeps the evidence,
-grader feedback, and revision comparison stable for teaching and regression
-checks.
+Each Run starts a fresh LangGraph thread. Reports from Guided Demo and Live
+Model remain isolated. Acceptance requires terminal `satisfied` plus passing
+Evidence for the exact current candidate.
 
-## Source and status
+## Security boundary
 
-This template is derived from
-`datawhalechina/deepagents-in-action/content/ch13-grading-rubrics.md` at exact
-commit `6fcef2294bc1ae19e97054426c1355923b50493a`.
+The fixed child-process profile strips inherited environment values, uses a
+timeout and output cap, and restricts Python built-ins. It is not a sandbox and
+does not isolate filesystem, network, or system calls from the host.
 
-The application is **Beta**. Its tested dependency versions are pinned in the
-generated Python and frontend manifests; later LangChain, LangGraph, or
-`@langchain/react` releases may change middleware or streaming contracts.
+## Reviewed teaching source
 
-The template is not a sandbox. Guided Demo avoids model calls, but Live Model
-uses the network endpoint and credentials you configure. It does not isolate
-model output, tools, local files, or network access from the host environment.
+The exact reviewed course source is
+[DeepAgents in Action, Chapter 13](https://github.com/datawhalechina/deepagents-in-action/blob/6fcef2294bc1ae19e97054426c1355923b50493a/content/ch13-grading-rubrics.md).
 
 ## Inputs
 
@@ -41,8 +45,8 @@ model output, tools, local files, or network access from the host environment.
 | `project_name` | Human-readable project name. Defaults to "Rubric Lab". |
 | `project_slug` | Python package and generated directory name. |
 | `author` | Project author. |
-| `default_provider` | Live Model provider: `openai`, `anthropic`, or `google`. |
-| `worker_model` | Model used to draft and revise rubric content. |
-| `grader_model` | Model used to grade draft evidence against the rubric. |
+| `default_provider` | Live provider: `openai`, `anthropic`, or `google`. |
+| `worker_model` | Model that drafts and revises candidate code. |
+| `grader_model` | Model that grades Evidence against the rubric. |
 | `langgraph_port` | Port for the LangGraph development API. |
 | `frontend_port` | Port for the Vite application. |

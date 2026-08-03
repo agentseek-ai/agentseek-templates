@@ -97,10 +97,7 @@ function decodePublicError(value: unknown): PublicError | null {
 
 function publicErrorMessage(error: PublicError): string {
   if (error.code === "live_configuration") {
-    const missing = error.missing.length > 0
-      ? error.missing.join(", ")
-      : "RUBRIC_API_KEY";
-    return `${error.message} Set ${missing} on the LangGraph server, then run again. Credentials stay server-side.`;
+    return `${error.message} Complete the documented provider setup on the LangGraph server, then run again. Credentials stay server-side.`;
   }
   return error.message;
 }

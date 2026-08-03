@@ -1,8 +1,8 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "rubric-demo": "./src/{{cookiecutter.project_slug}}/graphs.py:make_demo_graph",
-    "rubric-live": "./src/{{cookiecutter.project_slug}}/graphs.py:make_live_graph"
+    "rubric-demo": "{{cookiecutter.project_slug}}.graphs:make_demo_graph",
+    "rubric-live": "{{cookiecutter.project_slug}}.graphs:make_live_graph"
   },
   "env": ".env"
 }

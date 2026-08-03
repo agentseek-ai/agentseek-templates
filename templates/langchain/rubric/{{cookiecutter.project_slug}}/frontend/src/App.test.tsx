@@ -401,7 +401,7 @@ describe("Rubric Lab workbench", () => {
     view.rerender(<App />);
 
     expect(screen.getByRole("alert").textContent).toContain(
-      "Set RUBRIC_API_KEY on the LangGraph server",
+      "Complete the documented provider setup on the LangGraph server",
     );
     fireEvent.click(screen.getByLabelText("Guided Demo · no key"));
     expect(runButton()).toHaveProperty("disabled", false);

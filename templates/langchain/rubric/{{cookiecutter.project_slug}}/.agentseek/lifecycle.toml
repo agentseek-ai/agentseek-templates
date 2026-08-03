@@ -2,7 +2,6 @@ version = 2
 template = "langchain/rubric"
 name = "{{ cookiecutter.project_name }}"
 description = "Evidence-backed rubric revision lab with deterministic Guided Demo and provider-backed Live Model modes."
-env_file = ".env"
 guide = "README.md"
 
 [tools]

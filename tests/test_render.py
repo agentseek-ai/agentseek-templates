@@ -395,6 +395,13 @@ def _render(
     )
 
 
+def render_rubric(tmp_path: Path) -> Path:
+    """Render the catalog-native rubric template with its reviewed defaults."""
+    output_root = tmp_path / "rubric-output"
+    output_root.mkdir()
+    return _render(TEMPLATES_ROOT / "langchain/rubric", output_root, tmp_path)
+
+
 @pytest.mark.parametrize(("template_key", "template_root"), _registered_templates(), ids=sorted(INDEX))
 def test_registered_template_renders_as_complete_lifecycle_v2(
     template_key: str,
@@ -581,3 +588,143 @@ def test_cli_remote_local_dev_does_not_open_studio_implicitly(tmp_path: Path) ->
     )
 
     assert "--no-browser" in spec.processes["langgraph"].command
+
+
+def test_rubric_template_pins_characterized_runtime(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    project = tomllib.loads((generated / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "deepagents==0.7.1" in project["project"]["dependencies"]
+    assert "langchain==1.3.14" in project["project"]["dependencies"]
+    assert "langgraph==1.2.10" in project["project"]["dependencies"]
+
+
+def test_rubric_template_exposes_only_reviewed_lazy_graph_factories(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    langgraph = json.loads((generated / "langgraph.json").read_text(encoding="utf-8"))
+
+    assert langgraph["graphs"] == {
+        "rubric-demo": "rubric_lab.graphs:make_demo_graph",
+        "rubric-live": "rubric_lab.graphs:make_live_graph",
+    }
+
+
+def test_rubric_lifecycle_keeps_live_models_optional_and_smokes_rendered_package(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    lifecycle = tomllib.loads((generated / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+
+    assert "env_file" not in lifecycle
+    for variable in (
+        "RUBRIC_PROVIDER",
+        "RUBRIC_API_KEY",
+        "RUBRIC_API_BASE",
+        "RUBRIC_WORKER_MODEL",
+        "RUBRIC_GRADER_MODEL",
+    ):
+        assert lifecycle["env"][variable]["required"] is False
+    assert set(lifecycle["tasks"]) >= {"sync", "frontend", "rubric-smoke"}
+    assert lifecycle["tasks"]["rubric-smoke"]["command"] == [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "rubric_lab.smoke",
+    ]
+
+
+def test_rubric_readme_starts_with_the_keyless_first_run_sequence(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    readme = (generated / "README.md").read_text(encoding="utf-8")
+    first_run = """```bash
+uvx agentseek task sync
+uvx agentseek task frontend
+uvx agentseek task rubric-smoke
+uvx agentseek info
+uvx agentseek doctor
+uvx agentseek dev --dry-run
+uvx agentseek dev
+```"""
+
+    assert first_run in readme
+
+
+def test_rubric_readme_documents_acceptance_and_mode_boundaries(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    readme = " ".join((generated / "README.md").read_text(encoding="utf-8").split())
+
+    assert "terminal `satisfied`" in readme
+    assert "passing Evidence for the exact current candidate" in readme
+    assert "Guided Demo needs no model key" in readme
+    assert "Live Model reads provider settings only from server variables" in readme
+    assert "not a sandbox" in readme
+    assert "fresh thread" in readme
+    for status in ("satisfied", "needs_revision", "max_iterations_reached", "failed", "grader_error"):
+        assert f"`{status}`" in readme
+
+
+def test_rubric_readmes_record_exact_course_source_and_runtime_placement(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    source_url = (
+        "https://github.com/datawhalechina/deepagents-in-action/blob/"
+        "6fcef2294bc1ae19e97054426c1355923b50493a/content/ch13-grading-rubrics.md"
+    )
+
+    for readme_path in (TEMPLATES_ROOT / "langchain/rubric" / "README.md", generated / "README.md"):
+        readme = " ".join(readme_path.read_text(encoding="utf-8").split())
+        assert source_url in readme
+        assert "generic LangChain `AgentMiddleware`" in readme
+        assert "`create_agent`" in readme
+        assert "`create_deep_agent`" in readme
+        assert "Beta" in readme
+        assert "characterization suite" in readme
+
+
+def test_rubric_frontend_keeps_provider_credentials_out_of_browser_artifacts(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    frontend = generated / "frontend"
+    production_files = [
+        path
+        for path in frontend.rglob("*")
+        if path.is_file() and ".test." not in path.name and path.name != "package-lock.json"
+    ]
+    forbidden_names = (
+        "RUBRIC_API_KEY",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GOOGLE_API_KEY",
+    )
+
+    assert (frontend / ".env.example").is_file()
+    for path in production_files:
+        contents = path.read_text(encoding="utf-8")
+        assert all(name not in contents for name in forbidden_names), path
+
+
+def test_rubric_python_uses_plain_langchain_agent_boundary(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+
+    for path in (generated / "src").rglob("*.py"):
+        assert "create_deep_agent" not in path.read_text(encoding="utf-8"), path
+
+
+def test_rubric_generated_smoke_job_exercises_fresh_keyless_project() -> None:
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "main.yml").read_text(encoding="utf-8")
+    marker = "\n  rubric-generated-smoke:\n"
+
+    assert marker in workflow
+    job = workflow.split(marker, maxsplit=1)[1]
+    assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in job
+    assert "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065" in job
+    assert "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020" in job
+    assert "astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e" in job
+    assert "cookiecutter templates/langchain/rubric" in job
+    assert "uv sync --group test" in job
+    assert "uv run python -m pytest -q" in job
+    assert "uv run python -m rubric_lab.smoke" in job
+    assert "npm test" in job
+    assert "npm run build" in job
+    assert "agentseek task rubric-smoke" in job
+    assert "agentseek info" in job
+    assert "agentseek doctor" in job
+    assert "agentseek dev --dry-run" in job
+    assert "secrets." not in job
