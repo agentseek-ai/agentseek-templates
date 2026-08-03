@@ -189,6 +189,11 @@ jobs:
           npm install
           npm test
           npm run build
+      - name: Reject provider credential names from generated production bundle
+        working-directory: ${{ runner.temp }}/rubric-render/rubric_lab/frontend
+        run: >-
+          uv run --project "${GITHUB_WORKSPACE}" python
+          "${GITHUB_WORKSPACE}/scripts/verify_generated_frontend_bundle.py" dist
       - name: Validate the rendered lifecycle
         working-directory: ${{ runner.temp }}/rubric-render/rubric_lab
         run: |

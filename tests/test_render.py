@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -707,6 +708,55 @@ def test_rubric_python_uses_plain_langchain_agent_boundary(tmp_path: Path) -> No
         assert "create_deep_agent" not in path.read_text(encoding="utf-8"), path
 
 
+@pytest.mark.parametrize(
+    "forbidden_name",
+    ("RUBRIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"),
+)
+def test_generated_frontend_bundle_guard_rejects_each_provider_credential_name(
+    tmp_path: Path,
+    forbidden_name: str,
+) -> None:
+    dist = tmp_path / "dist"
+    assets = dist / "assets"
+    assets.mkdir(parents=True)
+    (assets / "index.js").write_bytes(f"window.__value='{forbidden_name}';".encode())
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPOSITORY_ROOT / "scripts" / "verify_generated_frontend_bundle.py"),
+            str(dist),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 1
+    assert forbidden_name in completed.stderr
+
+
+def test_generated_frontend_bundle_guard_accepts_clean_binary_assets(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    assets = dist / "assets"
+    assets.mkdir(parents=True)
+    (assets / "index.js").write_bytes(b"const mode='guided';\x00\xff")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPOSITORY_ROOT / "scripts" / "verify_generated_frontend_bundle.py"),
+            str(dist),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0
+    assert completed.stderr == ""
+
+
 def test_rubric_generated_smoke_job_exercises_fresh_keyless_project() -> None:
     workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "main.yml").read_text(encoding="utf-8")
     marker = "\n  rubric-generated-smoke:\n"
@@ -723,6 +773,11 @@ def test_rubric_generated_smoke_job_exercises_fresh_keyless_project() -> None:
     assert "uv run python -m rubric_lab.smoke" in job
     assert "npm test" in job
     assert "npm run build" in job
+    build_position = job.index("npm run build")
+    assert "Reject provider credential names from generated production bundle" in job
+    bundle_guard_position = job.index("Reject provider credential names from generated production bundle")
+    assert bundle_guard_position > build_position
+    assert '"${GITHUB_WORKSPACE}/scripts/verify_generated_frontend_bundle.py" dist' in job
     assert "agentseek task rubric-smoke" in job
     assert "agentseek info" in job
     assert "agentseek doctor" in job
