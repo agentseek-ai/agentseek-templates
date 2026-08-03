@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import selectors
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -164,6 +165,17 @@ def test_child_launch_has_fixed_restricted_profile_and_no_inherited_secrets(
     assert launch["start_new_session"] is False
 
 
+def test_anonymous_pipe_drain_does_not_require_selector_support(monkeypatch: pytest.MonkeyPatch) -> None:
+    def unsupported_selector() -> selectors.BaseSelector:
+        raise OSError("anonymous subprocess pipes are not selectable")
+
+    monkeypatch.setattr(selectors, "DefaultSelector", unsupported_selector)
+
+    result = execute_candidate(PASSING_SOURCE)
+
+    assert result["ok"] is True
+
+
 def test_overlong_source_is_rejected_before_process_creation(monkeypatch: pytest.MonkeyPatch) -> None:
     def unexpected_process(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
         raise AssertionError("overlong candidate must not create a process")
@@ -229,6 +241,32 @@ def test_abnormal_child_output_is_terminated_at_the_capture_limit(
     assert result["output_truncated"] is True
     assert completion_marker.exists() is False
     assert processes and all(process.poll() is not None for process in processes)
+
+
+def test_combined_child_output_is_terminated_at_the_capture_limit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    completion_marker = tmp_path / "combined-child-finished"
+    child = tmp_path / "combined_oversized_child.py"
+    child.write_text(
+        "import pathlib, sys, time\n"
+        "sys.stdin.buffer.read()\n"
+        "sys.stdout.buffer.write(b'x' * (40 * 1024))\n"
+        "sys.stdout.buffer.flush()\n"
+        "sys.stderr.buffer.write(b'x' * (40 * 1024))\n"
+        "sys.stderr.buffer.flush()\n"
+        "time.sleep(0.5)\n"
+        f"pathlib.Path({str(completion_marker)!r}).write_text('finished')\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runner, "_CHILD_PATH", child)
+
+    result = execute_candidate(PASSING_SOURCE)
+
+    assert result["profile_failures"] == ["child_protocol"]
+    assert result["output_truncated"] is True
+    assert completion_marker.exists() is False
 
 
 def test_each_execution_uses_and_removes_a_distinct_temporary_cwd(

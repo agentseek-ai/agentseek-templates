@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import contextlib
 import json
-import os
-import selectors
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import BinaryIO, cast
 
 from .contracts import MAX_CANDIDATE_CHARS, EvidenceResult, candidate_id, normalize_candidate_source
 
@@ -19,7 +18,9 @@ _PROCESS_FACTORY = subprocess.Popen
 _TIMEOUT_SECONDS = 2.0
 _REAP_TIMEOUT_SECONDS = 0.5
 _MAX_OUTPUT_BYTES = 64 * 1024
+_MAX_COMBINED_OUTPUT_BYTES = 64 * 1024
 _READ_CHUNK_BYTES = 8 * 1024
+_PROCESS_POLL_SECONDS = 0.01
 _CHILD_ENV = {
     "PYTHONIOENCODING": "utf-8",
     "RUBRIC_CHILD_PROFILE": "restricted-v1",
@@ -84,43 +85,70 @@ def _drain_process(
         raise RuntimeError("child process pipes are required")
 
     deadline = time.monotonic() + timeout
-    try:
-        process.stdin.write(request)
-        process.stdin.close()
-    except BrokenPipeError:
-        pass
-
     stdout = bytearray()
     stderr = bytearray()
-    selector = selectors.DefaultSelector()
-    selector.register(process.stdout, selectors.EVENT_READ, stdout)
-    selector.register(process.stderr, selectors.EVENT_READ, stderr)
+    capture_lock = threading.Lock()
+    output_limit_reached = threading.Event()
+    reader_failed = threading.Event()
+    combined_bytes = 0
+
+    def read_pipe(pipe: BinaryIO, captured: bytearray) -> None:
+        nonlocal combined_bytes
+        try:
+            while not output_limit_reached.is_set():
+                chunk = pipe.read(_READ_CHUNK_BYTES)
+                if not chunk:
+                    return
+                with capture_lock:
+                    available = min(
+                        _MAX_OUTPUT_BYTES - len(captured),
+                        _MAX_COMBINED_OUTPUT_BYTES - combined_bytes,
+                    )
+                    stored = chunk[:available]
+                    captured.extend(stored)
+                    combined_bytes += len(stored)
+                    exceeded = len(chunk) > available
+                if exceeded:
+                    output_limit_reached.set()
+                    return
+        except (OSError, ValueError):
+            reader_failed.set()
+
+    readers = (
+        threading.Thread(target=read_pipe, args=(process.stdout, stdout), name="rubric-stdout-reader"),
+        threading.Thread(target=read_pipe, args=(process.stderr, stderr), name="rubric-stderr-reader"),
+    )
+    for reader in readers:
+        reader.start()
+
     try:
-        while selector.get_map():
+        try:
+            process.stdin.write(request)
+            process.stdin.close()
+        except BrokenPipeError:
+            pass
+        while process.poll() is None:
+            if output_limit_reached.is_set() or reader_failed.is_set():
+                _terminate_and_reap(process)
+                break
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(process.args, timeout)
-            events = selector.select(remaining)
-            if not events:
-                raise subprocess.TimeoutExpired(process.args, timeout)
-            for key, _ in events:
-                chunk = os.read(key.fd, _READ_CHUNK_BYTES)
-                if not chunk:
-                    selector.unregister(key.fileobj)
-                    continue
-                captured = key.data
-                available = _MAX_OUTPUT_BYTES - len(captured)
-                captured.extend(chunk[:available])
-                if len(chunk) > available:
-                    return bytes(stdout), bytes(stderr), True
-
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise subprocess.TimeoutExpired(process.args, timeout)
-        process.wait(timeout=remaining)
-        return bytes(stdout), bytes(stderr), False
+            output_limit_reached.wait(min(_PROCESS_POLL_SECONDS, remaining))
+    except BaseException:
+        _terminate_and_reap(process)
+        raise
     finally:
-        selector.close()
+        for reader in readers:
+            reader.join(timeout=_REAP_TIMEOUT_SECONDS)
+        if any(reader.is_alive() for reader in readers):
+            _close_process_pipes(process)
+            for reader in readers:
+                reader.join(timeout=_REAP_TIMEOUT_SECONDS)
+
+    if any(reader.is_alive() for reader in readers):
+        raise RuntimeError("child output readers did not stop")
+    return bytes(stdout), bytes(stderr), output_limit_reached.is_set()
 
 
 def _parse_child_result(payload: bytes) -> tuple[list[str], list[str], bool] | None:
