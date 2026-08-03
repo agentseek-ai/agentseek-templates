@@ -8,6 +8,8 @@ from deepagents.middleware import RubricMiddleware
 from deepagents.middleware.rubric import ContextT, RubricState
 from langgraph.runtime import Runtime
 
+from .contracts import PublicError, make_public_error
+
 logger = logging.getLogger(__name__)
 
 _SAFE_ERROR_TYPES = frozenset(
@@ -36,6 +38,15 @@ def _safe_error_type(exc: Exception) -> str:
     return raw_type
 
 
+def _safe_grader_explanation(exc: Exception) -> str:
+    return f"Grader failed with {_safe_error_type(exc)}; inspect sanitized server diagnostics."
+
+
+def make_grader_public_error(exc: Exception) -> PublicError:
+    """Project a grader exception into the bounded frontend-visible error shape."""
+    return make_public_error("runtime", _safe_grader_explanation(exc))
+
+
 class SafeRubricMiddleware(RubricMiddleware):
     """Pinned DeepAgents 0.7.1 boundary that only sanitizes grader failures."""
 
@@ -59,7 +70,7 @@ class SafeRubricMiddleware(RubricMiddleware):
             "grading_run_id": grading_run_id,
             "iteration": iteration,
             "result": "grader_error",
-            "explanation": f"Grader failed with {error_type}; inspect sanitized server diagnostics.",
+            "explanation": _safe_grader_explanation(exc),
             "criteria": [],
         }
         self._emit(runtime, "rubric_evaluation_end", grading_run_id, iteration, evaluation)

@@ -8,19 +8,18 @@ from typing import Any
 
 import pytest
 from deepagents.middleware import RubricMiddleware
-from langchain.agents.structured_output import StructuredOutputValidationError
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage
-from langchain_core.outputs import ChatResult
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import PrivateAttr
 
+from {{ cookiecutter.project_slug }} import safe_rubric
 from {{ cookiecutter.project_slug }}.contracts import (
     BASELINE_RUBRIC,
     TASK_PROMPT,
     build_run_report,
-    make_public_error,
     normalize_candidate_source,
 )
 from {{ cookiecutter.project_slug }}.demo_models import (
@@ -182,6 +181,87 @@ class RaisingGraderModel(BaseChatModel):
         raise self.error
 
 
+class MalformedStructuredOutputGraderModel(BaseChatModel):
+    _bound_tool_names: set[str] = PrivateAttr(default_factory=set)
+    _validation_error_text: str | None = PrivateAttr(default=None)
+    _failure: RuntimeError | None = PrivateAttr(default=None)
+
+    @property
+    def _llm_type(self) -> str:
+        return "malformed-structured-output-grader"
+
+    @property
+    def bound_tool_names(self) -> set[str]:
+        return set(self._bound_tool_names)
+
+    @property
+    def validation_error_text(self) -> str | None:
+        return self._validation_error_text
+
+    @property
+    def failure(self) -> RuntimeError | None:
+        return self._failure
+
+    def bind_tools(
+        self,
+        tools: list[dict[str, Any] | type | BaseTool],
+        **kwargs: Any,
+    ) -> MalformedStructuredOutputGraderModel:
+        del kwargs
+        self._bound_tool_names.update(
+            tool.name
+            if isinstance(tool, BaseTool)
+            else tool.__name__
+            if isinstance(tool, type)
+            else tool["function"]["name"]
+            for tool in tools
+        )
+        return self
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        del stop, kwargs
+        validation_message = next(
+            (
+                message
+                for message in reversed(messages)
+                if isinstance(message, ToolMessage) and message.name == "GraderResponse"
+            ),
+            None,
+        )
+        if validation_message is not None:
+            self._validation_error_text = str(validation_message.content)
+            self._failure = RuntimeError(self._validation_error_text)
+            raise self._failure
+
+        malformed = AIMessage(
+            content="",
+            tool_calls=[
+                {
+                    "id": "malformed-grader-response",
+                    "name": "GraderResponse",
+                    "args": {
+                        "result": "satisfied",
+                        "explanation": SENTINEL,
+                        "criteria": [
+                            {
+                                "name": "sentinel-criterion",
+                                "passed": False,
+                                "gap": SENTINEL,
+                            }
+                        ],
+                    },
+                    "type": "tool_call",
+                }
+            ],
+        )
+        return ChatResult(generations=[ChatGeneration(message=malformed)])
+
+
 def test_safe_middleware_matches_the_pinned_private_handler_and_only_overrides_it() -> None:
     assert str(inspect.signature(RubricMiddleware._handle_grader_exception)) == (
         "(self, runtime: 'Runtime[ContextT]', state: 'RubricState', grading_run_id: 'str', "
@@ -205,14 +285,9 @@ def test_safe_middleware_matches_the_pinned_private_handler_and_only_overrides_i
     [
         RuntimeError(SENTINEL),
         type(SENTINEL, (RuntimeError,), {})(SENTINEL),
-        StructuredOutputValidationError(
-            "GraderResponse",
-            ValueError(SENTINEL),
-            AIMessage(content=SENTINEL),
-        ),
     ],
 )
-def test_grader_error_is_sanitized_across_logs_events_checkpoint_report_and_public_error(
+def test_direct_grader_error_is_sanitized_across_logs_events_checkpoint_and_report(
     error: Exception,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -237,7 +312,6 @@ def test_grader_error_is_sanitized_across_logs_events_checkpoint_report_and_publ
         )
     checkpoint = _checkpoint(agent, "grader-error-thread")
     report = _report(checkpoint, ledger, "grader-error-thread")
-    public_error = make_public_error("runtime", "The run failed safely.")
 
     assert checkpoint["_rubric_status"] == "grader_error"
     assert checkpoint["_rubric_iterations"] == 1
@@ -247,12 +321,58 @@ def test_grader_error_is_sanitized_across_logs_events_checkpoint_report_and_publ
     assert SENTINEL not in repr(events)
     assert SENTINEL not in repr(checkpoint["_rubric_evaluations"])
     assert SENTINEL not in repr(report)
-    assert SENTINEL not in repr(public_error)
     assert checkpoint["_rubric_evaluations"][0]["explanation"] in {
         "Grader failed with RuntimeError; inspect sanitized server diagnostics.",
         "Grader failed with GraderError; inspect sanitized server diagnostics.",
-        "Grader failed with StructuredOutputValidationError; inspect sanitized server diagnostics.",
     }
+
+
+def test_real_tool_strategy_validation_failure_projects_a_safe_public_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    grader = MalformedStructuredOutputGraderModel(profile={"structured_output": False})
+    ledger = RunEvidenceLedger(grading_run_id="structured-output-error-run")
+    agent = build_inner_agent(
+        worker_model=DemoWorkerModel(),
+        grader_model=grader,
+        max_iterations=3,
+        checkpointer=InMemorySaver(),
+        ledger=ledger,
+    )
+
+    with caplog.at_level(logging.ERROR):
+        events = list(
+            agent.stream(
+                _input(),
+                config=_config("structured-output-error-thread"),
+                stream_mode="custom",
+            )
+        )
+    checkpoint = _checkpoint(agent, "structured-output-error-thread")
+    report = _report(checkpoint, ledger, "structured-output-error-thread")
+
+    assert grader.bound_tool_names == {"run_test_suite", "GraderResponse"}
+    assert grader.validation_error_text is not None
+    assert "Failed to parse structured output for tool 'GraderResponse'" in grader.validation_error_text
+    assert SENTINEL in grader.validation_error_text
+    assert grader.failure is not None
+    assert SENTINEL in str(grader.failure)
+    projector = getattr(safe_rubric, "make_grader_public_error", None)
+    assert callable(projector), "Task 5 must expose the production grader-error projection boundary"
+    public_error = projector(grader.failure)
+
+    assert checkpoint["_rubric_status"] == "grader_error"
+    assert report["accepted"] is False
+    assert public_error == {
+        "code": "runtime",
+        "message": "Grader failed with RuntimeError; inspect sanitized server diagnostics.",
+        "missing": [],
+    }
+    assert SENTINEL not in caplog.text
+    assert SENTINEL not in repr(events)
+    assert SENTINEL not in repr(checkpoint["_rubric_evaluations"])
+    assert SENTINEL not in repr(report)
+    assert SENTINEL not in repr(public_error)
 
 
 @pytest.mark.asyncio
