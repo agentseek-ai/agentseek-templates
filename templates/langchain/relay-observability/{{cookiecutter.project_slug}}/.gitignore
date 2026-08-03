@@ -1,0 +1,15 @@
+.env
+.nemo-relay/
+.phoenix-data/
+.seekdb-data/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+frontend/node_modules/
+frontend/dist/
+.seekdb-data/

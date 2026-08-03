@@ -28,6 +28,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "langchain/agentic-rag-openvino": set(),
     "langchain/cli-remote": {"agentseek-langchain"},
     "langchain/default": {"agentseek-ag-ui", "agentseek-langchain"},
+    "langchain/relay-observability": {"agentseek-ag-ui", "agentseek-langchain"},
     "langchain/markdown-messages": set(),
 }
 EXPECTED_NORMALIZED_TOPOLOGY = {
@@ -269,6 +270,24 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
         ),
     },
     "langchain/default": {
+        "services": (
+            ("copilotkit", "api", "hidden", False, ("process:stack",), ("copilotkit",), ("docs",)),
+            ("frontend", "web", "default", True, ("process:stack",), ("frontend",), ()),
+            ("gateway", "protocol", "advanced", False, ("process:stack",), ("gateway",), ("docs",)),
+            ("phoenix", "web", "advanced", False, ("process:stack",), ("phoenix",), ("docs",)),
+            ("seekdb", "database", "hidden", False, ("process:stack",), (), ("docs",)),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:frontend:open",
+            "service:gateway:copy",
+            "service:gateway:reference:docs",
+            "service:phoenix:open",
+            "service:phoenix:reference:docs",
+        ),
+    },
+    "langchain/relay-observability": {
         "services": (
             ("copilotkit", "api", "hidden", False, ("process:stack",), ("copilotkit",), ("docs",)),
             ("frontend", "web", "default", True, ("process:stack",), ("frontend",), ()),

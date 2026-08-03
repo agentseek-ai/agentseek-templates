@@ -120,7 +120,10 @@ def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
             }
         ],
     }
-    assert set(source_registry) == set(_registry())
+    # The frozen source inventory covers imported templates. Locally authored
+    # templates may extend the published registry without changing the source
+    # commit provenance or catalog-origin record.
+    assert set(source_registry) <= set(_registry())
 
 
 def test_recorded_registry_digest_uses_the_frozen_source_registry_bytes() -> None:

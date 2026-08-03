@@ -1,0 +1,15 @@
+{
+  "project_name": "My LangChain Agent",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_') }}",
+  "author": "Your Name",
+  "system_prompt": "You are a helpful UI assistant. Build visual responses using the available components. Answer in the same language as the user's question.",
+  "default_model": "openai:Pro/zai-org/GLM-5.1",
+  "gateway_port": "8091",
+  "frontend_port": "5176",
+  "copilotkit_port": "4003",
+  "_agentseek_source_path": "",
+  "_agentseek_source_path_posix": "",
+  "_agentseek_source_path_shell": "",
+  "_agentseek_source_url": "https://github.com/ob-labs/agentseek.git",
+  "_agentseek_source_ref": "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
+}
