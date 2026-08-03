@@ -52,12 +52,14 @@ type PublicError = {
 type RunSessionProps = {
   mode: RunMode;
   request: RunRequest | null;
+  stopping: boolean;
   onEvent: (mode: RunMode, value: unknown) => void;
   onReport: (mode: RunMode, value: unknown) => void;
   onPublicError: (mode: RunMode, value: unknown) => void;
   onTransportError: (mode: RunMode, value: unknown) => void;
   onCancelled: (mode: RunMode) => void;
   onThreadId: (mode: RunMode, threadId: string) => void;
+  onStopReady: (stopRun: (() => Promise<void>) | null) => void;
   onRunningChange: (running: boolean) => void;
   onEndedWithoutReport: (mode: RunMode) => void;
 };
@@ -127,12 +129,14 @@ function hasAcceptanceInvariant(report: RunReport): boolean {
 function RunSession({
   mode,
   request,
+  stopping,
   onEvent,
   onReport,
   onPublicError,
   onTransportError,
   onCancelled,
   onThreadId,
+  onStopReady,
   onRunningChange,
   onEndedWithoutReport,
 }: RunSessionProps) {
@@ -152,8 +156,17 @@ function RunSession({
     threadId: null,
     onCustomEvent: (value) => onEvent(activeMode, value),
     onThreadId: (threadId) => onThreadId(activeMode, threadId),
-    onStop: () => onCancelled(activeMode),
   });
+
+  useEffect(() => {
+    if (request === null) {
+      onStopReady(null);
+      return;
+    }
+    const stopRun = () => stream.stop();
+    onStopReady(stopRun);
+    return () => onStopReady(null);
+  }, [onStopReady, request, stream]);
 
   useEffect(() => {
     if (request === null || submitted.current) return;
@@ -170,7 +183,7 @@ function RunSession({
   }, [onRunningChange, onTransportError, request, stream]);
 
   useEffect(() => {
-    if (request === null) return;
+    if (request === null || stopping) return;
     if (
       stream.values.report !== undefined &&
       stream.values.report !== handledReport.current
@@ -185,11 +198,12 @@ function RunSession({
       handledPublicError.current = stream.values.error;
       onPublicError(request.mode, stream.values.error);
     }
-  }, [onPublicError, onReport, request, stream.values]);
+  }, [onPublicError, onReport, request, stopping, stream.values]);
 
   useEffect(() => {
     if (
       request === null ||
+      stopping ||
       stream.error === null ||
       stream.error === undefined ||
       stream.error === handledTransportError.current
@@ -202,10 +216,10 @@ function RunSession({
     } else {
       onTransportError(request.mode, stream.error);
     }
-  }, [onCancelled, onTransportError, request, stream.error]);
+  }, [onCancelled, onTransportError, request, stopping, stream.error]);
 
   useEffect(() => {
-    if (request === null) return;
+    if (request === null || stopping) return;
     if (stream.isLoading) {
       sawLoading.current = true;
       onRunningChange(true);
@@ -224,6 +238,7 @@ function RunSession({
     onEndedWithoutReport,
     onRunningChange,
     request,
+    stopping,
     stream.error,
     stream.isLoading,
     stream.values,
@@ -247,6 +262,8 @@ export default function App() {
   );
   const [request, setRequest] = useState<RunRequest | null>(null);
   const [running, setRunning] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const stopRunRef = useRef<(() => Promise<void>) | null>(null);
   const [validationText, setValidationText] = useState<string | null>(null);
   const [statusText, setStatusText] = useState("Ready for a grading run.");
   const [activeRunIds, setActiveRunIds] = useState<
@@ -267,6 +284,7 @@ export default function App() {
 
   const finishRun = useCallback((finishedMode: RunMode, status: string) => {
     setRunning(false);
+    setStopping(false);
     setRequest(null);
     setStatusText(status);
     setErrorsByMode((current) => ({ ...current, [finishedMode]: null }));
@@ -297,6 +315,7 @@ export default function App() {
         [runMode]: "The server returned an invalid run report. No acceptance decision was recorded.",
       }));
       setRunning(false);
+      setStopping(false);
       setRequest(null);
       setStatusText("Run ended without a valid report.");
       return;
@@ -318,6 +337,7 @@ export default function App() {
         : publicErrorMessage(decoded),
     }));
     setRunning(false);
+    setStopping(false);
     setRequest(null);
     setStatusText("Run stopped before a report was created.");
   }, []);
@@ -334,12 +354,14 @@ export default function App() {
       setStatusText("Transport failure. No report was created.");
     }
     setRunning(false);
+    setStopping(false);
     setRequest(null);
   }, []);
 
   const handleCancelled = useCallback((runMode: RunMode) => {
     setErrorsByMode((current) => ({ ...current, [runMode]: null }));
     setRunning(false);
+    setStopping(false);
     setRequest(null);
     setStatusText("Run cancelled. No report was created.");
   }, []);
@@ -350,6 +372,7 @@ export default function App() {
       [runMode]: "The stream ended before the server returned a report. Run the grading loop again.",
     }));
     setRunning(false);
+    setStopping(false);
     setRequest(null);
     setStatusText("Run ended without a report.");
   }, []);
@@ -361,11 +384,20 @@ export default function App() {
     }));
   }, []);
 
+  const handleStopReady = useCallback(
+    (stopRun: (() => Promise<void>) | null) => {
+      stopRunRef.current = stopRun;
+    },
+    [],
+  );
+
   function changeMode(nextMode: RunMode) {
     if (running) return;
     setMode(nextMode);
     setRequest(null);
     setValidationText(null);
+    setStopping(false);
+    stopRunRef.current = null;
     setStatusText(
       nextMode === "demo"
         ? "Guided Demo is ready. No model key is required."
@@ -395,6 +427,7 @@ export default function App() {
     setErrorsByMode((current) => ({ ...current, [mode]: null }));
     setServerThreadIds((current) => ({ ...current, [mode]: null }));
     setRunning(true);
+    setStopping(false);
     setStatusText("Grading loop running");
     setRequest({
       sessionKey: freshSessionKey(),
@@ -402,6 +435,17 @@ export default function App() {
       rubric: submittedRubric,
       maxIterations: submittedMaxIterations,
     });
+  }
+
+  function stopRun() {
+    const stopCurrentRun = stopRunRef.current;
+    if (!running || stopping || stopCurrentRun === null) return;
+    setStopping(true);
+    setStatusText("Stopping grading loop");
+    void stopCurrentRun().then(
+      () => handleCancelled(mode),
+      (error: unknown) => handleTransportError(mode, error),
+    );
   }
 
   const sessionKey = `${mode}:${request?.sessionKey ?? "idle"}`;
@@ -423,12 +467,14 @@ export default function App() {
         key={sessionKey}
         mode={mode}
         request={request}
+        stopping={stopping}
         onEvent={handleEvent}
         onReport={handleReport}
         onPublicError={handlePublicError}
         onTransportError={handleTransportError}
         onCancelled={handleCancelled}
         onThreadId={handleThreadId}
+        onStopReady={handleStopReady}
         onRunningChange={setRunning}
         onEndedWithoutReport={handleEndedWithoutReport}
       />
@@ -464,8 +510,8 @@ export default function App() {
 
           <RubricEditor
             mode={mode}
-            rubric={rubric}
-            maxIterations={maxIterations}
+            rubric={mode === "demo" ? BASELINE_RUBRIC : rubric}
+            maxIterations={mode === "demo" ? DEFAULT_MAX_ITERATIONS : maxIterations}
             setRubric={(nextRubric) => {
               if (mode === "live") setRubric(nextRubric);
             }}
@@ -492,14 +538,26 @@ export default function App() {
                 files, or network access from this host.
               </p>
             ) : null}
-            <button
-              type="button"
-              className="run-button"
-              disabled={running}
-              onClick={startRun}
-            >
-              {hasReport ? "Run again" : "Run grading loop"}
-            </button>
+            <div className="action-buttons">
+              <button
+                type="button"
+                className="run-button"
+                disabled={running}
+                onClick={startRun}
+              >
+                {hasReport ? "Run again" : "Run grading loop"}
+              </button>
+              {running ? (
+                <button
+                  type="button"
+                  className="stop-button"
+                  disabled={stopping}
+                  onClick={stopRun}
+                >
+                  Stop grading loop
+                </button>
+              ) : null}
+            </div>
             <p className="run-status" aria-live="polite">
               <span className={running ? "status-dot is-running" : "status-dot"} aria-hidden="true" />
               {statusText}

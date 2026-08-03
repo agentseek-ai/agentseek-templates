@@ -152,31 +152,26 @@ describe("Rubric Lab workbench", () => {
     expect(screen.getByLabelText("Task").getAttribute("readonly")).not.toBeNull();
   });
 
-  it("requests a fresh server thread for every run and never reuses returned IDs", () => {
-    render(<App />);
-
+  it("creates two distinct server threads and clears the prior displayed identity", () => {
+    const view = render(<App />);
     fireEvent.click(runButton());
-    expect(submit).toHaveBeenCalledTimes(1);
     expect(latestOptions().threadId).toBeNull();
     act(() => latestOptions().onThreadId?.("server-thread-one"));
     expect(screen.getByText("Server thread: server-thread-one")).toBeTruthy();
-  });
-
-  it("remounts and submits a second fresh run after the first report", () => {
-    const view = render(<App />);
-    fireEvent.click(runButton());
-    act(() => latestOptions().onThreadId?.("server-thread-one"));
     streamState.values = { report: report("demo", "demo-first") };
     view.rerender(<App />);
     streamState.values = {};
 
     fireEvent.click(runButton());
+    expect(screen.queryByText("Server thread: server-thread-one")).toBeNull();
+    expect(latestOptions().threadId).toBeNull();
+    act(() => latestOptions().onThreadId?.("server-thread-two"));
 
     expect(submit).toHaveBeenCalledTimes(2);
-    expect(latestOptions()).toMatchObject({
-      assistantId: "rubric-demo",
-      threadId: null,
-    });
+    expect(screen.getByText("Server thread: server-thread-two")).toBeTruthy();
+    expect(screen.queryByText("Server thread: server-thread-one")).toBeNull();
+    expect(optionSnapshots.length).toBeGreaterThan(1);
+    expect(optionSnapshots.every((options) => options.threadId === null)).toBe(true);
   });
 
   it("keeps Demo and Live reports isolated while switching modes", () => {
@@ -250,6 +245,70 @@ describe("Rubric Lab workbench", () => {
     expect(JSON.stringify(submit.mock.calls[0][0])).not.toMatch(
       /accepted|task|candidate|api.?key|authorization|provider|headers|command/i,
     );
+  });
+
+  it("restores the exact read-only Demo values after editing Live", () => {
+    render(<App />);
+    selectLive();
+    fireEvent.change(screen.getByLabelText("Rubric"), {
+      target: { value: "A Live-only rubric." },
+    });
+    fireEvent.change(screen.getByLabelText("Maximum iterations"), {
+      target: { value: "7" },
+    });
+
+    fireEvent.click(screen.getByLabelText("Guided Demo · no key"));
+
+    expect(screen.getByLabelText<HTMLTextAreaElement>("Rubric").value).toBe(
+      BASELINE_RUBRIC,
+    );
+    expect(screen.getByLabelText<HTMLInputElement>("Maximum iterations").value).toBe(
+      String(DEFAULT_MAX_ITERATIONS),
+    );
+    expect(screen.getByLabelText("Rubric")).toHaveProperty("readOnly", true);
+    fireEvent.click(runButton());
+    expect(submit).toHaveBeenCalledWith({
+      request: {
+        rubric: BASELINE_RUBRIC,
+        max_iterations: DEFAULT_MAX_ITERATIONS,
+      },
+    });
+  });
+
+  it("lets the user stop a run and keeps mode switching locked until stop settles", async () => {
+    let resolveStop: (() => void) | undefined;
+    const pendingStop = new Promise<void>((resolve) => {
+      resolveStop = resolve;
+    });
+    stop.mockReturnValueOnce(pendingStop);
+    render(<App />);
+    fireEvent.click(runButton());
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop grading loop" }));
+
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Stopping grading loop")).toBeTruthy();
+    expect(screen.getByLabelText("Guided Demo · no key")).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(
+      screen.getByLabelText("Live Model · uses server configuration"),
+    ).toHaveProperty("disabled", true);
+    expect(screen.getByText("No completed report yet.")).toBeTruthy();
+
+    await act(async () => {
+      resolveStop?.();
+      await pendingStop;
+    });
+
+    expect(screen.queryByRole("button", { name: "Stop grading loop" })).toBeNull();
+    expect(screen.getByLabelText("Guided Demo · no key")).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(screen.getByText("Run cancelled. No report was created.")).toBeTruthy();
+    expect(screen.getByText("No completed report yet.")).toBeTruthy();
   });
 
   it("adds custom events to the current run timeline as they arrive", () => {

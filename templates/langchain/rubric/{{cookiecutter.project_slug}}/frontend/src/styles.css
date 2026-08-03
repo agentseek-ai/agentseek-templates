@@ -292,10 +292,15 @@ h4 {
   border-top: 4px solid var(--blueprint) !important;
 }
 
+.action-buttons {
+  display: grid;
+  gap: 9px;
+  margin-top: 8px;
+}
+
 .run-button {
   width: 100%;
   min-height: 50px;
-  margin-top: 8px;
   border: 1px solid var(--blueprint);
   background: var(--blueprint);
   color: #fff;
@@ -312,6 +317,25 @@ h4 {
 }
 
 .run-button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.stop-button {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--blueprint);
+  background: transparent;
+  color: var(--blueprint);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.stop-button:hover:not(:disabled) {
+  background: #eaf0f6;
+}
+
+.stop-button:disabled {
   cursor: wait;
   opacity: 0.58;
 }
