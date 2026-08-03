@@ -134,6 +134,20 @@ def test_published_registry_is_the_disjoint_provenance_union() -> None:
     assert set(_registry()) == set(source_registry) | set(native_registry)
 
 
+def test_langchain_rubric_records_reviewed_course_source() -> None:
+    assert _catalog_native_registry()["langchain/rubric"] == {
+        "schema_version": 1,
+        "source_repository": "https://github.com/datawhalechina/deepagents-in-action.git",
+        "source_commit": "6fcef2294bc1ae19e97054426c1355923b50493a",
+        "source_path": "content/ch13-grading-rubrics.md",
+        "description": (
+            "LangChain create_agent with evidence-backed rubric revision, Guided Demo and Live Model UI, "
+            "and AgentSeek lifecycle spec."
+        ),
+        "derivation": "Runnable LangChain RubricMiddleware teaching application derived from Chapter 13.",
+    }
+
+
 def test_catalog_native_provenance_is_complete() -> None:
     for key, record in _catalog_native_registry().items():
         assert record["schema_version"] == 1, key

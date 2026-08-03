@@ -11,5 +11,6 @@
   "langchain/cli-remote": "Remote LangGraph CLI agent bridged through LangGraphClientRunnable with AgentSeek lifecycle spec.",
   "langchain/default": "LangChain create_agent plus CopilotKit middleware with AgentSeek lifecycle spec.",
   "langchain/relay-observability": "LangChain Relay observability with bounded Tavily research, Phoenix, OceanBase SeekDB, and AgentSeek lifecycle spec.",
-  "langchain/markdown-messages": "LangChain create_agent and react-markdown frontend with AgentSeek lifecycle spec."
+  "langchain/markdown-messages": "LangChain create_agent and react-markdown frontend with AgentSeek lifecycle spec.",
+  "langchain/rubric": "LangChain create_agent with evidence-backed rubric revision, Guided Demo and Live Model UI, and AgentSeek lifecycle spec."
 }

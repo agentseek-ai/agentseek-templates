@@ -32,6 +32,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "langchain/default": {"agentseek-ag-ui", "agentseek-langchain"},
     "langchain/relay-observability": {"agentseek-ag-ui", "agentseek-langchain"},
     "langchain/markdown-messages": set(),
+    "langchain/rubric": set(),
 }
 EXPECTED_NORMALIZED_TOPOLOGY = {
     "bub/default": {
@@ -329,6 +330,30 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
             "service:backend:reference:studio",
             "service:frontend:open",
             "service:frontend:reference:docs",
+        ),
+    },
+    "langchain/rubric": {
+        "services": (
+            ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
+            (
+                "langgraph",
+                "api",
+                "advanced",
+                False,
+                ("process:langgraph",),
+                ("langgraph",),
+                ("api_docs", "docs", "studio"),
+            ),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:frontend:open",
+            "service:frontend:reference:docs",
+            "service:langgraph:copy",
+            "service:langgraph:reference:api_docs",
+            "service:langgraph:reference:docs",
+            "service:langgraph:reference:studio",
         ),
     },
 }

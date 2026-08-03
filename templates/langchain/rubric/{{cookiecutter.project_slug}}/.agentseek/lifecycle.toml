@@ -1,0 +1,86 @@
+version = 2
+template = "langchain/rubric"
+name = "{{ cookiecutter.project_name }}"
+description = "Evidence-backed rubric revision lab with deterministic Guided Demo and provider-backed Live Model modes."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv", "node", "npm"]
+
+[paths]
+required = ["pyproject.toml", "langgraph.json", "frontend/package.json", "frontend/node_modules"]
+
+[env.RUBRIC_PROVIDER]
+required = false
+default = "{{ cookiecutter.default_provider }}"
+description = "Provider used by Live Model mode: openai, anthropic, or google."
+
+[env.RUBRIC_API_KEY]
+required = false
+description = "Credential used only by Live Model mode; Guided Demo and rubric-smoke do not require it."
+
+[env.RUBRIC_API_BASE]
+required = false
+description = "Optional OpenAI-compatible API base URL for Live Model mode."
+
+[env.RUBRIC_WORKER_MODEL]
+required = false
+default = "{{ cookiecutter.worker_model }}"
+description = "Model used to draft and revise rubric content in Live Model mode."
+
+[env.RUBRIC_GRADER_MODEL]
+required = false
+default = "{{ cookiecutter.grader_model }}"
+description = "Model used to grade evidence in Live Model mode."
+
+[services.frontend]
+name = "Rubric Lab"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Browser application for the Guided Demo and Live Model rubric-revision flows."
+tech = "vite"
+links = { docs = "https://vite.dev/guide/" }
+
+[services.langgraph]
+name = "LangGraph API"
+url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+kind = "api"
+display = "advanced"
+primary = false
+description = "LangGraph development API exposing the deterministic and live rubric graphs."
+tech = "langgraph"
+links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
+
+[processes.langgraph]
+command = ["uv", "run", "langgraph", "dev", "--port", "{{ cookiecutter.langgraph_port }}", "--no-browser"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+
+[checks.langgraph]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+timeout = 2
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+timeout = 2
+attempts = 3
+
+[tasks.sync]
+description = "Install Python dependencies with uv."
+command = ["uv", "sync"]
+
+[tasks.frontend]
+description = "Install frontend dependencies and create frontend/node_modules."
+command = ["npm", "install", "--prefix", "frontend"]
+
+[tasks.rubric-smoke]
+description = "Run the deterministic evidence-backed rubric loop without a model key."
+command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.smoke"]
