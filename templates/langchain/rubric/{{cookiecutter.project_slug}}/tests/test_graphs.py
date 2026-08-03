@@ -13,7 +13,12 @@ from langchain_core.tools import BaseTool
 from pydantic import PrivateAttr
 from {{ cookiecutter.project_slug }} import evidence
 from {{ cookiecutter.project_slug }}.contracts import BASELINE_RUBRIC, build_run_report, candidate_id
-from {{ cookiecutter.project_slug }}.demo_models import DemoWorkerModel, build_demo_models
+from {{ cookiecutter.project_slug }}.demo_models import (
+    DEMO_FAILING_SOURCE,
+    DemoWorkerModel,
+    ScriptedGraderModel,
+    build_demo_models,
+)
 from {{ cookiecutter.project_slug }}.graphs import (
     build_application_graph,
     make_demo_graph,
@@ -226,6 +231,32 @@ class OversizedWorker(BaseChatModel):
         return ChatResult(generations=[ChatGeneration(message=AIMessage(content=self.source))])
 
 
+class NormalThenOversizedWorker(BaseChatModel):
+    normal_source: str
+    oversized_source: str
+    _invocation_count: int = PrivateAttr(default=0)
+
+    @property
+    def _llm_type(self) -> str:
+        return "normal-then-oversized-worker"
+
+    @property
+    def invocation_count(self) -> int:
+        return self._invocation_count
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        del messages, stop, run_manager, kwargs
+        self._invocation_count += 1
+        source = self.normal_source if self._invocation_count == 1 else self.oversized_source
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=source))])
+
+
 class ForbiddenGrader(BaseChatModel):
     _invocation_count: int = PrivateAttr(default=0)
 
@@ -330,6 +361,83 @@ async def test_oversized_worker_candidate_returns_a_typed_rejected_report_withou
     assert executed == []
     assert oversized not in json.dumps({"events": events, "report": report})
     assert max(map(len, _public_strings({"events": events, "report": report}))) <= 3500
+
+
+@pytest.mark.asyncio
+async def test_oversized_second_candidate_preserves_completed_history_without_grading_or_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    oversized = "x" * 3500 + "\n"
+    worker = NormalThenOversizedWorker(
+        normal_source=DEMO_FAILING_SOURCE,
+        oversized_source=oversized,
+    )
+    grader = ScriptedGraderModel(profile={"structured_output": False})
+    real_execute_candidate = evidence.execute_candidate
+    executed: list[str] = []
+
+    def tracked_execute_candidate(source: str):
+        executed.append(source)
+        return real_execute_candidate(source)
+
+    monkeypatch.setattr(evidence, "execute_candidate", tracked_execute_candidate)
+    graph = build_application_graph(
+        mode="live",
+        model_factory=lambda: SimpleNamespace(worker=worker, grader=grader),
+    )
+
+    events, report, error = await _stream(
+        graph,
+        {"rubric": BASELINE_RUBRIC, "max_iterations": 3},
+        "outer-normal-then-oversized",
+    )
+
+    assert error is None
+    assert report is not None
+    assert report["terminal_status"] == "failed"
+    assert report["accepted"] is False
+    assert report["gate_reason"] == "terminal_status_not_satisfied"
+    assert report["iterations"] == 2
+    assert report["final_candidate"] is None
+    first, rejected = report["candidates"]
+    assert (first["version"], first["iteration"], first["candidate_id"], first["source"]) == (
+        1,
+        0,
+        candidate_id(DEMO_FAILING_SOURCE),
+        DEMO_FAILING_SOURCE,
+    )
+    assert rejected == {
+        "grading_run_id": report["grading_run_id"],
+        "version": 2,
+        "iteration": 1,
+        "candidate_id": candidate_id(oversized),
+        "source": None,
+        "source_omitted": True,
+    }
+    assert [(item["candidate_version"], item["ok"]) for item in report["evidence"]] == [
+        (1, False),
+        (2, False),
+    ]
+    assert report["evidence"][1]["profile_failures"] == ["candidate_too_long"]
+    assert [(item["candidate_version"], item["result"]) for item in report["evaluations"]] == [(1, "needs_revision")]
+    assert len(report["feedback"]) == 1
+    assert report["feedback"][0]["candidate_version"] == 1
+    assert report["feedback"][0]["candidate_id"] == first["candidate_id"]
+
+    reconciled = reconcile_public_events(events, report)
+    assert [
+        (item["candidate_version"], item["payload"]["result"])
+        for item in reconciled
+        if item["type"] == "rubric_evaluation_end"
+    ] == [(1, "needs_revision")]
+    assert [item["candidate_version"] for item in reconciled if item["type"] == "grader_feedback"] == [1]
+    assert [item["candidate_version"] for item in reconciled if item["type"] == "rubric_evidence"] == [1, 2]
+    assert worker.invocation_count == 2
+    assert grader.call_kinds == ["request_evidence", "return_needs_revision"]
+    assert executed == [DEMO_FAILING_SOURCE]
+    public_result = {"events": events, "reconciled": reconciled, "report": report}
+    assert oversized not in json.dumps(public_result)
+    assert max(map(len, _public_strings(public_result))) <= 3500
 
 
 def test_report_rejects_candidate_id_that_does_not_match_normalized_source() -> None:

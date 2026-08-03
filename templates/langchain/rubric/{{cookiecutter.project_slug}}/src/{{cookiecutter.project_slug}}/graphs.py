@@ -328,7 +328,7 @@ def _project_evaluations(
     raw_evaluations: object,
     candidates: Sequence[CandidateRecord],
     grading_run_id: str,
-    terminal_status: TerminalStatus,
+    terminal_status: TerminalStatus | None,
 ) -> list[EvaluationEvent]:
     if not isinstance(raw_evaluations, Sequence):
         return []
@@ -339,7 +339,7 @@ def _project_evaluations(
         iteration = iteration_value if type(iteration_value) is int and iteration_value >= 0 else sequence
         candidate = _candidate_for_iteration(candidates, iteration)
         payload = _evaluation_payload(raw)
-        if sequence == len(raw_items) - 1 and terminal_status != "satisfied":
+        if sequence == len(raw_items) - 1 and terminal_status not in {None, "satisfied"}:
             payload["result"] = terminal_status
         evaluations.append(
             {
@@ -603,6 +603,14 @@ def build_application_graph(*, mode: RunMode, model_factory: Callable[[], object
             _emit_new_evidence(context)
             candidates = [cast(CandidateRecord, dict(item)) for item in ledger.candidates]
             try:
+                checkpoint = dict(inner.get_state(inner_config).values)
+                evaluations = _project_evaluations(
+                    checkpoint.get("_rubric_evaluations", []),
+                    candidates,
+                    grading_run_id,
+                    None,
+                )
+                feedback = _project_feedback(checkpoint.get("messages", []), candidates, grading_run_id)
                 report = build_run_report(
                     mode=mode,
                     thread_id=outer_thread_id,
@@ -613,10 +621,10 @@ def build_application_graph(*, mode: RunMode, model_factory: Callable[[], object
                     candidates=candidates,
                     final_candidate=None,
                     evidence=cast(Any, _project_evidence(ledger)),
-                    evaluations=[],
-                    feedback=[],
+                    evaluations=evaluations,
+                    feedback=feedback,
                 )
-            except (IndexError, TypeError, ValueError):
+            except Exception:
                 return {"error": _public_runtime_error()}
             return {"report": report}
         except Exception:
