@@ -14,6 +14,7 @@ INDEX_PATH = TEMPLATES_ROOT / "index.json"
 ORIGIN_PATH = REPOSITORY_ROOT / "catalog-origin.json"
 RELEASE_PATH = REPOSITORY_ROOT / "catalog-release.json"
 SOURCE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "source-index.json"
+CATALOG_NATIVE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "catalog-native-index.json"
 PYPROJECT_PATH = REPOSITORY_ROOT / "pyproject.toml"
 LOCK_PATH = REPOSITORY_ROOT / "uv.lock"
 EXPECTED_SOURCE_COMMIT = "82c659c8d0f6c91981582f154d3001e3d3509299"
@@ -21,13 +22,16 @@ EXPECTED_SOURCE_REGISTRY_SHA256 = "5695b14933fa4be57f77f6838c85dff1be72d8813aa71
 EXPECTED_CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
 EXPECTED_CORE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
 EXPECTED_CORE_RELEASE = "v0.1.1"
-EXPECTED_LOCAL_TEMPLATES = {
-    "langchain/relay-observability",
-}
 
 
 def _registry() -> dict[str, str]:
     value = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
+    assert isinstance(value, dict)
+    return value
+
+
+def _catalog_native_registry() -> dict[str, dict[str, object]]:
+    value = json.loads(CATALOG_NATIVE_INDEX_PATH.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
 
@@ -123,7 +127,21 @@ def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
             }
         ],
     }
-    assert set(_registry()) == set(source_registry) | EXPECTED_LOCAL_TEMPLATES
+def test_published_registry_is_the_disjoint_provenance_union() -> None:
+    source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
+    native_registry = _catalog_native_registry()
+    assert set(source_registry).isdisjoint(native_registry)
+    assert set(_registry()) == set(source_registry) | set(native_registry)
+
+
+def test_catalog_native_provenance_is_complete() -> None:
+    for key, record in _catalog_native_registry().items():
+        assert record["schema_version"] == 1, key
+        assert record["source_repository"].startswith("https://github.com/"), key
+        assert len(record["source_commit"]) == 40, key
+        assert record["source_path"], key
+        assert record["derivation"], key
+        assert record["description"] == _registry()[key], key
 
 
 def test_recorded_registry_digest_uses_the_frozen_source_registry_bytes() -> None:
