@@ -177,6 +177,17 @@ def candidate_id(value: object) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
+def _require_positive_integer(value: object, name: str) -> int:
+    if type(value) is not int or value < 1:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
+def _require_candidate_source_limit(source: str) -> None:
+    if len(source) > MAX_CANDIDATE_CHARS:
+        raise ValueError(f"normalized candidate source must be at most {MAX_CANDIDATE_CHARS} characters")
+
+
 def build_candidate_record(
     *,
     grading_run_id: str,
@@ -184,11 +195,10 @@ def build_candidate_record(
     iteration: int,
     source: object,
 ) -> CandidateRecord:
-    if version < 1:
-        raise ValueError("candidate version must be a positive integer")
-    if iteration < 0:
-        raise ValueError("candidate iteration must be non-negative")
+    version = _require_positive_integer(version, "candidate version")
+    iteration = _require_positive_integer(iteration, "candidate iteration")
     normalized = normalize_candidate_source(source)
+    _require_candidate_source_limit(normalized)
     return {
         "grading_run_id": grading_run_id,
         "version": version,
@@ -196,6 +206,23 @@ def build_candidate_record(
         "candidate_id": candidate_id(normalized),
         "source": normalized,
     }
+
+
+def _validate_candidate_history(
+    grading_run_id: str,
+    candidates: Sequence[CandidateRecord],
+) -> None:
+    previous_version = 0
+    for candidate in candidates:
+        if candidate["grading_run_id"] != grading_run_id:
+            raise ValueError("candidate history must belong to the same grading run")
+        version = candidate["version"]
+        if type(version) is not int or version <= previous_version:
+            raise ValueError("candidate versions must be strictly increasing positive integers")
+        _require_positive_integer(candidate["iteration"], "candidate iteration")
+        normalized_source = normalize_candidate_source(candidate["source"])
+        _require_candidate_source_limit(normalized_source)
+        previous_version = version
 
 
 def validate_run_input(value: Mapping[str, object]) -> RunInput:
@@ -270,6 +297,7 @@ def build_run_report(
     evaluations: Sequence[EvaluationEvent],
     feedback: Sequence[FeedbackRecord],
 ) -> RunReport:
+    _validate_candidate_history(grading_run_id, candidates)
     normalized_final = None if final_candidate is None else normalize_candidate_source(final_candidate)
     if terminal_status != "satisfied":
         accepted = False

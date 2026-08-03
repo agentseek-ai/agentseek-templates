@@ -27,7 +27,7 @@ CANDIDATES = [
     {
         "grading_run_id": "grading-1",
         "version": 1,
-        "iteration": 0,
+        "iteration": 1,
         "candidate_id": CANDIDATE_ID,
         "source": SOURCE,
     }
@@ -36,7 +36,7 @@ CURRENT_EVIDENCE = [
     {
         "event_id": "evidence-1",
         "grading_run_id": "grading-1",
-        "iteration": 0,
+        "iteration": 1,
         "candidate_version": 1,
         "requested_candidate_id": CANDIDATE_ID,
         "candidate_id": CANDIDATE_ID,
@@ -86,13 +86,13 @@ def test_identical_source_remains_two_correlated_candidate_versions() -> None:
     first = build_candidate_record(
         grading_run_id="grading-1",
         version=1,
-        iteration=0,
+        iteration=1,
         source="x = 1\r\n",
     )
     second = build_candidate_record(
         grading_run_id="grading-1",
         version=2,
-        iteration=1,
+        iteration=2,
         source="```python\nx = 1\n```",
     )
 
@@ -100,14 +100,116 @@ def test_identical_source_remains_two_correlated_candidate_versions() -> None:
     assert (first["grading_run_id"], first["version"], first["iteration"]) == (
         "grading-1",
         1,
-        0,
+        1,
     )
     assert (second["grading_run_id"], second["version"], second["iteration"]) == (
         "grading-1",
         2,
-        1,
+        2,
     )
     assert first["source"] == second["source"] == "x = 1\n"
+
+
+def test_candidate_record_accepts_exact_normalized_source_limit() -> None:
+    record = build_candidate_record(
+        grading_run_id="grading-1",
+        version=1,
+        iteration=1,
+        source="x" * 3499,
+    )
+
+    assert len(record["source"]) == 3500
+
+
+def test_candidate_record_rejects_normalized_source_above_limit() -> None:
+    with pytest.raises(ValueError, match="at most 3500 characters"):
+        build_candidate_record(
+            grading_run_id="grading-1",
+            version=1,
+            iteration=1,
+            source="x" * 3500,
+        )
+
+
+@pytest.mark.parametrize("version", [0, -1, True, False, 1.0, 1.5, "1"])
+def test_candidate_record_rejects_non_positive_or_non_integer_versions(version: object) -> None:
+    with pytest.raises(ValueError, match="version must be a positive integer"):
+        build_candidate_record(
+            grading_run_id="grading-1",
+            version=version,  # type: ignore[arg-type]
+            iteration=1,
+            source="x = 1\n",
+        )
+
+
+@pytest.mark.parametrize("iteration", [0, -1, True, False, 1.0, 1.5, "1"])
+def test_candidate_record_rejects_non_positive_or_non_integer_iterations(iteration: object) -> None:
+    with pytest.raises(ValueError, match="iteration must be a positive integer"):
+        build_candidate_record(
+            grading_run_id="grading-1",
+            version=1,
+            iteration=iteration,  # type: ignore[arg-type]
+            source="x = 1\n",
+        )
+
+
+@pytest.mark.parametrize(
+    "versions",
+    [
+        [1, 1],
+        [2, 1],
+        [True],
+        [1.5],
+    ],
+)
+def test_run_report_rejects_non_monotonic_or_non_integer_candidate_versions(
+    versions: list[object],
+) -> None:
+    candidates = [
+        {
+            **CANDIDATES[0],
+            "version": version,
+            "iteration": index + 1,
+        }
+        for index, version in enumerate(versions)
+    ]
+
+    with pytest.raises(ValueError, match="candidate versions must be strictly increasing"):
+        build_run_report(
+            terminal_status="satisfied",
+            **{**REPORT_FIELDS, "candidates": candidates},  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize("iteration", [0, True, 1.5])
+def test_run_report_rejects_non_positive_or_non_integer_candidate_iterations(
+    iteration: object,
+) -> None:
+    candidate = {**CANDIDATES[0], "iteration": iteration}
+
+    with pytest.raises(ValueError, match="iteration must be a positive integer"):
+        build_run_report(
+            terminal_status="satisfied",
+            **{**REPORT_FIELDS, "candidates": [candidate]},  # type: ignore[arg-type]
+        )
+
+
+def test_run_report_rejects_candidate_history_from_another_grading_run() -> None:
+    candidates = [
+        CANDIDATES[0],
+        {
+            **CANDIDATES[0],
+            "grading_run_id": "grading-other",
+            "version": 2,
+            "iteration": 2,
+        },
+    ]
+
+    with pytest.raises(ValueError, match="same grading run"):
+        build_run_report(
+            terminal_status="satisfied",
+            **{**REPORT_FIELDS, "candidates": candidates},
+        )
 
 
 @pytest.mark.parametrize(
@@ -135,7 +237,7 @@ def test_report_acceptance_requires_terminal_status_and_current_evidence(
     [
         {"ok": False},
         {"grading_run_id": "grading-old"},
-        {"iteration": 1},
+        {"iteration": 2},
         {"candidate_version": 2},
         {"candidate_id": candidate_id("different = True\n")},
         {"requested_candidate_id": candidate_id("different = True\n")},
