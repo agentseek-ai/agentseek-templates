@@ -228,6 +228,8 @@ def _validate_candidate_history(
         _require_non_negative_integer(candidate["iteration"], "candidate iteration")
         normalized_source = normalize_candidate_source(candidate["source"])
         _require_candidate_source_limit(normalized_source)
+        if candidate["candidate_id"] != candidate_id(normalized_source):
+            raise ValueError("candidate ID must match normalized source")
         previous_version = version
 
 
@@ -285,6 +287,7 @@ def _has_current_passing_evidence(
         and record["candidate_id"] == current_id
         and record["requested_candidate_id"] == current_id
         and record["ok"] is True
+        and record["timed_out"] is False
         for record in evidence
     )
 
