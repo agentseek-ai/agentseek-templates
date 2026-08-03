@@ -334,7 +334,8 @@ export function decodeUIEvent(value: unknown): UIEvent | null {
       if (
         evidence === null ||
         binding.candidateVersion === null ||
-        binding.candidateId === null
+        binding.candidateId === null ||
+        evidence.requestedCandidateId !== binding.candidateId
       ) {
         return null;
       }
@@ -474,6 +475,14 @@ function decodeArray<T>(
 }
 
 function recordsMatchCandidates(report: RunReport): boolean {
+  const versions = report.candidates.map((candidate) => candidate.version);
+  if (new Set(versions).size !== versions.length) return false;
+  const eventIds = [
+    ...report.evidence.map((item) => item.eventId),
+    ...report.evaluations.map((item) => item.eventId),
+    ...report.feedback.map((item) => item.eventId),
+  ];
+  if (new Set(eventIds).size !== eventIds.length) return false;
   const candidates = new Map(
     report.candidates.map((candidate) => [candidate.version, candidate.candidateId]),
   );
@@ -484,6 +493,7 @@ function recordsMatchCandidates(report: RunReport): boolean {
     report.evidence.some(
       (item) =>
         item.gradingRunId !== report.gradingRunId ||
+        item.requestedCandidateId !== item.candidateId ||
         candidates.get(item.candidateVersion) !== item.candidateId,
     )
   ) {

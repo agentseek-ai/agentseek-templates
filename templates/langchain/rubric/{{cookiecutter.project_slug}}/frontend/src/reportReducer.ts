@@ -40,10 +40,31 @@ export type ReportAction =
   | { type: "report_received"; value: unknown }
   | { type: "clear_diagnostic" };
 
+function emptyRunDictionary(): Record<string, RunTimeline> {
+  return Object.create(null) as Record<string, RunTimeline>;
+}
+
+function hasOwnRun(
+  runs: Record<string, RunTimeline>,
+  gradingRunId: string,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(runs, gradingRunId);
+}
+
+function setRun(
+  runs: Record<string, RunTimeline>,
+  gradingRunId: string,
+  run: RunTimeline,
+): Record<string, RunTimeline> {
+  const next = Object.assign(emptyRunDictionary(), runs);
+  next[gradingRunId] = run;
+  return next;
+}
+
 export function createReportState(): ReportState {
   return {
     seenEventIds: new Set(),
-    runsById: {},
+    runsById: emptyRunDictionary(),
     reportsByMode: { demo: null, live: null },
     diagnostic: null,
   };
@@ -190,7 +211,10 @@ function addDecodedEvent(
 
   const seenEventIds = new Set(state.seenEventIds);
   seenEventIds.add(event.eventId);
-  const run = cloneRun(state.runsById[event.gradingRunId] ?? emptyRun(event.gradingRunId));
+  const existingRun = hasOwnRun(state.runsById, event.gradingRunId)
+    ? state.runsById[event.gradingRunId]
+    : undefined;
+  const run = cloneRun(existingRun ?? emptyRun(event.gradingRunId));
   const result =
     event.type === "candidate"
       ? addCandidate(run, event)
@@ -198,7 +222,7 @@ function addDecodedEvent(
   return {
     ...state,
     seenEventIds,
-    runsById: { ...state.runsById, [event.gradingRunId]: result.run },
+    runsById: setRun(state.runsById, event.gradingRunId, result.run),
     diagnostic: result.diagnostic,
   };
 }
@@ -287,7 +311,7 @@ function replaceWithReport(state: ReportState, report: RunReport): ReportState {
   return {
     ...state,
     seenEventIds,
-    runsById: { ...state.runsById, [report.gradingRunId]: run },
+    runsById: setRun(state.runsById, report.gradingRunId, run),
     reportsByMode: { ...state.reportsByMode, [report.mode]: report },
     diagnostic: null,
   };

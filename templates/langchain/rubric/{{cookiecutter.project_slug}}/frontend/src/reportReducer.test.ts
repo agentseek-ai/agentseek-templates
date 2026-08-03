@@ -170,6 +170,99 @@ describe("wire decoders", () => {
       }),
     ).toBeNull();
   });
+
+  it("rejects passing Evidence requested for a different candidate", () => {
+    const mismatchedEvidence = {
+      event_id: "run-new:rubric_evidence:0:1:0",
+      type: "rubric_evidence",
+      grading_run_id: "run-new",
+      iteration: 0,
+      candidate_version: 1,
+      candidate_id: HASH_A,
+      payload: {
+        requested_candidate_id: HASH_B,
+        ok: true,
+        behavior_failures: [],
+        profile_failures: [],
+        duration_ms: 4,
+        timed_out: false,
+        output_truncated: false,
+      },
+    };
+
+    expect(decodeUIEvent(mismatchedEvidence)).toBeNull();
+
+    let state = receiveEvent(createReportState(), {
+      event_id: "run-new:candidate:0:1:0",
+      type: "candidate",
+      grading_run_id: "run-new",
+      iteration: 0,
+      candidate_version: 1,
+      candidate_id: HASH_A,
+      payload: { source: "candidate A" },
+    });
+    state = receiveEvent(state, mismatchedEvidence);
+
+    expect(state.diagnostic).toBe("Ignored malformed or unrecognized event.");
+    expect(state.runsById["run-new"].candidatesByVersion["1"].evidence).toEqual(
+      [],
+    );
+    render(
+      createElement(EvaluationTimeline, { run: state.runsById["run-new"] }),
+    );
+    expect(screen.getByText("Evidence: pending")).toBeTruthy();
+    expect(screen.queryByText("Evidence: passing")).toBeNull();
+  });
+
+  it("rejects an authoritative report whose Evidence requested another candidate", () => {
+    const report = completeReport({
+      evidence: [
+        {
+          ...completeReport().evidence[0],
+          requestedCandidateId: HASH_A,
+        },
+      ],
+    });
+
+    expect(decodeRunReport(report)).toBeNull();
+    const state = reportReducer(createReportState(), {
+      type: "report_received",
+      value: report,
+    });
+    expect(state.reportsByMode.demo).toBeNull();
+    expect(state.runsById["run-new"]).toBeUndefined();
+    expect(state.diagnostic).toBe("Ignored malformed run report.");
+
+    render(createElement(AcceptanceGate, { report: decodeRunReport(report) }));
+    expect(screen.queryByRole("heading", { name: "Accepted" })).toBeNull();
+  });
+
+  it("rejects duplicate candidate versions in an authoritative report", () => {
+    const report = completeReport({
+      candidates: [
+        completeReport().candidates[0],
+        { ...completeReport().candidates[0] },
+      ],
+      evidence: [],
+      evaluations: [],
+      feedback: [],
+    });
+
+    expect(decodeRunReport(report)).toBeNull();
+  });
+
+  it("rejects duplicate event IDs across authoritative report record types", () => {
+    const report = completeReport({
+      evaluations: [
+        {
+          ...completeReport().evaluations[0],
+          eventId: completeReport().evidence[0].eventId,
+        },
+      ],
+    });
+
+    expect(decodeRunReport(report)).toBeNull();
+  });
 });
 
 describe("reportReducer", () => {
@@ -377,6 +470,45 @@ describe("reportReducer", () => {
     expect(run.candidatesByVersion["2"].evidence).toHaveLength(1);
     expect(run.candidatesByVersion["2"].evaluations).toHaveLength(1);
     expect(state.reportsByMode.demo?.accepted).toBe(true);
+  });
+
+  it.each(["__proto__", "constructor", "toString"])(
+    "handles the prototype-like grading run ID %s as owned data",
+    (gradingRunId) => {
+      const state = receiveEvent(createReportState(), {
+        event_id: `${gradingRunId}:candidate:0:1:0`,
+        type: "candidate",
+        grading_run_id: gradingRunId,
+        iteration: 0,
+        candidate_version: 1,
+        candidate_id: HASH_A,
+        payload: { source: "candidate" },
+      });
+
+      expect(
+        Object.prototype.hasOwnProperty.call(state.runsById, gradingRunId),
+      ).toBe(true);
+      expect(
+        state.runsById[gradingRunId].candidatesByVersion["1"].candidate
+          .candidateId,
+      ).toBe(HASH_A);
+      expect(state.diagnostic).toBeNull();
+    },
+  );
+
+  it("stores a concise diagnostic for malformed input without creating a run", () => {
+    const state = receiveEvent(createReportState(), {
+      event_id: "bad",
+      type: "candidate",
+      grading_run_id: "__proto__",
+      iteration: -1,
+      candidate_version: 0,
+      candidate_id: "not-a-hash",
+      payload: { source: "candidate" },
+    });
+
+    expect(state.diagnostic).toBe("Ignored malformed or unrecognized event.");
+    expect(Object.keys(state.runsById)).toEqual([]);
   });
 });
 
