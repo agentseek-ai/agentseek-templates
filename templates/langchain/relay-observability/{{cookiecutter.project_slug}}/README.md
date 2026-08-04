@@ -2,6 +2,54 @@
 
 LangChain `create_agent` with the default AgentSeek middleware and CopilotKit/Bub/AG-UI runtime, plus NeMo Relay observability and Tavily web research.
 
+## What Relay does, and why Phoenix is included
+
+The final answer is only one part of an agent run. In practice, developers also need to answer: which model and prompt were used, which tool arguments were sent, how long each step took, where a failure happened, and why a multi-step agent chose a particular path. NeMo Relay captures those execution steps as structured observability events and traces, so the application can be debugged and operated without adding ad-hoc logging to every agent function.
+
+Relay is the instrumentation and export layer; Phoenix is the trace analysis layer. Relay runs with the application, observes LangChain model/tool/middleware activity, normalizes it into OpenInference-compatible spans, and fans it out to one or more destinations. Phoenix receives those spans over OTLP, provides the trace UI, and persists them in SeekDB in this template.
+
+```text
+LangChain / AgentSeek runtime
+              ↓
+NeMo Relay: instrument → normalize → export
+              ├─ ATOF JSONL: raw local audit/debug events
+              └─ OpenInference over OTLP → Phoenix UI → OceanBase SeekDB
+```
+
+This separation is useful because Relay and Phoenix solve different problems:
+
+- Relay answers “how do I observe and export this run consistently?”
+- Phoenix answers “how do I inspect, compare, and search the runs?”
+- ATOF answers “what raw events were emitted, even when the trace backend is unavailable?”
+
+The template uses `NemoRelayMiddleware` and a request-scoped `NemoRelayCallbackHandler`. The middleware covers the agent lifecycle, while the callback carries the same request context through the runnable. Do not also enable `LangChainInstrumentor` for the same model/tool path: two instrumentors can produce duplicate LLM and tool spans.
+
+## Instrumenting your own agent and tools
+
+For the normal LangChain path, keep the template's Relay setup and pass the Relay callback configuration to the root runnable. The relevant pattern is:
+
+```python
+from nemo_relay.integrations.langchain import NemoRelayCallbackHandler
+
+config = {
+    "callbacks": [NemoRelayCallbackHandler()],
+}
+result = agent.invoke({"messages": messages}, config=config)
+```
+
+In this template, `relay_config_builder()` adds that callback to AgentSeek's default runnable configuration, so `messages_spec` and nested runnable calls share one request-scoped trace. When adding a new tool, expose it through LangChain's normal `@tool` or `StructuredTool` interface and invoke it from the instrumented agent; Relay can then record the tool name, input, output, errors, and timing. Keep secrets, authorization headers, and unnecessary personal data out of tool arguments and returned payloads because observability data may be persisted.
+
+If you add a custom middleware, router, or non-LangChain function, preserve the current callback/config when calling a nested runnable. If the component is not automatically covered by the integration, add a Relay/OpenInference span at that boundary rather than creating a second independent tracing system. Name spans after stable operations such as `research_agent`, `tavily_search`, or `presentation_agent`, and record bounded metadata that helps debugging without dumping full sensitive prompts or documents.
+
+For a quick sanity check, inspect both outputs after one request:
+
+```bash
+wc -l .nemo-relay/atof/events.jsonl
+grep -n 'tavily_search' .nemo-relay/atof/events.jsonl | tail
+```
+
+If ATOF contains events but Phoenix is empty, the agent is instrumented and the problem is on the OTLP/Phoenix path. If both are empty, check Relay registration, callback propagation, and `RELAY_ENABLED` first.
+
 ## Architecture
 
 ```text
@@ -24,6 +72,8 @@ agentseek dev
 ```
 
 The browser is at `http://127.0.0.1:{{ cookiecutter.frontend_port }}`; Phoenix is at `http://127.0.0.1:6006`. Compose starts `langchain-app`, `frontend`, `phoenix`, and `seekdb`. First startup downloads Docker images plus Python and Node dependencies.
+
+Open Phoenix at `http://127.0.0.1:6006` after the first request. Select the latest project/run to see the root agent span, model calls, tool calls, middleware steps, errors, and timing. Phoenix is not required for the application to write ATOF events; it is the exploration and persistence surface for the exported traces.
 
 ## Research example
 
