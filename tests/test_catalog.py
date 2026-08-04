@@ -16,7 +16,7 @@ RELEASE_PATH = REPOSITORY_ROOT / "catalog-release.json"
 SOURCE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "source-index.json"
 PYPROJECT_PATH = REPOSITORY_ROOT / "pyproject.toml"
 LOCK_PATH = REPOSITORY_ROOT / "uv.lock"
-EXPECTED_SOURCE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
+EXPECTED_SOURCE_COMMIT = "82c659c8d0f6c91981582f154d3001e3d3509299"
 EXPECTED_SOURCE_REGISTRY_SHA256 = "5695b14933fa4be57f77f6838c85dff1be72d8813aa715e50e51869dcf65d639"
 EXPECTED_CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
 EXPECTED_CORE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
@@ -69,6 +69,16 @@ def test_every_registered_template_is_self_contained_and_documented() -> None:
         template_root = TEMPLATES_ROOT / key
         assert (template_root / "README.md").is_file(), key
         _assert_self_contained_template(TEMPLATES_ROOT, key)
+
+
+def test_langsmith_template_examples_include_regional_endpoint() -> None:
+    examples = sorted(TEMPLATES_ROOT.glob("*/*/{{cookiecutter.project_slug}}/.env.example"))
+    langsmith_examples = [path for path in examples if "LANGSMITH_" in path.read_text(encoding="utf-8")]
+
+    assert langsmith_examples
+    for example in langsmith_examples:
+        text = example.read_text(encoding="utf-8")
+        assert "LANGSMITH_ENDPOINT=https://apac.api.smith.langchain.com" in text, example
 
 
 def test_self_containment_rejects_a_template_root_symlink(tmp_path: Path) -> None:

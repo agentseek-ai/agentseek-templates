@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "source_repository": "https://github.com/ob-labs/agentseek.git",
-  "source_commit": "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc",
+  "source_commit": "82c659c8d0f6c91981582f154d3001e3d3509299",
   "source_registry_sha256": "5695b14933fa4be57f77f6838c85dff1be72d8813aa715e50e51869dcf65d639",
   "included_templates": [
     "bub/default",
