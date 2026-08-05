@@ -156,7 +156,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      RUBRIC_API_KEY: ""
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
       GOOGLE_API_KEY: ""
@@ -177,6 +176,9 @@ jobs:
       - run: uv sync --frozen --dev
       - name: Render Rubric Lab
         run: uv run cookiecutter templates/langchain/rubric --no-input --output-dir "${RUNNER_TEMP}/rubric-render"
+      - name: Create the keyless server environment
+        working-directory: ${{ runner.temp }}/rubric-render/rubric_lab
+        run: cp .env.example .env
       - name: Test the rendered Python application and keyless smoke
         working-directory: ${{ runner.temp }}/rubric-render/rubric_lab
         run: |

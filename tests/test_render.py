@@ -666,6 +666,7 @@ def test_rubric_readme_starts_with_the_keyless_first_run_sequence(tmp_path: Path
     generated = render_rubric(tmp_path)
     readme = (generated / "README.md").read_text(encoding="utf-8")
     first_run = """```bash
+cp .env.example .env
 uvx agentseek task sync
 uvx agentseek task frontend
 uvx agentseek task rubric-smoke
@@ -690,6 +691,24 @@ def test_rubric_readme_documents_acceptance_and_mode_boundaries(tmp_path: Path) 
     assert "fresh thread" in readme
     for status in ("satisfied", "needs_revision", "max_iterations_reached", "failed", "grader_error"):
         assert f"`{status}`" in readme
+
+
+def test_rubric_readmes_document_provider_native_server_setup(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+
+    for readme_path in (TEMPLATES_ROOT / "langchain/rubric" / "README.md", generated / "README.md"):
+        readme = " ".join(readme_path.read_text(encoding="utf-8").split())
+        assert "`$EDITOR .env`" in readme
+        assert "exactly one provider-native credential/base block" in readme
+        assert "`AGENTSEEK_MODEL_PROVIDER`" in readme
+        assert "`AGENTSEEK_MODEL`" in readme
+        assert "`RUBRIC_GRADER_MODEL`" in readme
+        assert "server" in readme
+        assert "browser" in readme
+        assert "`RUBRIC_API_KEY`" not in readme
+        assert "`RUBRIC_PROVIDER`" not in readme
+        assert "`RUBRIC_API_BASE`" not in readme
+        assert "`RUBRIC_WORKER_MODEL`" not in readme
 
 
 def test_rubric_readmes_record_exact_course_source_and_runtime_placement(tmp_path: Path) -> None:
@@ -797,6 +816,7 @@ def test_rubric_generated_smoke_job_exercises_fresh_keyless_project() -> None:
     assert "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020" in job
     assert "astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e" in job
     assert "cookiecutter templates/langchain/rubric" in job
+    assert "cp .env.example .env" in job
     assert "uv sync --group test" in job
     assert "uv run python -m pytest -q" in job
     assert "uv run python -m rubric_lab.smoke" in job
@@ -811,4 +831,10 @@ def test_rubric_generated_smoke_job_exercises_fresh_keyless_project() -> None:
     assert "agentseek info" in job
     assert "agentseek doctor" in job
     assert "agentseek dev --dry-run" in job
+    env_copy_position = job.index("cp .env.example .env")
+    assert env_copy_position < job.index("agentseek task rubric-smoke")
+    assert env_copy_position < job.index("agentseek info")
+    assert env_copy_position < job.index("agentseek doctor")
+    assert env_copy_position < job.index("agentseek dev --dry-run")
+    assert "RUBRIC_API_KEY" not in job
     assert "secrets." not in job

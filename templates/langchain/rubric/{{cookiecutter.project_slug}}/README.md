@@ -10,6 +10,7 @@ server variables.
 From the generated project directory, run these commands in order:
 
 ```bash
+cp .env.example .env
 uvx agentseek task sync
 uvx agentseek task frontend
 uvx agentseek task rubric-smoke
@@ -19,11 +20,13 @@ uvx agentseek dev --dry-run
 uvx agentseek dev
 ```
 
-The first two tasks install the Python and frontend dependencies. The smoke
-then proves the fixed Guided Demo can move from a failing candidate to an
-accepted candidate without a provider credential. `agentseek info` prints the
-service URLs. `doctor` checks the installed tools and generated paths.
-`dev --dry-run` previews both development processes before `dev` starts them.
+The lifecycle reads server settings from `.env`, so the first command creates
+that file from the safe example. Guided Demo still needs no credential. The
+first two tasks install the Python and frontend dependencies. The smoke then
+proves the fixed Guided Demo can move from a failing candidate to an accepted
+candidate without a provider credential. `agentseek info` prints the service
+URLs. `doctor` checks the installed tools and generated paths. `dev --dry-run`
+previews both development processes before `dev` starts them.
 
 After `dev` starts, open the primary frontend URL printed by `agentseek info`.
 Keep that terminal open; stop both development processes with `Ctrl-C`.
@@ -42,17 +45,18 @@ candidate v1, Evidence, feedback, candidate v2, and acceptance reproducible.
 
 ## How to configure and run Live Model
 
-Copy the server environment example, then edit `.env`:
+Run `$EDITOR .env`. Set `AGENTSEEK_MODEL_PROVIDER`, `AGENTSEEK_MODEL`, and
+`RUBRIC_GRADER_MODEL`, then fill exactly one provider-native credential/base
+block:
 
-```bash
-cp .env.example .env
-```
+- OpenAI: `OPENAI_API_KEY` and optional `OPENAI_API_BASE`.
+- Anthropic: `ANTHROPIC_API_KEY` and optional `ANTHROPIC_API_URL`.
+- Google: `GOOGLE_API_KEY` and optional `GOOGLE_API_BASE`.
 
-Set the provider credential in `RUBRIC_API_KEY`. You can also change
-`RUBRIC_PROVIDER`, `RUBRIC_API_BASE`, `RUBRIC_WORKER_MODEL`, and
-`RUBRIC_GRADER_MODEL`. These variables are read by the LangGraph server. They
-are never browser configuration. Restart `uvx agentseek dev` after changing
-them.
+Leave the other two provider blocks empty. These variables are server
+configuration read by the LangGraph process; they are never browser
+configuration and must not be added to `frontend/.env`. Restart
+`uvx agentseek dev` after changing them.
 
 Provider aliases are:
 

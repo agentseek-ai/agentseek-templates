@@ -27,6 +27,20 @@ Each Run starts a fresh LangGraph thread. Reports from Guided Demo and Live
 Model remain isolated. Acceptance requires terminal `satisfied` plus passing
 Evidence for the exact current candidate.
 
+## Generated setup contract
+
+The generated first-run guide copies `.env.example` to `.env` before
+`agentseek info`, `agentseek doctor`, or `agentseek dev`. The lifecycle requires
+that server environment file, but Guided Demo needs no credential.
+
+For Live Model, run `$EDITOR .env`, set `AGENTSEEK_MODEL_PROVIDER`,
+`AGENTSEEK_MODEL`, and `RUBRIC_GRADER_MODEL`, then fill exactly one
+provider-native credential/base block: `OPENAI_API_KEY` with optional
+`OPENAI_API_BASE`, `ANTHROPIC_API_KEY` with optional `ANTHROPIC_API_URL`, or
+`GOOGLE_API_KEY` with optional `GOOGLE_API_BASE`. Leave the other provider
+blocks empty. These are LangGraph server settings, never browser configuration
+and never values for `frontend/.env`.
+
 ## Security boundary
 
 The fixed child-process profile strips inherited environment values, uses a
