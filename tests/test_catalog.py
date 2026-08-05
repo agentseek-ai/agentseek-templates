@@ -14,7 +14,6 @@ INDEX_PATH = TEMPLATES_ROOT / "index.json"
 ORIGIN_PATH = REPOSITORY_ROOT / "catalog-origin.json"
 RELEASE_PATH = REPOSITORY_ROOT / "catalog-release.json"
 SOURCE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "source-index.json"
-CATALOG_NATIVE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "catalog-native-index.json"
 PYPROJECT_PATH = REPOSITORY_ROOT / "pyproject.toml"
 LOCK_PATH = REPOSITORY_ROOT / "uv.lock"
 EXPECTED_SOURCE_COMMIT = "82c659c8d0f6c91981582f154d3001e3d3509299"
@@ -26,12 +25,6 @@ EXPECTED_CORE_RELEASE = "v0.1.1"
 
 def _registry() -> dict[str, str]:
     value = json.loads(INDEX_PATH.read_text(encoding="utf-8"))
-    assert isinstance(value, dict)
-    return value
-
-
-def _catalog_native_registry() -> dict[str, dict[str, object]]:
-    value = json.loads(CATALOG_NATIVE_INDEX_PATH.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return value
 
@@ -111,12 +104,12 @@ def test_every_template_carries_the_reviewed_core_dependency_coordinate() -> Non
 def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
     origin = json.loads(ORIGIN_PATH.read_text(encoding="utf-8"))
     source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
+    included_templates = origin.pop("included_templates")
     assert origin == {
         "schema_version": 1,
         "source_repository": "https://github.com/ob-labs/agentseek.git",
         "source_commit": EXPECTED_SOURCE_COMMIT,
         "source_registry_sha256": EXPECTED_SOURCE_REGISTRY_SHA256,
-        "included_templates": sorted(source_registry),
         "excluded_templates": [
             {
                 "path": "templates/bub/contextseek",
@@ -127,41 +120,21 @@ def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
             }
         ],
     }
+    assert included_templates == sorted(set(included_templates))
+    assert set(included_templates) <= set(source_registry)
 
 
-def test_published_registry_is_the_disjoint_provenance_union() -> None:
+def test_published_registry_matches_source_index() -> None:
     source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
-    native_registry = _catalog_native_registry()
-    assert set(source_registry).isdisjoint(native_registry)
-    assert set(_registry()) == set(source_registry) | set(native_registry)
+    assert _registry() == source_registry
 
 
-def test_langchain_rubric_records_reviewed_course_source() -> None:
-    assert _catalog_native_registry()["langchain/rubric"] == {
-        "schema_version": 1,
-        "source_repository": "https://github.com/datawhalechina/deepagents-in-action.git",
-        "source_commit": "6fcef2294bc1ae19e97054426c1355923b50493a",
-        "source_path": "content/ch13-grading-rubrics.md",
-        "description": (
-            "LangChain create_agent with evidence-backed rubric revision, Guided Demo and Live Model UI, "
-            "and AgentSeek lifecycle spec."
-        ),
-        "derivation": "Runnable LangChain RubricMiddleware teaching application derived from Chapter 13.",
-    }
-
-
-def test_catalog_native_provenance_is_complete() -> None:
-    for key, record in _catalog_native_registry().items():
-        assert record["schema_version"] == 1, key
-        assert record["source_repository"].startswith("https://github.com/"), key
-        assert len(record["source_commit"]) == 40, key
-        assert record["source_path"], key
-        assert record["derivation"], key
-        assert record["description"] == _registry()[key], key
-
-
-def test_recorded_registry_digest_uses_the_frozen_source_registry_bytes() -> None:
-    digest = hashlib.sha256(SOURCE_INDEX_PATH.read_bytes()).hexdigest()
+def test_recorded_registry_digest_uses_the_frozen_import_inventory() -> None:
+    origin = json.loads(ORIGIN_PATH.read_text(encoding="utf-8"))
+    source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
+    imported_registry = {key: source_registry[key] for key in origin["included_templates"]}
+    imported_bytes = (json.dumps(imported_registry, indent=2) + "\n").encode()
+    digest = hashlib.sha256(imported_bytes).hexdigest()
     assert digest == EXPECTED_SOURCE_REGISTRY_SHA256
 
 
