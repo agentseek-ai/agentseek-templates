@@ -141,7 +141,6 @@ def test_child_launch_has_fixed_restricted_profile_and_no_inherited_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     launches: list[dict[str, Any]] = []
-    monkeypatch.setenv("RUBRIC_API_KEY", "must-not-cross-boundary")
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-cross-boundary")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-cross-boundary")
     monkeypatch.setenv("GOOGLE_API_KEY", "must-not-cross-boundary")

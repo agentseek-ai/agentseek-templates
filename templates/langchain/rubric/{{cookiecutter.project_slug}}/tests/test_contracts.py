@@ -337,7 +337,7 @@ def test_baseline_rubric_has_six_atomic_criteria_and_a_fail_closed_evidence_gate
     ("code", "message", "missing"),
     [
         ("invalid_input", "Request validation failed.", []),
-        ("live_configuration", "Live Model is not configured.", ["RUBRIC_API_KEY"]),
+        ("live_configuration", "Live Model is not configured.", ["OPENAI_API_KEY"]),
         ("runtime", "The run failed safely.", []),
     ],
 )

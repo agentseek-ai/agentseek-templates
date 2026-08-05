@@ -395,7 +395,7 @@ describe("Rubric Lab workbench", () => {
       error: {
         code: "live_configuration",
         message: "Live Model is not configured.",
-        missing: ["RUBRIC_API_KEY"],
+        missing: ["OPENAI_API_KEY"],
       },
     };
     view.rerender(<App />);

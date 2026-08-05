@@ -56,7 +56,7 @@ def _assert_correlated(report: dict[str, Any]) -> None:
 
 @pytest.mark.asyncio
 async def test_demo_reports_are_isolated_complete_and_keyless(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("RUBRIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"):
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     first = await make_demo_graph().ainvoke({"request": {}}, config={"configurable": {"thread_id": "outer-one"}})
     second = await make_demo_graph().ainvoke({"request": {}}, config={"configurable": {"thread_id": "outer-two"}})
@@ -151,13 +151,13 @@ async def test_validation_and_live_preflight_fail_before_worker_invocation(
     assert invalid["error"]["code"] == "invalid_input"
     assert called is False
 
-    for name in ("RUBRIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"):
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     missing = await make_live_graph().ainvoke({"request": {}}, config={"configurable": {"thread_id": "outer-missing"}})
     assert missing["error"] == {
         "code": "live_configuration",
-        "message": "Live Model is not configured. Set server variable: RUBRIC_API_KEY.",
-        "missing": ["RUBRIC_API_KEY"],
+        "message": "Live Model is not configured. Set server variable: OPENAI_API_KEY.",
+        "missing": ["OPENAI_API_KEY"],
     }
 
 
@@ -613,7 +613,7 @@ def test_keyless_smoke_executes_the_evidence_backed_revision_loop(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    for name in ("RUBRIC_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"):
+    for name in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     from {{ cookiecutter.project_slug }}.smoke import main
 
