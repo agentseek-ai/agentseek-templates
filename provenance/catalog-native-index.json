@@ -1,4 +1,12 @@
 {
+  "langchain/relay-observability": {
+    "schema_version": 1,
+    "source_repository": "https://github.com/agentseek-ai/agentseek-templates.git",
+    "source_commit": "71e452632f59d5d8806f3983e08445274ed1a05d",
+    "source_path": "templates/langchain/relay-observability",
+    "description": "LangChain Relay observability with bounded Tavily research, Phoenix, OceanBase SeekDB, and AgentSeek lifecycle spec.",
+    "derivation": "Catalog-native LangChain observability template based on langchain/default and introduced in pull request #6."
+  },
   "langchain/rubric": {
     "schema_version": 1,
     "source_repository": "https://github.com/datawhalechina/deepagents-in-action.git",

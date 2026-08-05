@@ -127,6 +127,8 @@ def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
             }
         ],
     }
+
+
 def test_published_registry_is_the_disjoint_provenance_union() -> None:
     source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
     native_registry = _catalog_native_registry()
