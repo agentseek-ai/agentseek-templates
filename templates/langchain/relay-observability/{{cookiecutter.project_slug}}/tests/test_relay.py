@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import sys
+from unittest.mock import Mock
+from types import SimpleNamespace
+
+import {{ cookiecutter.project_slug }}.relay as relay
 from {{ cookiecutter.project_slug }}.relay import _observability_config, relay_config_builder, relay_middleware
 from {{ cookiecutter.project_slug }}.settings import ProjectSettings
 
@@ -32,3 +37,24 @@ def test_phoenix_export_keeps_atof_enabled_by_default() -> None:
     rendered = config.to_dict()["components"][0]["config"]
     assert rendered["atof"]["enabled"] is True
     assert rendered["openinference"]["enabled"] is True
+
+
+def test_shutdown_flushes_public_subscribers_api_only(monkeypatch) -> None:
+    flush = Mock()
+    subscribers = SimpleNamespace(flush=flush)
+    old_api = Mock(side_effect=AssertionError("legacy flush_subscribers API was called"))
+    fake_nemo_relay = SimpleNamespace(subscribers=subscribers, flush_subscribers=old_api)
+    monkeypatch.setitem(sys.modules, "nemo_relay", fake_nemo_relay)
+    monkeypatch.setattr(relay, "_INITIALIZED", True)
+
+    relay.shutdown_relay()
+
+    flush.assert_called_once_with()
+    old_api.assert_not_called()
+
+
+def test_shutdown_does_not_import_or_flush_when_uninitialized(monkeypatch) -> None:
+    monkeypatch.setattr(relay, "_INITIALIZED", False)
+    monkeypatch.delitem(sys.modules, "nemo_relay", raising=False)
+
+    relay.shutdown_relay()

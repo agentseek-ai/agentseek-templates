@@ -89,8 +89,8 @@ def shutdown_relay() -> None:
     """Flush Relay subscribers and close active exporters at process exit."""
     if not _INITIALIZED:
         return
-    import nemo_relay
+    from nemo_relay import subscribers
 
-    nemo_relay.flush_subscribers()
+    subscribers.flush()
     for exporter in _EXPORTERS:
         exporter.shutdown()

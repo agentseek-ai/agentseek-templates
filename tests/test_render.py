@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -13,6 +16,7 @@ from cookiecutter.main import cookiecutter
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES_ROOT = REPOSITORY_ROOT / "templates"
+RELAY_CHILD_PYTHON = REPOSITORY_ROOT / "relay-observability-app/my_langchain_agent/.venv/bin/python"
 INDEX = json.loads((TEMPLATES_ROOT / "index.json").read_text(encoding="utf-8"))
 CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
 CORE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
@@ -481,6 +485,34 @@ def test_mcp_lifecycle_advertises_protocol_url_and_separate_health_check(tmp_pat
 
     assert calculator_service.url == "http://127.0.0.1:8765/mcp"
     assert calculator_check.target == "http://127.0.0.1:8765/health"
+
+
+def test_relay_observability_render_runs_child_tests_with_dummy_credentials(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    generated_path = _render(
+        TEMPLATES_ROOT / "langchain/relay-observability",
+        output_root,
+        tmp_path,
+        extra_context={"project_name": "Rendered Relay Child"},
+    )
+    env = {
+        **os.environ,
+        "OPENAI_API_KEY": "test-openai-key",
+        "TAVILY_API_KEY": "test-tavily-key",
+        "RELAY_ENABLED": "false",
+    }
+    env["PYTHONPATH"] = str(generated_path / "src")
+    child_python = str(RELAY_CHILD_PYTHON) if RELAY_CHILD_PYTHON.is_file() else sys.executable
+    result = subprocess.run(
+        [child_python, "-m", "pytest", "-q"],
+        cwd=generated_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_cli_remote_does_not_claim_that_local_dev_provides_an_external_server(tmp_path: Path) -> None:

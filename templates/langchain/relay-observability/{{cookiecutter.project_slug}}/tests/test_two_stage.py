@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import {{ cookiecutter.project_slug }}.demo_binding as demo_binding
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from {{ cookiecutter.project_slug }}.demo_binding import (
     MAX_PRESENTATION_RESEARCH_CHARS,
@@ -18,28 +21,53 @@ class _Settings:
     relay_enabled = False
 
 
-def _middleware_names(agent: object) -> list[str]:
-    return [
-        getattr(item, "__name__", type(item).__name__)
-        for item in getattr(agent, "middleware", [])
-    ]
+def _capture_agent(monkeypatch):
+    captured = {}
+
+    def fake_create_agent(**kwargs):
+        captured.update(kwargs)
+        calls = []
+
+        def ainvoke(*args, **kwargs):
+            calls.append((args, kwargs))
+            return {"messages": []}
+
+        captured["calls"] = calls
+        return SimpleNamespace(ainvoke=ainvoke)
+
+    monkeypatch.setattr(demo_binding, "create_agent", fake_create_agent)
+    return captured
 
 
-def test_presentation_agent_does_not_force_provider_strategy() -> None:
+def test_presentation_agent_uses_public_runnable_and_markdown_prompt(monkeypatch) -> None:
+    captured = _capture_agent(monkeypatch)
     agent = build_presentation_agent(_Settings())
 
-    assert "apply_structured_output_schema" not in _middleware_names(agent)
-    assert agent.tools == []
+    assert callable(agent.ainvoke)
+    agent.ainvoke({"messages": []}, config={"run_name": "presentation"})
+    assert captured["calls"] == [(({"messages": []},), {"config": {"run_name": "presentation"}})]
+    assert captured["tools"] == []
+    assert not any(
+        getattr(item, "__name__", type(item).__name__) == "apply_structured_output_schema"
+        for item in captured["middleware"]
+    )
     assert "普通 Markdown" in PRESENTATION_SYSTEM_PROMPT
     assert "不要输出 JSON" in PRESENTATION_SYSTEM_PROMPT
 
 
-def test_research_agent_keeps_tavily_and_think_tool() -> None:
+def test_research_agent_passes_tavily_and_think_tool_to_runnable(monkeypatch) -> None:
+    captured = _capture_agent(monkeypatch)
     agent = build_research_agent(_Settings())
 
-    tool_names = {getattr(tool, "name", "") for tool in agent.tools}
+    assert callable(agent.ainvoke)
+    agent.ainvoke({"messages": []}, config={"run_name": "research"})
+    assert captured["calls"] == [(({"messages": []},), {"config": {"run_name": "research"}})]
+    tool_names = {getattr(tool, "name", "") for tool in captured["tools"]}
     assert {"tavily_search", "think_tool"} <= tool_names
-    assert "apply_structured_output_schema" not in _middleware_names(agent)
+    assert not any(
+        getattr(item, "__name__", type(item).__name__) == "apply_structured_output_schema"
+        for item in captured["middleware"]
+    )
 
 
 def test_presentation_input_preserves_question_and_research_evidence() -> None:

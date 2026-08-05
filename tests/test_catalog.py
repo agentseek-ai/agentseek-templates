@@ -21,6 +21,9 @@ EXPECTED_SOURCE_REGISTRY_SHA256 = "5695b14933fa4be57f77f6838c85dff1be72d8813aa71
 EXPECTED_CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
 EXPECTED_CORE_COMMIT = "2d91d5e8ab1b8eabae74c95057a5a0139e9b4abc"
 EXPECTED_CORE_RELEASE = "v0.1.1"
+EXPECTED_LOCAL_TEMPLATES = {
+    "langchain/relay-observability",
+}
 
 
 def _registry() -> dict[str, str]:
@@ -120,10 +123,7 @@ def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
             }
         ],
     }
-    # The frozen source inventory covers imported templates. Locally authored
-    # templates may extend the published registry without changing the source
-    # commit provenance or catalog-origin record.
-    assert set(source_registry) <= set(_registry())
+    assert set(_registry()) == set(source_registry) | EXPECTED_LOCAL_TEMPLATES
 
 
 def test_recorded_registry_digest_uses_the_frozen_source_registry_bytes() -> None:
