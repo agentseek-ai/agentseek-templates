@@ -502,10 +502,23 @@ def test_relay_observability_render_runs_child_tests_with_dummy_credentials(tmp_
         "TAVILY_API_KEY": "test-tavily-key",
         "RELAY_ENABLED": "false",
     }
-    env["PYTHONPATH"] = str(generated_path / "src")
-    child_python = str(RELAY_CHILD_PYTHON) if RELAY_CHILD_PYTHON.is_file() else sys.executable
+    if os.environ.get("CI") == "true":
+        sync = subprocess.run(
+            ["uv", "sync", "--extra", "dev"],
+            cwd=generated_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert sync.returncode == 0, sync.stdout + sync.stderr
+        child_command = ["uv", "run", "python", "-m", "pytest", "-q"]
+    else:
+        child_python = str(RELAY_CHILD_PYTHON) if RELAY_CHILD_PYTHON.is_file() else sys.executable
+        env["PYTHONPATH"] = str(generated_path / "src")
+        child_command = [child_python, "-m", "pytest", "-q"]
     result = subprocess.run(
-        [child_python, "-m", "pytest", "-q"],
+        child_command,
         cwd=generated_path,
         env=env,
         capture_output=True,
