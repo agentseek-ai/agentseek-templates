@@ -3,6 +3,7 @@ template = "langchain/rubric"
 name = "{{ cookiecutter.project_name }}"
 description = "Evidence-backed rubric revision lab with deterministic Guided Demo and provider-backed Live Model modes."
 guide = "README.md"
+env_file = ".env"
 
 [tools]
 required = ["uv", "node", "npm"]
@@ -10,20 +11,12 @@ required = ["uv", "node", "npm"]
 [paths]
 required = ["pyproject.toml", "langgraph.json", "frontend/package.json", "frontend/node_modules"]
 
-[env.RUBRIC_PROVIDER]
+[env.AGENTSEEK_MODEL_PROVIDER]
 required = false
 default = "{{ cookiecutter.default_provider }}"
-description = "Provider used by Live Model mode: openai, anthropic, or google."
+description = "Provider used by Live Model mode: openai, anthropic, or google (google_genai is accepted as an alias)."
 
-[env.RUBRIC_API_KEY]
-required = false
-description = "Credential used only by Live Model mode; Guided Demo and rubric-smoke do not require it."
-
-[env.RUBRIC_API_BASE]
-required = false
-description = "Optional OpenAI-compatible API base URL for Live Model mode."
-
-[env.RUBRIC_WORKER_MODEL]
+[env.AGENTSEEK_MODEL]
 required = false
 default = "{{ cookiecutter.worker_model }}"
 description = "Model used to draft and revise rubric content in Live Model mode."
@@ -32,6 +25,30 @@ description = "Model used to draft and revise rubric content in Live Model mode.
 required = false
 default = "{{ cookiecutter.grader_model }}"
 description = "Model used to grade evidence in Live Model mode."
+
+[env.OPENAI_API_KEY]
+required = false
+description = "Credential used only when Live Model mode selects openai; Guided Demo and rubric-smoke do not require it."
+
+[env.OPENAI_API_BASE]
+required = false
+description = "Optional OpenAI-compatible API base URL used only when Live Model mode selects openai."
+
+[env.ANTHROPIC_API_KEY]
+required = false
+description = "Credential used only when Live Model mode selects anthropic; Guided Demo and rubric-smoke do not require it."
+
+[env.ANTHROPIC_API_URL]
+required = false
+description = "Optional Anthropic-compatible API base URL used only when Live Model mode selects anthropic."
+
+[env.GOOGLE_API_KEY]
+required = false
+description = "Credential used only when Live Model mode selects google; Guided Demo and rubric-smoke do not require it."
+
+[env.GOOGLE_API_BASE]
+required = false
+description = "Optional Google-compatible API base URL used only when Live Model mode selects google."
 
 [services.frontend]
 name = "Rubric Lab"

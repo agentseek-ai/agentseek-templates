@@ -36,6 +36,11 @@ _PROVIDER_ALIASES: dict[str, Provider] = {
     "google_genai": "google",
     "gemini": "google",
 }
+_PROVIDER_ENVIRONMENT: dict[Provider, tuple[str, str]] = {
+    "openai": ("OPENAI_API_KEY", "OPENAI_API_BASE"),
+    "anthropic": ("ANTHROPIC_API_KEY", "ANTHROPIC_API_URL"),
+    "google": ("GOOGLE_API_KEY", "GOOGLE_API_BASE"),
+}
 _SAFE_ERROR_TYPES = frozenset(
     {
         "APIConnectionError",
@@ -97,7 +102,9 @@ def _normalize_provider(value: str) -> Provider:
     try:
         return _PROVIDER_ALIASES[alias]
     except KeyError:
-        raise LiveConfigurationError("Unsupported RUBRIC_PROVIDER. Expected openai, anthropic, or google.") from None
+        raise LiveConfigurationError(
+            "Unsupported AGENTSEEK_MODEL_PROVIDER. Expected openai, anthropic, or google."
+        ) from None
 
 
 def _split_model_provider(model_id: str) -> tuple[Provider | None, str]:
@@ -116,29 +123,30 @@ def _split_model_provider(model_id: str) -> tuple[Provider | None, str]:
 def _resolve_model_id(raw_model: str, provider: Provider, variable: str) -> str:
     prefixed_provider, model_id = _split_model_provider(raw_model)
     if prefixed_provider is not None and prefixed_provider != provider:
-        raise LiveConfigurationError(f"{variable} provider prefix does not match RUBRIC_PROVIDER.")
+        raise LiveConfigurationError(f"{variable} provider prefix does not match AGENTSEEK_MODEL_PROVIDER.")
     return model_id
 
 
 def resolve_live_config(environ: Mapping[str, str] | None = None) -> LiveModelConfig:
     """Resolve server-only Live configuration when, and only when, invoked."""
     values = os.environ if environ is None else environ
-    api_key = _nonempty(values, "RUBRIC_API_KEY")
+    provider = _normalize_provider(_nonempty(values, "AGENTSEEK_MODEL_PROVIDER") or DEFAULT_PROVIDER)
+    api_key_name, api_base_name = _PROVIDER_ENVIRONMENT[provider]
+    api_key = _nonempty(values, api_key_name)
     if api_key is None:
-        missing = ("RUBRIC_API_KEY",)
+        missing = (api_key_name,)
         raise LiveConfigurationError(
-            "Live Model is not configured. Set server variable: RUBRIC_API_KEY.",
+            f"Live Model is not configured. Set server variable: {api_key_name}.",
             missing=missing,
         )
 
-    provider = _normalize_provider(_nonempty(values, "RUBRIC_PROVIDER") or DEFAULT_PROVIDER)
-    worker_raw = _nonempty(values, "RUBRIC_WORKER_MODEL") or DEFAULT_WORKER_MODEL
+    worker_raw = _nonempty(values, "AGENTSEEK_MODEL") or DEFAULT_WORKER_MODEL
     grader_raw = _nonempty(values, "RUBRIC_GRADER_MODEL") or DEFAULT_GRADER_MODEL
     return LiveModelConfig(
         provider=provider,
         api_key=api_key,
-        api_base=_nonempty(values, "RUBRIC_API_BASE"),
-        worker_model=_resolve_model_id(worker_raw, provider, "RUBRIC_WORKER_MODEL"),
+        api_base=_nonempty(values, api_base_name),
+        worker_model=_resolve_model_id(worker_raw, provider, "AGENTSEEK_MODEL"),
         grader_model=_resolve_model_id(grader_raw, provider, "RUBRIC_GRADER_MODEL"),
     )
 

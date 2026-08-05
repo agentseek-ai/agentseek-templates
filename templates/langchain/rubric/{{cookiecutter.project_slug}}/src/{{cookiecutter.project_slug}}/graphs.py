@@ -51,10 +51,13 @@ from .safe_rubric import SafeRubricMiddleware
 _TERMINAL_STATUSES = frozenset({"satisfied", "max_iterations_reached", "failed", "grader_error"})
 _EVALUATION_RESULTS = _TERMINAL_STATUSES | {"needs_revision"}
 _SECRET_VARIABLES = (
-    "RUBRIC_API_KEY",
     "OPENAI_API_KEY",
+    "OPENAI_API_BASE",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_API_URL",
     "GOOGLE_API_KEY",
+    "GOOGLE_API_BASE",
+    "LANGSMITH_API_KEY",
 )
 _SECRET_PATTERNS = (
     re.compile(r"(?i)\b(authorization|api[-_ ]?key)\s*[:=]\s*[^\s,;]+"),
