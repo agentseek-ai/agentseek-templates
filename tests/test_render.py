@@ -610,17 +610,46 @@ def test_rubric_template_exposes_only_reviewed_lazy_graph_factories(tmp_path: Pa
     }
 
 
+def test_rubric_example_exposes_the_provider_native_live_model_contract(tmp_path: Path) -> None:
+    generated = render_rubric(tmp_path)
+    assignments = {
+        name: value
+        for raw_line in (generated / ".env.example").read_text(encoding="utf-8").splitlines()
+        if (line := raw_line.strip()) and not line.startswith("#") and "=" in line
+        for name, value in [line.split("=", maxsplit=1)]
+    }
+
+    assert assignments == {
+        "AGENTSEEK_MODEL_PROVIDER": "openai",
+        "AGENTSEEK_MODEL": "gpt-5-mini",
+        "RUBRIC_GRADER_MODEL": "gpt-5-mini",
+        "OPENAI_API_KEY": "",
+        "OPENAI_API_BASE": "",
+        "ANTHROPIC_API_KEY": "",
+        "ANTHROPIC_API_URL": "",
+        "GOOGLE_API_KEY": "",
+        "GOOGLE_API_BASE": "",
+        "LANGSMITH_TRACING": "false",
+        "LANGSMITH_API_KEY": "",
+        "LANGSMITH_PROJECT": "",
+    }
+
+
 def test_rubric_lifecycle_keeps_live_models_optional_and_smokes_rendered_package(tmp_path: Path) -> None:
     generated = render_rubric(tmp_path)
     lifecycle = tomllib.loads((generated / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
 
-    assert "env_file" not in lifecycle
+    assert lifecycle["env_file"] == ".env"
     for variable in (
-        "RUBRIC_PROVIDER",
-        "RUBRIC_API_KEY",
-        "RUBRIC_API_BASE",
-        "RUBRIC_WORKER_MODEL",
+        "AGENTSEEK_MODEL_PROVIDER",
+        "AGENTSEEK_MODEL",
         "RUBRIC_GRADER_MODEL",
+        "OPENAI_API_KEY",
+        "OPENAI_API_BASE",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_API_URL",
+        "GOOGLE_API_KEY",
+        "GOOGLE_API_BASE",
     ):
         assert lifecycle["env"][variable]["required"] is False
     assert set(lifecycle["tasks"]) >= {"sync", "frontend", "rubric-smoke"}

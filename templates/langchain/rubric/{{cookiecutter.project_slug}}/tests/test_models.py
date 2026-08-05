@@ -30,15 +30,15 @@ from rubric_lab.models import (
 )
 
 LIVE_AND_PROVIDER_VARIABLES = (
-    "RUBRIC_PROVIDER",
-    "RUBRIC_API_KEY",
-    "RUBRIC_API_BASE",
-    "RUBRIC_WORKER_MODEL",
+    "AGENTSEEK_MODEL_PROVIDER",
+    "AGENTSEEK_MODEL",
     "RUBRIC_GRADER_MODEL",
     "OPENAI_API_KEY",
+    "OPENAI_API_BASE",
     "ANTHROPIC_API_KEY",
+    "ANTHROPIC_API_URL",
     "GOOGLE_API_KEY",
-    "GEMINI_API_KEY",
+    "GOOGLE_API_BASE",
 )
 
 
@@ -84,11 +84,16 @@ def test_models_and_graphs_import_without_provider_configuration(monkeypatch: py
     ],
 )
 def test_live_configuration_normalizes_supported_provider_aliases(alias: str, provider: str) -> None:
+    key_name = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+    }[provider]
     config = resolve_live_config(
         {
-            "RUBRIC_PROVIDER": alias,
-            "RUBRIC_API_KEY": "shared-secret",
-            "RUBRIC_WORKER_MODEL": f"{alias}:worker-model",
+            "AGENTSEEK_MODEL_PROVIDER": alias,
+            key_name: "shared-secret",
+            "AGENTSEEK_MODEL": f"{alias}:worker-model",
             "RUBRIC_GRADER_MODEL": f"{alias}:grader-model",
         }
     )
@@ -99,14 +104,14 @@ def test_live_configuration_normalizes_supported_provider_aliases(alias: str, pr
     assert config.api_key == "shared-secret"
 
 
-@pytest.mark.parametrize("model_variable", ["RUBRIC_WORKER_MODEL", "RUBRIC_GRADER_MODEL"])
+@pytest.mark.parametrize("model_variable", ["AGENTSEEK_MODEL", "RUBRIC_GRADER_MODEL"])
 def test_live_configuration_rejects_provider_prefixed_model_conflicts(
     model_variable: str,
 ) -> None:
     environ = {
-        "RUBRIC_PROVIDER": "openai",
-        "RUBRIC_API_KEY": "SENTINEL_SECRET_7f2c",
-        "RUBRIC_WORKER_MODEL": "openai:worker-model",
+        "AGENTSEEK_MODEL_PROVIDER": "openai",
+        "OPENAI_API_KEY": "SENTINEL_SECRET_7f2c",
+        "AGENTSEEK_MODEL": "openai:worker-model",
         "RUBRIC_GRADER_MODEL": "openai:grader-model",
     }
     environ[model_variable] = "anthropic:wrong-provider-model"
@@ -117,13 +122,51 @@ def test_live_configuration_rejects_provider_prefixed_model_conflicts(
     assert "SENTINEL_SECRET_7f2c" not in str(error.value)
 
 
+@pytest.mark.parametrize(
+    ("provider", "key_name", "base_name"),
+    [
+        ("openai", "OPENAI_API_KEY", "OPENAI_API_BASE"),
+        ("anthropic", "ANTHROPIC_API_KEY", "ANTHROPIC_API_URL"),
+        ("google", "GOOGLE_API_KEY", "GOOGLE_API_BASE"),
+    ],
+)
+def test_live_configuration_reads_only_the_selected_provider_native_key_and_base(
+    provider: str,
+    key_name: str,
+    base_name: str,
+) -> None:
+    environ = {
+        "AGENTSEEK_MODEL_PROVIDER": provider,
+        "AGENTSEEK_MODEL": "worker-model",
+        "RUBRIC_GRADER_MODEL": "grader-model",
+        "OPENAI_API_KEY": "not-the-selected-key",
+        "OPENAI_API_BASE": "https://not-openai.example.test/v1",
+        "ANTHROPIC_API_KEY": "not-the-selected-key",
+        "ANTHROPIC_API_URL": "https://not-anthropic.example.test/v1",
+        "GOOGLE_API_KEY": "not-the-selected-key",
+        "GOOGLE_API_BASE": "https://not-google.example.test/v1",
+        key_name: f"{provider}-selected-key",
+        base_name: f"https://{provider}.example.test/v1",
+    }
+
+    config = resolve_live_config(environ)
+
+    assert config == LiveModelConfig(
+        provider=provider,  # type: ignore[arg-type]
+        api_key=f"{provider}-selected-key",
+        api_base=f"https://{provider}.example.test/v1",
+        worker_model="worker-model",
+        grader_model="grader-model",
+    )
+
+
 def test_live_configuration_preserves_separate_model_ids_and_one_shared_credential() -> None:
     config = resolve_live_config(
         {
-            "RUBRIC_PROVIDER": "openai",
-            "RUBRIC_API_KEY": "shared-secret",
-            "RUBRIC_API_BASE": "https://models.example.test/v1",
-            "RUBRIC_WORKER_MODEL": "openai:worker-model",
+            "AGENTSEEK_MODEL_PROVIDER": "openai",
+            "OPENAI_API_KEY": "shared-secret",
+            "OPENAI_API_BASE": "https://models.example.test/v1",
+            "AGENTSEEK_MODEL": "openai:worker-model",
             "RUBRIC_GRADER_MODEL": "openai:grader-model",
         }
     )
@@ -141,17 +184,17 @@ def test_missing_live_configuration_lists_server_variables() -> None:
     with pytest.raises(LiveConfigurationError) as error:
         resolve_live_config({})
 
-    assert error.value.missing == ("RUBRIC_API_KEY",)
+    assert error.value.missing == ("OPENAI_API_KEY",)
     assert "sk-" not in str(error.value)
-    assert "RUBRIC_API_KEY" in str(error.value)
+    assert "OPENAI_API_KEY" in str(error.value)
 
 
 def test_invalid_live_configuration_does_not_echo_unknown_values() -> None:
     with pytest.raises(LiveConfigurationError) as error:
         resolve_live_config(
             {
-                "RUBRIC_PROVIDER": "SENTINEL_SECRET_7f2c",
-                "RUBRIC_API_KEY": "sk-SENTINEL_SECRET_7f2c",
+                "AGENTSEEK_MODEL_PROVIDER": "SENTINEL_SECRET_7f2c",
+                "OPENAI_API_KEY": "sk-SENTINEL_SECRET_7f2c",
             }
         )
 
