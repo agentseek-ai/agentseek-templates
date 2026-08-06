@@ -530,6 +530,11 @@ def test_deepagents_default_render_runs_child_tests(tmp_path: Path) -> None:
         tmp_path,
         extra_context={"project_name": "Rendered DeepAgents Default"},
     )
+    rendered_readme = (generated_path / "README.md").read_text(encoding="utf-8")
+    assert "HarnessProfile" in rendered_readme
+    assert "ProviderProfile" in rendered_readme
+    assert "use_responses_api=False" in rendered_readme
+    assert "Chat Completions" in rendered_readme
     env = {
         **os.environ,
         "BUB_MODEL": "openai:test-model",
