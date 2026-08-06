@@ -8,13 +8,14 @@ dependencies = [
     "bub==0.3.9",
     "agentseek-ag-ui",
     "agentseek-langchain",
-    "deepagents>=0.5.3",
+    "deepagents>=0.6.0",
     "langchain-openai>=0.3.0",
     "pydantic-settings>=2.0.0",
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4,<10",
 ]
 
 [build-system]

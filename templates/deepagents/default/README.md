@@ -17,6 +17,11 @@ uvx agentseek dev
 
 The binding export is `{{ project_slug }}.demo_binding:build_spec`.
 
+For `openai:` model specifications, the generated binding registers a
+DeepAgents provider profile that uses the Chat Completions API. This keeps the
+template compatible with OpenAI-compatible endpoints that do not implement
+the Responses API. Other providers retain their normal DeepAgents behavior.
+
 ## Inputs
 
 | Variable | Description |
@@ -65,9 +70,13 @@ with `messages_spec`:
 
 ```python
 from agentseek_langchain import messages_spec
-from deepagents import create_deep_agent
+from deepagents import ProviderProfile, create_deep_agent, register_provider_profile
 
 def build_agent():
+    register_provider_profile(
+        "openai",
+        ProviderProfile(init_kwargs={"use_responses_api": False}),
+    )
     return create_deep_agent(
         model=settings.require_model(),
         tools=[outline_answer],

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from agentseek_langchain import messages_spec
-from deepagents import create_deep_agent
+from deepagents import ProviderProfile, create_deep_agent, register_provider_profile
 
 from .settings import get_settings
 
@@ -29,6 +29,10 @@ def build_agent() -> Any:
 
     settings = get_settings()
     settings.apply_openai_env_bridge()
+    register_provider_profile(
+        "openai",
+        ProviderProfile(init_kwargs={"use_responses_api": False}),
+    )
     return create_deep_agent(
         model=settings.require_model(),
         tools=[outline_answer],
