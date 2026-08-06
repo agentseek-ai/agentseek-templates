@@ -36,6 +36,18 @@ agentseek create bub/default \
 
 修改注册表或模板前，请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+## Catalog 元数据职责
+
+| 文件 | 职责 | 拉取模板时是否使用 |
+| --- | --- | --- |
+| `templates/index.json` | 当前 catalog 提交所发布模板的唯一注册表。 | 使用。显式 catalog 坐标会直接读取它；默认锁定路径会将下载内容与内置快照进行校验。 |
+| `catalog-origin.json` | 首次从 core 仓库导入时形成的不可变审计记录；后续在 catalog 中原生新增的模板不加入这份导入清单。 | 不使用。 |
+| `catalog-release.json` | 供发布与仓库检查使用的 catalog 版本、lifecycle 版本和配套 core 版本坐标。 | 不使用。 |
+| AgentSeek `catalog-lock.json` | 内置在 AgentSeek 包中的运行时锁文件，固定 catalog 仓库与提交，并保存注册表快照和每个模板的摘要。 | 默认锁定路径使用。该文件位于 AgentSeek core 仓库，不在本仓库。 |
+
+仅针对某个 catalog 原生模板的来源说明应写入该模板自己的 README，不应再
+建立第二份 catalog 注册表。
+
 ## 许可证
 
 Apache License 2.0，详见 [LICENSE](LICENSE)。

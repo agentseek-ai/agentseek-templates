@@ -13,7 +13,6 @@ TEMPLATES_ROOT = REPOSITORY_ROOT / "templates"
 INDEX_PATH = TEMPLATES_ROOT / "index.json"
 ORIGIN_PATH = REPOSITORY_ROOT / "catalog-origin.json"
 RELEASE_PATH = REPOSITORY_ROOT / "catalog-release.json"
-SOURCE_INDEX_PATH = REPOSITORY_ROOT / "provenance" / "source-index.json"
 PYPROJECT_PATH = REPOSITORY_ROOT / "pyproject.toml"
 LOCK_PATH = REPOSITORY_ROOT / "uv.lock"
 EXPECTED_SOURCE_COMMIT = "82c659c8d0f6c91981582f154d3001e3d3509299"
@@ -101,9 +100,9 @@ def test_every_template_carries_the_reviewed_core_dependency_coordinate() -> Non
         assert context["_agentseek_source_ref"] == EXPECTED_CORE_COMMIT, key
 
 
-def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
+def test_catalog_origin_matches_the_frozen_import_inventory() -> None:
     origin = json.loads(ORIGIN_PATH.read_text(encoding="utf-8"))
-    source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
+    registry = _registry()
     included_templates = origin.pop("included_templates")
     assert origin == {
         "schema_version": 1,
@@ -121,18 +120,17 @@ def test_catalog_provenance_matches_the_frozen_source_inventory() -> None:
         ],
     }
     assert included_templates == sorted(set(included_templates))
-    assert set(included_templates) <= set(source_registry)
+    assert set(included_templates) <= set(registry)
 
 
-def test_published_registry_matches_source_index() -> None:
-    source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
-    assert _registry() == source_registry
+def test_catalog_does_not_publish_a_second_registry() -> None:
+    assert not (REPOSITORY_ROOT / "provenance" / "source-index.json").exists()
 
 
 def test_recorded_registry_digest_uses_the_frozen_import_inventory() -> None:
     origin = json.loads(ORIGIN_PATH.read_text(encoding="utf-8"))
-    source_registry = json.loads(SOURCE_INDEX_PATH.read_text(encoding="utf-8"))
-    imported_registry = {key: source_registry[key] for key in origin["included_templates"]}
+    registry = _registry()
+    imported_registry = {key: registry[key] for key in origin["included_templates"]}
     imported_bytes = (json.dumps(imported_registry, indent=2) + "\n").encode()
     digest = hashlib.sha256(imported_bytes).hexdigest()
     assert digest == EXPECTED_SOURCE_REGISTRY_SHA256

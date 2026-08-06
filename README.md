@@ -40,6 +40,18 @@ is unavailable or invalid.
 See [CONTRIBUTING.md](CONTRIBUTING.md) before changing the registry or a
 template.
 
+## Catalog metadata roles
+
+| File | Role | Used while pulling a template? |
+| --- | --- | --- |
+| `templates/index.json` | Canonical registry of the templates published by the current catalog commit. | Yes. Explicit catalog coordinates load it directly; locked catalog downloads verify it against the embedded snapshot. |
+| `catalog-origin.json` | Immutable audit record of the one-time import from the core repository. Catalog-native templates are not added to this import inventory. | No. |
+| `catalog-release.json` | Catalog release, lifecycle, and paired core release coordinates used by release and repository checks. | No. |
+| AgentSeek `catalog-lock.json` | Runtime lock embedded in the AgentSeek package. It pins the catalog repository and commit, snapshots the registry, and records per-template digests. | Yes, for the default locked catalog path. This file lives in the AgentSeek core repository, not here. |
+
+Template source attribution that is specific to one catalog-native template
+belongs in that template's README. It is not a second catalog registry.
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).
