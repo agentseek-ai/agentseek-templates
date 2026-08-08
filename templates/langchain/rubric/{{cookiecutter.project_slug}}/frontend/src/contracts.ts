@@ -274,6 +274,16 @@ function evidenceResult(value: unknown): EvidenceResult | null {
   };
 }
 
+function evidenceMatchesCandidate(
+  evidence: EvidenceResult,
+  candidateId: string,
+): boolean {
+  return (
+    evidence.requestedCandidateId === candidateId ||
+    (!evidence.ok && evidence.profileFailures.includes("candidate_binding"))
+  );
+}
+
 function eventEnvelope(value: unknown): {
   wire: WireUIEvent;
   binding: { candidateVersion: number | null; candidateId: string | null };
@@ -354,7 +364,7 @@ export function decodeUIEvent(value: unknown): UIEvent | null {
         evidence === null ||
         binding.candidateVersion === null ||
         binding.candidateId === null ||
-        evidence.requestedCandidateId !== binding.candidateId
+        !evidenceMatchesCandidate(evidence, binding.candidateId)
       ) {
         return null;
       }
@@ -521,7 +531,7 @@ function recordsMatchCandidates(report: RunReport): boolean {
     report.evidence.some(
       (item) =>
         item.gradingRunId !== report.gradingRunId ||
-        item.requestedCandidateId !== item.candidateId ||
+        !evidenceMatchesCandidate(item, item.candidateId) ||
         candidates.get(item.candidateVersion) !== item.candidateId,
     )
   ) {

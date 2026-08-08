@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import uuid
@@ -48,8 +49,14 @@ from .evidence import RunEvidenceLedger, make_run_test_suite
 from .models import LiveConfigurationError, build_live_models, resolve_live_config
 from .safe_rubric import SafeRubricMiddleware
 
+logger = logging.getLogger(__name__)
+
 _TERMINAL_STATUSES = frozenset({"satisfied", "max_iterations_reached", "failed", "grader_error"})
 _EVALUATION_RESULTS = _TERMINAL_STATUSES | {"needs_revision"}
+_LIVE_PROVIDERS = frozenset({"openai", "anthropic", "google"})
+_SAFE_RUNTIME_ERROR_TYPES = frozenset(
+    {"ConnectionError", "RuntimeError", "SafeModelError", "TimeoutError", "TypeError", "ValueError"}
+)
 _SECRET_VARIABLES = (
     "OPENAI_API_KEY",
     "OPENAI_API_BASE",
@@ -535,6 +542,16 @@ def _public_runtime_error() -> PublicError:
     return make_public_error("runtime", "Run failed safely; inspect sanitized server diagnostics.")
 
 
+def _runtime_provider_context(mode: RunMode, worker: BaseChatModel) -> str:
+    provider = getattr(worker, "provider", None)
+    return provider if provider in _LIVE_PROVIDERS else mode
+
+
+def _safe_runtime_error_type(exc: Exception) -> str:
+    error_type = type(exc).__name__
+    return error_type if error_type in _SAFE_RUNTIME_ERROR_TYPES else "RuntimeError"
+
+
 def build_application_graph(*, mode: RunMode, model_factory: Callable[[], object]):
     """Build stable outer topology and allocate every runtime dependency per submission."""
 
@@ -630,7 +647,13 @@ def build_application_graph(*, mode: RunMode, model_factory: Callable[[], object
             except Exception:
                 return {"error": _public_runtime_error()}
             return {"report": report}
-        except Exception:
+        except Exception as exc:
+            logger.error(
+                "Rubric run failed safely (mode=%s, provider=%s, error_type=%s)",
+                mode,
+                _runtime_provider_context(mode, worker),
+                _safe_runtime_error_type(exc),
+            )
             return {"error": _public_runtime_error()}
         finally:
             with suppress(Exception):

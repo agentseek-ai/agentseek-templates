@@ -308,6 +308,52 @@ describe("wire decoders", () => {
     expect(screen.queryByText("Evidence: passing")).toBeNull();
   });
 
+  it("preserves a failed candidate-binding Evidence record", () => {
+    const bindingFailure = {
+      event_id: "run-new:rubric_evidence:0:1:0",
+      type: "rubric_evidence",
+      grading_run_id: "run-new",
+      iteration: 0,
+      candidate_version: 1,
+      candidate_id: HASH_A,
+      payload: {
+        requested_candidate_id: HASH_B,
+        ok: false,
+        behavior_failures: [],
+        profile_failures: ["candidate_binding"],
+        duration_ms: 0,
+        timed_out: false,
+        output_truncated: false,
+      },
+    };
+
+    expect(decodeUIEvent(bindingFailure)).toMatchObject({
+      candidateId: HASH_A,
+      evidence: {
+        requestedCandidateId: HASH_B,
+        ok: false,
+        profileFailures: ["candidate_binding"],
+      },
+    });
+
+    let state = receiveEvent(createReportState(), {
+      event_id: "run-new:candidate:0:1:0",
+      type: "candidate",
+      grading_run_id: "run-new",
+      iteration: 0,
+      candidate_version: 1,
+      candidate_id: HASH_A,
+      payload: { source: "candidate A" },
+    });
+    state = receiveEvent(state, bindingFailure);
+
+    render(
+      createElement(EvaluationTimeline, { run: state.runsById["run-new"] }),
+    );
+    expect(screen.getByText("Evidence: failing")).toBeTruthy();
+    expect(screen.getByText("candidate_binding")).toBeTruthy();
+  });
+
   it("rejects an authoritative report whose Evidence requested another candidate", () => {
     const report = completeReport({
       evidence: [

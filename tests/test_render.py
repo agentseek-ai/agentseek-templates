@@ -635,6 +635,39 @@ def test_rubric_example_exposes_the_provider_native_live_model_contract(tmp_path
     }
 
 
+@pytest.mark.parametrize(
+    ("provider", "default_model"),
+    [
+        ("openai", "gpt-5-mini"),
+        ("anthropic", "claude-sonnet-4-6"),
+        ("google", "gemini-2.5-flash"),
+    ],
+)
+def test_rubric_provider_choice_renders_compatible_default_models(
+    provider: str,
+    default_model: str,
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "rubric-provider-output"
+    output_root.mkdir()
+    generated = _render(
+        TEMPLATES_ROOT / "langchain/rubric",
+        output_root,
+        tmp_path,
+        extra_context={"default_provider": provider},
+    )
+    assignments = {
+        name: value
+        for raw_line in (generated / ".env.example").read_text(encoding="utf-8").splitlines()
+        if (line := raw_line.strip()) and not line.startswith("#") and "=" in line
+        for name, value in [line.split("=", maxsplit=1)]
+    }
+
+    assert assignments["AGENTSEEK_MODEL_PROVIDER"] == provider
+    assert assignments["AGENTSEEK_MODEL"] == default_model
+    assert assignments["RUBRIC_GRADER_MODEL"] == default_model
+
+
 def test_rubric_lifecycle_keeps_live_models_optional_and_smokes_rendered_package(tmp_path: Path) -> None:
     generated = render_rubric(tmp_path)
     lifecycle = tomllib.loads((generated / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))

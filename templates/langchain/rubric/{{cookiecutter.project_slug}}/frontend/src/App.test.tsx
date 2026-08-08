@@ -37,6 +37,7 @@ vi.mock("@langchain/react", () => ({
 }));
 
 const HASH_A = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const HASH_B = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 function latestOptions(): StreamOptions {
   const options = optionSnapshots.at(-1);
@@ -385,6 +386,38 @@ describe("Rubric Lab workbench", () => {
     );
     expect(screen.queryByRole("heading", { name: "Accepted" })).toBeNull();
     expect(screen.getByText("No completed report yet.")).toBeTruthy();
+  });
+
+  it("renders a backend candidate-binding rejection as not accepted", () => {
+    const view = render(<App />);
+    fireEvent.click(runButton());
+    streamState.values = {
+      report: report("demo", "run-binding-rejected", {
+        accepted: false,
+        gate_reason: "current_evidence_missing",
+        evidence: [
+          {
+            event_id: "run-binding-rejected:evidence:1:0",
+            grading_run_id: "run-binding-rejected",
+            iteration: 0,
+            candidate_version: 1,
+            candidate_id: HASH_A,
+            requested_candidate_id: HASH_B,
+            ok: false,
+            behavior_failures: [],
+            profile_failures: ["candidate_binding"],
+            duration_ms: 0,
+            timed_out: false,
+            output_truncated: false,
+          },
+        ],
+      }),
+    };
+    view.rerender(<App />);
+
+    expect(screen.getByRole("heading", { name: "Not accepted" })).toBeTruthy();
+    expect(screen.getByText("candidate_binding")).toBeTruthy();
+    expect(screen.queryByText(/invalid run report/i)).toBeNull();
   });
 
   it("turns a missing Live configuration error into server setup guidance", () => {

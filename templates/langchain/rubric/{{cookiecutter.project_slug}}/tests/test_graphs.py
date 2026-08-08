@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from types import SimpleNamespace
 from typing import Any
 
@@ -11,6 +12,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import BaseTool
 from pydantic import PrivateAttr
+
 from {{ cookiecutter.project_slug }} import evidence
 from {{ cookiecutter.project_slug }}.contracts import BASELINE_RUBRIC, build_run_report, candidate_id
 from {{ cookiecutter.project_slug }}.demo_models import (
@@ -25,8 +27,10 @@ from {{ cookiecutter.project_slug }}.graphs import (
     make_live_graph,
     reconcile_public_events,
 )
+from {{ cookiecutter.project_slug }}.models import SanitizingChatModel
 
 SENTINEL = "SENTINEL_SECRET_7f2c"
+SensitiveProviderError = type(f"SensitiveProviderError_{SENTINEL}", (Exception,), {})
 
 
 async def _stream(graph: Any, request: dict[str, object], thread_id: str):
@@ -211,6 +215,62 @@ async def test_grader_failure_is_terminal_and_sanitized_at_outer_boundary() -> N
     assert report["accepted"] is False
     assert SENTINEL not in json.dumps(events)
     assert SENTINEL not in json.dumps(report)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stream_error",
+    [
+        RuntimeError(f"provider body authorization=Bearer {SENTINEL}"),
+        SensitiveProviderError("provider failed"),
+    ],
+    ids=["secret-in-message", "secret-in-type"],
+)
+async def test_inner_stream_failure_emits_only_sanitized_server_diagnostics(
+    stream_error: Exception,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from {{ cookiecutter.project_slug }} import graphs
+
+    class FailingInnerAgent:
+        def astream(self, *args: object, **kwargs: object):
+            del args, kwargs
+
+            async def fail():
+                raise stream_error
+                yield  # pragma: no cover - keeps this an async generator
+
+            return fail()
+
+    monkeypatch.setattr(graphs, "build_inner_agent", lambda **_: FailingInnerAgent())
+    graph = build_application_graph(
+        mode="live",
+        model_factory=lambda: SimpleNamespace(
+            worker=SanitizingChatModel(
+                delegate=DemoWorkerModel(),
+                provider="openai",
+                role="worker",
+            ),
+            grader=RaisingGrader(profile={"structured_output": False}),
+        ),
+    )
+
+    with caplog.at_level(logging.ERROR):
+        state = await graph.ainvoke(
+            {"request": {"rubric": BASELINE_RUBRIC, "max_iterations": 3}},
+            config={"configurable": {"thread_id": "outer-stream-failure"}},
+        )
+
+    assert state["error"] == {
+        "code": "runtime",
+        "message": "Run failed safely; inspect sanitized server diagnostics.",
+        "missing": [],
+    }
+    assert "mode=live" in caplog.text
+    assert "provider=openai" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert SENTINEL not in caplog.text
 
 
 class OversizedWorker(BaseChatModel):
