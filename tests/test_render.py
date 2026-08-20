@@ -1417,7 +1417,7 @@ def test_rubric_generated_smoke_job_exercises_fresh_keyless_project() -> None:
 
     assert marker in workflow
     job = workflow.split(marker, maxsplit=1)[1]
-    assert "actions/checkout@11d5960a326750d5838078e36cf38b85af677262" in job
+    assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in job
     assert "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in job
     assert "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020" in job
     assert "astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e" in job
