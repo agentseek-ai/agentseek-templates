@@ -4,6 +4,7 @@
   "deepagents/default": "Local create_deep_agent runnable with AgentSeek lifecycle spec.",
   "deepagents/mcp": "DeepAgents MCP Tools app with validated stdio/HTTP configuration, a local calculator example, streamed UI, and AgentSeek lifecycle spec.",
   "deepagents/research": "DeepAgents research agent with Tavily search, streamed tool/sub-agent UI, and AgentSeek lifecycle spec.",
+  "deepagents/streaming": "DeepAgents Event Streaming v3 showcase with subagent, message, tool, state, and output projections.",
   "deepagents/sandbox": "DeepAgents sandbox coding agent with streamed UI and AgentSeek lifecycle spec.",
   "langchain/agentic-rag": "LangChain agentic RAG with OceanBase vector search and AgentSeek lifecycle spec.",
   "langchain/agentic-rag-hybrid": "LangChain agentic hybrid RAG with image ingestion, vector/sparse/full-text/metadata search, comparison demos, optional Phoenix observability, and AgentSeek lifecycle spec.",
