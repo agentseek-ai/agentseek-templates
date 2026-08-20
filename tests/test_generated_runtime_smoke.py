@@ -1813,7 +1813,7 @@ def test_runtime_workflow_covers_every_retained_migration() -> None:
             "with": {"node-version": "22"},
         },
         {
-            "uses": "astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e",
+            "uses": "astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d",
             "with": {"version": "0.9.28", "enable-cache": True},
         },
         {"run": "uv sync --frozen --dev"},
