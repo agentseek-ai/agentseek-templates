@@ -1801,7 +1801,7 @@ def test_runtime_workflow_covers_every_retained_migration() -> None:
     }
     assert job["steps"] == [
         {
-            "uses": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
+            "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
             "with": {"persist-credentials": False},
         },
         {

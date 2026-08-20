@@ -1,0 +1,60 @@
+name: DeepAgents Streaming
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "templates/deepagents/streaming/**"
+      - "templates/index.json"
+      - "tests/test_render.py"
+      - ".github/workflows/deepagents-streaming.yml"
+  pull_request:
+    paths:
+      - "templates/deepagents/streaming/**"
+      - "templates/index.json"
+      - "tests/test_render.py"
+      - ".github/workflows/deepagents-streaming.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generated-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: offline-test-key
+      AGENTSEEK_MODEL_PROVIDER: openai
+      AGENTSEEK_MODEL: offline-test-model
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - run: uv sync --frozen --dev
+      - name: Render DeepAgents Streaming
+        run: uv run cookiecutter templates/deepagents/streaming --no-input --output-dir "${RUNNER_TEMP}/streaming-render"
+      - name: Install and test the rendered backend
+        working-directory: ${{ runner.temp }}/streaming-render/deepagents_streaming
+        run: |
+          cp .env.example .env
+          uv sync --extra dev
+          uv run python -m pytest -q
+      - name: Test and build the rendered frontend
+        working-directory: ${{ runner.temp }}/streaming-render/deepagents_streaming/frontend
+        run: |
+          npm install
+          npm test -- --run
+          npm run build
+      - name: Validate the rendered lifecycle
+        working-directory: ${{ runner.temp }}/streaming-render/deepagents_streaming
+        run: uv run --project "${GITHUB_WORKSPACE}" agentseek dev --dry-run

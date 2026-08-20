@@ -1,0 +1,77 @@
+version = 2
+template = "deepagents/streaming"
+name = "{{ cookiecutter.project_name }}"
+description = "DeepAgents Event Streaming v3 application with projection-aware UI."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv", "node", "npm"]
+
+[paths]
+required = ["pyproject.toml", "langgraph.json", "frontend/package.json", "frontend/node_modules"]
+
+[env.AGENTSEEK_MODEL_PROVIDER]
+required = true
+default = "{{ cookiecutter.default_model_provider }}"
+description = "LangChain model provider."
+
+[env.AGENTSEEK_MODEL]
+required = true
+default = "{{ cookiecutter.default_model }}"
+description = "Model id used by the streaming graph."
+aliases = ["DEEPAGENTS_MODEL", "BUB_MODEL"]
+
+[env.OPENAI_API_KEY]
+required = true
+description = "Credential for the selected model provider."
+aliases = ["ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "BUB_OPENAI_API_KEY"]
+
+[services.langgraph]
+name = "LangGraph API"
+url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+tech = "langgraph"
+kind = "api"
+display = "advanced"
+primary = false
+description = "LangGraph development API that runs the DeepAgents streaming graph."
+links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
+
+[services.frontend]
+name = "Streaming application"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Projection-aware Event Streaming browser UI."
+tech = "vite"
+links = { docs = "https://vite.dev/guide/" }
+
+[processes.langgraph]
+command = ["uv", "run", "langgraph", "dev", "--port", "{{ cookiecutter.langgraph_port }}", "--no-browser"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+
+[checks.langgraph]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+service = "langgraph"
+timeout = 2
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+service = "frontend"
+timeout = 2
+attempts = 3
+
+[tasks.sync]
+description = "Install Python dependencies with uv."
+command = ["uv", "sync"]
+
+[tasks.frontend]
+description = "Install frontend dependencies."
+command = ["npm", "install", "--prefix", "frontend"]
