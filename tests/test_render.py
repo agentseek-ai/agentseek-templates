@@ -55,6 +55,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "deepagents/default": {"agentseek-ag-ui", "agentseek-langchain"},
     "deepagents/mcp": set(),
     "deepagents/research": set(),
+    "deepagents/subagents-dynamic": set(),
     "deepagents/streaming": set(),
     "deepagents/sandbox": set(),
     "langchain/agentic-rag": set(),
@@ -146,6 +147,30 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
         ),
     },
     "deepagents/research": {
+        "services": (
+            ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
+            (
+                "langgraph",
+                "api",
+                "advanced",
+                False,
+                ("process:langgraph",),
+                ("langgraph",),
+                ("api_docs", "docs", "studio"),
+            ),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:frontend:open",
+            "service:frontend:reference:docs",
+            "service:langgraph:copy",
+            "service:langgraph:reference:api_docs",
+            "service:langgraph:reference:docs",
+            "service:langgraph:reference:studio",
+        ),
+    },
+    "deepagents/subagents-dynamic": {
         "services": (
             ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
             (
@@ -1551,3 +1576,65 @@ def test_deepagents_streaming_template_keeps_langgraph_v3_contract(tmp_path: Pat
     for event_kind in ("message", "subagent", "tool_call", "values", "output", "raw", "error"):
         assert f'"kind": "{event_kind}"' in adapter_source
     assert "state snapshot" in frontend_source
+
+
+def test_deepagents_subagents_dynamic_renders_six_pattern_lab_contract(tmp_path: Path) -> None:
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/subagents-dynamic", output_root, tmp_path)
+
+    pyproject = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = set(pyproject["project"]["dependencies"])
+    assert "deepagents==0.7.8" in dependencies
+    assert "langchain-quickjs==0.3.5" in dependencies
+    assert "langgraph-cli[inmem]>=0.4" in dependencies
+    assert not any(dependency.startswith("agentseek-api") for dependency in dependencies)
+
+    assert {
+        path.relative_to(generated_path / "examples").as_posix() for path in (generated_path / "examples").rglob("*.py")
+    } == {
+        "dead-code-package/api.py",
+        "dead-code-package/helpers.py",
+        "dead-code-package/main.py",
+        "dead-code-package/orphan.py",
+        "payments/payment_service.py",
+        "payments/signatures.py",
+        "routes/admin.py",
+        "routes/health.py",
+        "routes/orders.py",
+        "routes/refunds.py",
+    }
+
+    lifecycle = tomllib.loads((generated_path / ".agentseek/lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["template"] == "deepagents/subagents-dynamic"
+    assert lifecycle["services"]["langgraph"]["tech"] == "langgraph"
+    assert lifecycle["processes"]["langgraph"]["command"] == [
+        "uv",
+        "run",
+        "langgraph",
+        "dev",
+        "--port",
+        "2024",
+        "--no-browser",
+    ]
+    assert lifecycle["processes"]["frontend"]["cwd"] == "frontend"
+
+    graph_config = json.loads((generated_path / "langgraph.json").read_text(encoding="utf-8"))
+    assert graph_config["graphs"] == {
+        "classify_and_act": "dynamic_subagents_lab.agent:classify_and_act",
+        "fan_out_and_synthesize": "dynamic_subagents_lab.agent:fan_out_and_synthesize",
+        "adversarial_verification": "dynamic_subagents_lab.agent:adversarial_verification",
+        "generate_and_filter": "dynamic_subagents_lab.agent:generate_and_filter",
+        "tournament": "dynamic_subagents_lab.agent:tournament",
+        "loop_until_done": "dynamic_subagents_lab.agent:loop_until_done",
+    }
+    node_tsconfig = json.loads((generated_path / "frontend/tsconfig.node.json").read_text(encoding="utf-8"))
+    node_options = node_tsconfig["compilerOptions"]
+    assert node_options["noEmit"] is True
+    assert node_options["tsBuildInfoFile"].startswith("./node_modules/")
+    app_tsconfig = json.loads((generated_path / "frontend/tsconfig.app.json").read_text(encoding="utf-8"))
+    assert app_tsconfig["compilerOptions"]["tsBuildInfoFile"].startswith("./node_modules/")
+    assert (generated_path / "frontend/src/patterns.tsx").is_file()
+    assert (generated_path / "frontend/src/WorkflowEvidence.test.tsx").is_file()
+    assert (generated_path / "tests/test_patterns.py").is_file()
+    assert (generated_path / "tests/test_fixture_workspace.py").is_file()

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.langgraph_api/
+.env
+node_modules/
+frontend/node_modules/
+frontend/dist/
