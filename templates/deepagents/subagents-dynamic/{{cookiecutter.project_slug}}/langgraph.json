@@ -1,0 +1,12 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "classify_and_act": "{{ cookiecutter.project_slug }}.agent:classify_and_act",
+    "fan_out_and_synthesize": "{{ cookiecutter.project_slug }}.agent:fan_out_and_synthesize",
+    "adversarial_verification": "{{ cookiecutter.project_slug }}.agent:adversarial_verification",
+    "generate_and_filter": "{{ cookiecutter.project_slug }}.agent:generate_and_filter",
+    "tournament": "{{ cookiecutter.project_slug }}.agent:tournament",
+    "loop_until_done": "{{ cookiecutter.project_slug }}.agent:loop_until_done"
+  },
+  "env": "./.env"
+}
