@@ -59,6 +59,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "deepagents/streaming": set(),
     "deepagents/sandbox": set(),
     "langchain/agentic-rag": set(),
+    "langchain/agentbase-rag-agentops": set(),
     "langchain/agentic-rag-hybrid": set(),
     "langchain/agentic-rag-openvino": set(),
     "langchain/cli-remote": {"agentseek-langchain"},
@@ -253,6 +254,21 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
                 ("backend",),
                 ("api_docs", "docs", "studio"),
             ),
+            ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ()),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:backend:copy",
+            "service:backend:reference:api_docs",
+            "service:backend:reference:docs",
+            "service:backend:reference:studio",
+            "service:frontend:open",
+        ),
+    },
+    "langchain/agentbase-rag-agentops": {
+        "services": (
+            ("backend", "api", "advanced", False, ("process:backend",), ("backend",), ("api_docs", "docs", "studio")),
             ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ()),
         ),
         "effects": {},
@@ -541,6 +557,44 @@ def test_registered_template_renders_as_complete_lifecycle_v2(
     assert "{{" not in pyproject_text
     pyproject = tomllib.loads(pyproject_text)
     assert pyproject["project"]["name"]
+
+
+def test_agentbase_rag_render_contains_observability_rag_and_frontend_contract(
+    tmp_path: Path,
+) -> None:
+    output_root = tmp_path / "output"
+    output_root.mkdir()
+    generated_path = _render(
+        TEMPLATES_ROOT / "langchain/agentbase-rag-agentops",
+        output_root,
+        tmp_path,
+        extra_context={"knowledge_base_id": "kb-fixture"},
+    )
+
+    readme = (generated_path / "README.md").read_text(encoding="utf-8")
+    env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
+    lifecycle = tomllib.loads(
+        (generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8")
+    )
+    frontend_package = json.loads(
+        (generated_path / "frontend" / "package.json").read_text(encoding="utf-8")
+    )
+
+    assert "AgentBase" in readme
+    assert "AgentOps" in readme
+    assert "KnowledgeBases.create_search" in readme
+    assert "AGENTBASE_KNOWLEDGE_BASE_ID=kb-fixture" in env_example
+    assert "AGENTBASE_AGENTOPS_CAPTURE_CONTENT=false" in env_example
+    assert "SEEKDB_EMBED=true" in env_example
+    assert lifecycle["tasks"]["frontend-test"]["command"] == [
+        "npm",
+        "run",
+        "test",
+        "--prefix",
+        "frontend",
+    ]
+    assert frontend_package["scripts"]["test"] == "vitest run"
+    assert (generated_path / "frontend" / "src" / "evidence.test.ts").is_file()
 
 
 @pytest.mark.parametrize("template_key", sorted(MIGRATED_RUNTIME_TEMPLATES))

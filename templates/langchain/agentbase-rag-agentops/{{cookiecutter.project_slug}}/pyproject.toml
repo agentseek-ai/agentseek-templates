@@ -1,0 +1,27 @@
+[project]
+name = "{{ cookiecutter.project_slug }}"
+version = "0.1.0"
+description = "{{ cookiecutter.project_name }} — LangChain RAG backed by AgentBase knowledge bases and AgentOps."
+authors = [{ name = "{{ cookiecutter.author }}" }]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "agentbase-agentops-langchain==0.1.0",
+    "agentbase-python-sdk==15.5.0",
+    "agentseek-api[embedded]==0.2.3",
+    "langchain>=1.0,<2.0",
+    "langchain-openai>=0.3",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.2"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
