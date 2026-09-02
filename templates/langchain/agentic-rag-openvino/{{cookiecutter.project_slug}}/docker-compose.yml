@@ -2,7 +2,7 @@ name: {{ cookiecutter.project_slug }}
 
 services:
   seekdb:
-    image: quay.io/oceanbase/seekdb:latest
+    image: quay.io/oceanbase/seekdb@sha256:e3a46b6520fa6b6fb7949d03b8c6f22cef180e6c84953b839ad56a358d34932d
     restart: unless-stopped
     environment:
       DATAFILE_SIZE: 2G

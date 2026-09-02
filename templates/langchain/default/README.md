@@ -120,7 +120,7 @@ The generated `docker-compose.yml` is the default lifecycle stack: it starts
 Bub gateway, the CopilotKit frontend, Phoenix, and an OceanBase seekdb backend
 in one `agentseek dev` run. Phoenix uses
 `PHOENIX_SQL_DATABASE_URL=mysql://root@seekdb:2881/phoenix` and persists data in
-`quay.io/oceanbase/seekdb:latest`. The Phoenix image defaults to
+`quay.io/oceanbase/seekdb@sha256:e3a46b6520fa6b6fb7949d03b8c6f22cef180e6c84953b839ad56a358d34932d`. The Phoenix image defaults to
 `ghcr.io/agentseek-ai/agentseek-phoenix:main` and can be overridden with
 `AGENTSEEK_PHOENIX_IMAGE`. Its optional `feishu` profile starts the Feishu
 gateway with the same LangChain spec and environment surface; enable it with

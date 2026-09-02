@@ -20,6 +20,9 @@ EXPECTED_SOURCE_REGISTRY_SHA256 = "5695b14933fa4be57f77f6838c85dff1be72d8813aa71
 EXPECTED_CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
 EXPECTED_CORE_COMMIT = "900f89518c32f8570d7648897394ed96a86a647a"
 EXPECTED_CORE_RELEASE = "v0.1.2"
+EXPECTED_SEEKDB_IMAGE = (
+    "quay.io/oceanbase/seekdb@sha256:e3a46b6520fa6b6fb7949d03b8c6f22cef180e6c84953b839ad56a358d34932d"
+)
 
 
 def _registry() -> dict[str, str]:
@@ -78,6 +81,26 @@ def test_langsmith_template_examples_include_regional_endpoint() -> None:
     for example in langsmith_examples:
         text = example.read_text(encoding="utf-8")
         assert "LANGSMITH_ENDPOINT=https://apac.api.smith.langchain.com" in text, example
+
+
+def test_seekdb_images_are_pinned_to_the_validated_multiarch_manifest() -> None:
+    candidate_paths = [
+        *TEMPLATES_ROOT.glob("*/*/{{cookiecutter.project_slug}}/docker-compose.yml"),
+        *TEMPLATES_ROOT.glob("*/*/{{cookiecutter.project_slug}}/.env.example"),
+        *TEMPLATES_ROOT.glob("*/*/README.md"),
+        *TEMPLATES_ROOT.glob("*/*/{{cookiecutter.project_slug}}/README.md"),
+    ]
+    seekdb_paths = []
+
+    for path in candidate_paths:
+        text = path.read_text(encoding="utf-8")
+        if "quay.io/oceanbase/seekdb" not in text:
+            continue
+        seekdb_paths.append(path)
+        assert "quay.io/oceanbase/seekdb:latest" not in text, path
+        assert EXPECTED_SEEKDB_IMAGE in text, path
+
+    assert seekdb_paths
 
 
 def test_self_containment_rejects_a_template_root_symlink(tmp_path: Path) -> None:
@@ -140,7 +163,7 @@ def test_paired_release_metadata_separates_core_dependencies_from_import_provena
     release = json.loads(RELEASE_PATH.read_text(encoding="utf-8"))
     assert release == {
         "schema_version": 1,
-        "catalog_release": "v0.1.4",
+        "catalog_release": "v0.1.5",
         "lifecycle_version": 2,
         "core_repository": EXPECTED_CORE_REPOSITORY,
         "core_commit": EXPECTED_CORE_COMMIT,

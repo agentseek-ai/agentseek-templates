@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "catalog_release": "v0.1.4",
+  "catalog_release": "v0.1.5",
   "lifecycle_version": 2,
   "core_repository": "https://github.com/ob-labs/agentseek.git",
   "core_commit": "900f89518c32f8570d7648897394ed96a86a647a",

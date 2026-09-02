@@ -79,7 +79,7 @@ AGENTSEEK_OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://127.0.0.1:6006/v1/traces
 
 Phoenix is available at `http://127.0.0.1:6006`. The compose stack uses
 `ghcr.io/agentseek-ai/agentseek-phoenix:main` and persists Phoenix data in
-OceanBase seekdb (`quay.io/oceanbase/seekdb:latest`) through
+OceanBase seekdb (`quay.io/oceanbase/seekdb@sha256:e3a46b6520fa6b6fb7949d03b8c6f22cef180e6c84953b839ad56a358d34932d`) through
 `PHOENIX_SQL_DATABASE_URL=mysql://root@seekdb:2881/phoenix`.
 Override the images with `AGENTSEEK_PHOENIX_IMAGE` and
 `OCEANBASE_SEEKDB_IMAGE` in `.env`.

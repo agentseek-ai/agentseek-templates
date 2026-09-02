@@ -137,4 +137,4 @@ This template does not prepare local model artifacts. Chat, embeddings, and VLM 
 
 The implementation uses `langchain-oceanbase` as the storage/search infrastructure. Image vectors, hashed sparse token vectors, full-text content, captions, tags, and metadata are written through `OceanbaseVectorStore` with embedded seekdb enabled by `SEEKDB_PATH`. The app intentionally keeps vector, sparse, full-text, and metadata routes visible in the Lab tab so developers can see how each retrieval signal changes the fused rank.
 
-Phoenix tracing follows the AgentSeek Phoenix compose convention: `AGENTSEEK_PHOENIX_IMAGE` defaults to `ghcr.io/agentseek-ai/agentseek-phoenix:main`, and `OCEANBASE_SEEKDB_IMAGE` defaults to `quay.io/oceanbase/seekdb:latest`.
+Phoenix tracing follows the AgentSeek Phoenix compose convention: `AGENTSEEK_PHOENIX_IMAGE` defaults to `ghcr.io/agentseek-ai/agentseek-phoenix:main`, and `OCEANBASE_SEEKDB_IMAGE` defaults to `quay.io/oceanbase/seekdb@sha256:e3a46b6520fa6b6fb7949d03b8c6f22cef180e6c84953b839ad56a358d34932d`.
