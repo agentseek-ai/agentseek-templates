@@ -573,12 +573,8 @@ def test_agentbase_rag_render_contains_observability_rag_and_frontend_contract(
 
     readme = (generated_path / "README.md").read_text(encoding="utf-8")
     env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
-    lifecycle = tomllib.loads(
-        (generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8")
-    )
-    frontend_package = json.loads(
-        (generated_path / "frontend" / "package.json").read_text(encoding="utf-8")
-    )
+    lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    frontend_package = json.loads((generated_path / "frontend" / "package.json").read_text(encoding="utf-8"))
 
     assert "AgentBase" in readme
     assert "AgentOps" in readme
