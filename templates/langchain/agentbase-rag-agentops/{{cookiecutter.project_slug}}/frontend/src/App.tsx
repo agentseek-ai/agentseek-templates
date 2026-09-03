@@ -35,7 +35,13 @@ function rows(messages: Message[]) {
 
 export default function App() {
   const apiUrl = import.meta.env.VITE_LANGGRAPH_API_URL ?? `http://${window.location.hostname || "127.0.0.1"}:2024`;
-  const stream = useStream<{ messages: Message[] }>({ apiUrl, assistantId: "agentbase_rag" });
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const stream = useStream<{ messages: Message[] }>({
+    apiUrl,
+    assistantId: "agentbase_rag",
+    threadId,
+    onThreadId: setThreadId,
+  });
   const [input, setInput] = useState("");
   const sessionId = useMemo(() => crypto.randomUUID(), []);
   function submit(event: FormEvent) { event.preventDefault(); const question = input.trim(); if (!question || stream.isLoading) return; setInput(""); const userId = import.meta.env.VITE_AGENTBASE_USER_ID || "demo-user"; stream.submit({ messages: [{ type: "human", content: question }] }, { config: { metadata: { session_id: sessionId, user_id: userId }, tags: ["agentbase", "rag", "browser"] } } as never); }

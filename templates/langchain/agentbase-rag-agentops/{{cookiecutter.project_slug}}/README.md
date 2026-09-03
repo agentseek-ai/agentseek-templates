@@ -51,6 +51,17 @@ mode. It maps every result to a LangChain `Document`; the AgentOps middleware
 therefore records both the retrieval call and its parent Agent invocation. The
 browser parses the `AGENTBASE_EVIDENCE_JSON` tool payload into source cards.
 
+## Threads and checkpoint persistence
+
+Following the `deepagents/subagents-dynamic` pattern, the graph does not create
+an `InMemorySaver` or another process-local checkpointer. The `agentseek-api`
+runtime owns checkpoint persistence and uses the embedded SeekDB configuration
+above. The frontend keeps the server-issued LangGraph `thread_id` in a
+controlled `useStream` state, so consecutive messages in one open page share
+the same checkpoint. A page reload starts a new thread; connect a durable
+thread ID to your authenticated conversation record when cross-reload resume
+is required.
+
 Open the frontend at `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. Each
 request includes a generated session ID and the configured environment tags;
 the backend also accepts LangChain `metadata`/`tags` when called directly.

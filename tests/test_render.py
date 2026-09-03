@@ -591,6 +591,9 @@ def test_agentbase_rag_render_contains_observability_rag_and_frontend_contract(
     ]
     assert frontend_package["scripts"]["test"] == "vitest run"
     assert (generated_path / "frontend" / "src" / "evidence.test.ts").is_file()
+    frontend_app = (generated_path / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+    assert "threadId" in frontend_app
+    assert "onThreadId" in frontend_app
 
 
 @pytest.mark.parametrize("template_key", sorted(MIGRATED_RUNTIME_TEMPLATES))
