@@ -65,3 +65,9 @@ is required.
 Open the frontend at `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. Each
 request includes a generated session ID and the configured environment tags;
 the backend also accepts LangChain `metadata`/`tags` when called directly.
+
+AgentSeek desktop exposes both browser actions from the lifecycle: **Open RAG
+application** opens the local chat UI, and **Open AgentBase** opens
+`{{ cookiecutter.agentbase_console_url }}`. The Console URL is a public link;
+authentication is handled by your browser session and no API key is placed in
+the lifecycle or URL.

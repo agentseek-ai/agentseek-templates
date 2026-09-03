@@ -85,6 +85,14 @@ display = "default"
 primary = true
 description = "Chat UI with visible AgentBase retrieval evidence."
 
+[services.agentbase]
+name = "AgentBase"
+url = "{{ cookiecutter.agentbase_console_url }}"
+kind = "web"
+display = "default"
+primary = false
+description = "Open the AgentBase console."
+
 [processes.backend]
 command = ["sh", "-lc", "uv run agentseek-api dev --host ${LANGGRAPH_HOST:-127.0.0.1}"]
 

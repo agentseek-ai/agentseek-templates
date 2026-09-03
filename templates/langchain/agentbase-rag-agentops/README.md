@@ -27,3 +27,8 @@ The API key needs `knowledgebases.read` for retrieval and
 
 Do not enable NeMo Relay for the same agent: this template uses
 `AgentOpsMiddleware`, and enabling both creates duplicate traces.
+
+The generated lifecycle exposes two browser actions in AgentSeek desktop:
+`Open RAG application` opens the local chat UI, while `Open AgentBase` opens
+the configured AgentBase Console URL. Override `agentbase_console_url` when
+creating the template if your deployment uses a different Console address.

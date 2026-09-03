@@ -268,12 +268,14 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
     },
     "langchain/agentbase-rag-agentops": {
         "services": (
+            ("agentbase", "web", "default", False, (), (), ()),
             ("backend", "api", "advanced", False, ("process:backend",), ("backend",), ("api_docs", "docs", "studio")),
             ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ()),
         ),
         "effects": {},
         "actions": (
             "project:start_dev",
+            "service:agentbase:open",
             "service:backend:copy",
             "service:backend:reference:api_docs",
             "service:backend:reference:docs",
@@ -594,6 +596,22 @@ def test_agentbase_rag_render_contains_observability_rag_and_frontend_contract(
     frontend_app = (generated_path / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
     assert "threadId" in frontend_app
     assert "onThreadId" in frontend_app
+    assert lifecycle["services"]["agentbase"] == {
+        "name": "AgentBase",
+        "url": "https://appbuild-sit.oceanbase.com/console",
+        "kind": "web",
+        "display": "default",
+        "primary": False,
+        "description": "Open the AgentBase console.",
+    }
+    normalized = normalize_lifecycle(
+        read_lifecycle_spec(generated_path / ".agentseek" / "lifecycle.toml", project_root=generated_path),
+        project_root=generated_path,
+    )
+    agentbase_action = next(action for action in normalized.actions if action.service_id == "agentbase")
+    assert agentbase_action.id == "service:agentbase:open"
+    assert agentbase_action.type == "open_url"
+    assert agentbase_action.url == "https://appbuild-sit.oceanbase.com/console"
 
 
 @pytest.mark.parametrize("template_key", sorted(MIGRATED_RUNTIME_TEMPLATES))
