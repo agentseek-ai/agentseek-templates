@@ -4,21 +4,52 @@ This project is a browser-based LangChain Agent that retrieves from one
 AgentBase knowledge base, renders retrieval evidence, and exports execution
 traces to AppBase AgentOps.
 
-## What AgentBase provides
+## AgentBase basics
 
-AgentBase is the backend service behind the knowledge base: it stores documents,
-processes and indexes them, and exposes vector, full-text, or hybrid search.
-This template does not build a local vector index. The
-`agentbase-python-sdk==15.5.0` client calls the AgentBase
-`POST /v1/knowledgebases/{knowledgeBaseId}/search` API and maps the response to
-LangChain `Document` objects. `AGENTBASE_PROJECT_ID` selects the project,
-`AGENTBASE_API_KEY` authenticates the server request, and
-`AGENTBASE_KNOWLEDGE_BASE_ID` selects the exact knowledge base.
+AgentBase is the remote knowledge-base service for this application. It stores
+documents, chunks and indexes, and exposes vector, full-text, or hybrid search.
+This template does not create a local vector index: the pinned
+`agentbase-python-sdk==15.5.0` calls
+`POST /v1/knowledgebases/{knowledgeBaseId}/search`, and the local LangChain
+retriever maps each result to a `Document` with source, locator, score, and
+chunk metadata.
 
-AgentBase is separate from the model provider: OpenAI (or another LangChain
-provider) generates the answer, while AgentBase supplies the retrieved context.
-AppBase AgentOps is a third, optional plane that receives OTLP traces from the
-LangChain AgentOps middleware. It does not proxy model or knowledge-base calls.
+The components have separate responsibilities:
+
+- AgentBase supplies retrieved context;
+- OpenAI or another LangChain provider generates the answer;
+- AgentSeek hosts the local graph and embedded runtime state;
+- AppBase AgentOps receives OTLP traces from `AgentOpsMiddleware`.
+
+AgentBase does not proxy model requests, and embedded SeekDB does not contain
+your AgentBase documents.
+
+## AgentBase API and credentials
+
+Copy `.env.example` to `.env` and set these values:
+
+```dotenv
+AGENTBASE_ENDPOINT=https://appbuild-sit.oceanbase.com/v1
+AGENTBASE_PROJECT_ID=<project-id>
+AGENTBASE_API_KEY=<project-api-key>
+AGENTBASE_KNOWLEDGE_BASE_ID=<knowledge-base-id>
+```
+
+`AGENTBASE_ENDPOINT` is the SDK API base URL and must include `/v1`. Create the
+Project API Key in the AgentBase/AppBase Console for the same Project as the
+knowledge base. Grant only the permissions needed:
+
+- `knowledgebases.read` — required for retrieval;
+- `observability.ingest.write` — required to export AgentOps traces;
+- `observability.traces.read` — optional, only for querying traces.
+
+`AGENTBASE_AGENTOPS_ENDPOINT` is the OTLP trace destination and is separate
+from the browser Console URL. The lifecycle Console shortcut defaults to
+`https://appbuild-sit.oceanbase.com/console`; it is controlled by the
+`agentbase_console_url` template variable and is not used for SDK requests.
+
+Never commit `AGENTBASE_API_KEY`, put it in a URL, or expose it through a
+`VITE_*` variable. AgentBase requests and credentials stay on the backend.
 
 ## Setup
 
@@ -41,6 +72,11 @@ development reloads. A separate local MySQL/SeekDB server is not needed.
 Set `AGENTBASE_PROJECT_ID`, `AGENTBASE_API_KEY`, and
 `AGENTBASE_KNOWLEDGE_BASE_ID`. The API key requires `knowledgebases.read`.
 For traces it also requires `observability.ingest.write`.
+
+If retrieval returns 401/403, verify that the Project ID and API key belong to
+the same Project and that the key has `knowledgebases.read`. A 404 usually
+means the knowledge-base ID is not exact or belongs to another Project. Keep
+`/v1` on `AGENTBASE_ENDPOINT`; use the Console URL only for the browser link.
 
 `AGENTBASE_AGENTOPS_CAPTURE_CONTENT=false` is the safe default: prompts,
 responses, tool arguments, and document content are not exported. Review your
