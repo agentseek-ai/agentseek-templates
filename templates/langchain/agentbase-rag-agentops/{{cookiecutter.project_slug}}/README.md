@@ -4,6 +4,37 @@ This project is a browser-based LangChain Agent that retrieves from one
 AgentBase knowledge base, renders retrieval evidence, and exports execution
 traces to AppBase AgentOps.
 
+## AgentBase at a glance
+
+AgentBase is an enterprise application backend and Agent infrastructure
+platform. It provides a shared project boundary for knowledge retrieval,
+long-term memory, controlled access to enterprise data, application backend
+services, and AgentOps. This example uses two of those capabilities together:
+
+- **RAG** supplies permission-aware context from documents, web pages, or
+  enterprise knowledge sources through vector, full-text, or hybrid search;
+- **AgentOps** records the relationship between sessions, Agent runs, model
+  calls, tool calls, and retrieval calls so teams can inspect bad cases and
+  evaluate changes over time.
+
+The same AgentBase project can later add Memory for durable user preferences
+and team experience, or Data API for identity-scoped access to existing
+business data without copying it into the local application. AgentBase also
+offers BaaS capabilities such as Auth, TablesDB, Storage, Functions, Sites,
+and Realtime for applications that need a complete backend.
+
+For the SIT deployment used by this template:
+
+- **Console:** <https://appbuild-sit.oceanbase.com/console> — manage the
+  project and knowledge base in a browser;
+- **API base:** <https://appbuild-sit.oceanbase.com/v1> — used by the backend
+  SDK and AgentOps integration; keep the `/v1` suffix.
+
+The Console address and API base are different entry points. AgentBase
+credentials stay in the backend environment, while the local embedded SeekDB
+instance stores AgentSeek runtime state and does not replace the AgentBase
+knowledge base.
+
 ## AgentBase basics
 
 AgentBase is the remote knowledge-base service for this application. It stores
