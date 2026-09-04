@@ -1810,7 +1810,7 @@ def test_runtime_workflow_covers_every_retained_migration() -> None:
         },
         {
             "uses": "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
-            "with": {"node-version": "22"},
+            "with": {"node-version": "24"},
         },
         {
             "uses": "astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d",

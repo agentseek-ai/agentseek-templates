@@ -35,11 +35,8 @@ jobs:
           python-version: "3.12"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: "22"
-      # Node 22 currently ships npm 10, whose Arborist can fail resolving
-      # peer dependencies with "Cannot read properties of null (reading 'edgesOut')".
-      - name: Use npm 11 for frontend dependency resolution
-        run: npm install --global npm@11.6.0
+          # Node 24 includes npm 11+, avoiding npm 10 Arborist's edgesOut crash.
+          node-version: "24"
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
         with:
           version: "0.9.28"
