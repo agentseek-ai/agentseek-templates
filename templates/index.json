@@ -8,6 +8,7 @@
   "deepagents/streaming": "DeepAgents Event Streaming v3 showcase with subagent, message, tool, state, and output projections.",
   "deepagents/sandbox": "DeepAgents sandbox coding agent with streamed UI and AgentSeek lifecycle spec.",
   "langchain/agentic-rag": "LangChain agentic RAG with OceanBase vector search and AgentSeek lifecycle spec.",
+  "langchain/agentbase-rag-agentops": "LangChain RAG backed by AgentBase knowledge-base search with AppBase AgentOps observability and AgentSeek lifecycle spec.",
   "langchain/agentic-rag-hybrid": "LangChain agentic hybrid RAG with image ingestion, vector/sparse/full-text/metadata search, comparison demos, optional Phoenix observability, and AgentSeek lifecycle spec.",
   "langchain/agentic-rag-openvino": "LangChain local RAG with OpenVINO models and AgentSeek lifecycle spec.",
   "langchain/cli-remote": "Remote LangGraph CLI agent bridged through LangGraphClientRunnable with AgentSeek lifecycle spec.",

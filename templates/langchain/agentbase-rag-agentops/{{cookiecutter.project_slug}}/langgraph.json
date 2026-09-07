@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agentbase_rag": "./src/{{ cookiecutter.project_slug }}/agent.py:graph"
+  },
+  "env": "./.env"
+}

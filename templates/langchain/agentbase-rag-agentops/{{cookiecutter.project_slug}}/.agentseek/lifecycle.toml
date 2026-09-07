@@ -1,0 +1,131 @@
+version = 2
+template = "langchain/agentbase-rag-agentops"
+name = "{{ cookiecutter.project_name }}"
+description = "LangChain AgentBase RAG application with AppBase AgentOps observability."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv"]
+
+[paths]
+required = ["pyproject.toml", "langgraph.json", "frontend/package.json"]
+
+[env.AGENTSEEK_MODEL]
+required = true
+default = "{{ cookiecutter.default_model }}"
+description = "LangChain model identifier, for example openai:gpt-4.1-mini."
+
+[env.AGENTBASE_ENDPOINT]
+required = true
+default = "https://appbuild-sit.oceanbase.com/v1"
+description = "AgentBase API endpoint including /v1."
+
+[env.AGENTBASE_PROJECT_ID]
+required = true
+default = ""
+description = "AgentBase project ID."
+
+[env.AGENTBASE_API_KEY]
+required = true
+default = ""
+description = "Project API key with knowledgebases.read and observability.ingest.write."
+
+[env.AGENTBASE_KNOWLEDGE_BASE_ID]
+required = true
+default = "{{ cookiecutter.knowledge_base_id }}"
+description = "Knowledge base searched by the LangChain retriever."
+
+[env.AGENTBASE_AGENTOPS_ENDPOINT]
+required = true
+default = "https://appbuild-sit.oceanbase.com/v1"
+description = "AppBase AgentOps endpoint."
+
+[env.SEEKDB_MODE]
+required = true
+default = "embedded"
+description = "AgentSeek API persistence mode; embedded avoids a separate local database."
+
+[env.SEEKDB_PATH]
+required = true
+default = "{{ cookiecutter.seekdb_path }}"
+description = "Embedded SeekDB data directory, kept outside the generated project."
+
+[env.SEEKDB_EMBED]
+required = true
+default = "true"
+description = "Enable AgentSeek API embedded persistence."
+
+[env.SEEKDB_EMBED_DIR]
+required = true
+default = "{{ cookiecutter.seekdb_path }}"
+description = "AgentSeek API embedded persistence directory."
+
+[env.OCEANBASE_DB_NAME]
+required = true
+default = "{{ cookiecutter.seekdb_db_name }}"
+description = "Embedded SeekDB database name."
+
+[services.backend]
+name = "AgentSeek API"
+url = "http://127.0.0.1:2024"
+tech = "agentseek-api"
+kind = "api"
+display = "advanced"
+primary = false
+description = "LangChain AgentBase RAG graph."
+links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:2024/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024" }
+
+[services.frontend]
+name = "RAG application"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+tech = "vite"
+kind = "web"
+display = "default"
+primary = true
+description = "Chat UI with visible AgentBase retrieval evidence."
+
+[services.agentbase]
+name = "AgentBase"
+url = "{{ cookiecutter.agentbase_console_url }}"
+kind = "web"
+display = "default"
+primary = false
+description = "Open the AgentBase console."
+
+[processes.backend]
+command = ["sh", "-lc", "uv run agentseek-api dev --host ${LANGGRAPH_HOST:-127.0.0.1}"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+
+[checks.backend]
+type = "http"
+target = "http://127.0.0.1:2024/health"
+service = "backend"
+timeout = 2
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+service = "frontend"
+timeout = 2
+attempts = 3
+
+[tasks.sync]
+description = "Install Python dependencies."
+command = ["uv", "sync"]
+
+[tasks.test]
+description = "Run retriever adapter tests without network access."
+command = ["uv", "run", "--extra", "dev", "pytest"]
+
+[tasks.frontend]
+description = "Install frontend dependencies."
+command = ["npm", "install", "--prefix", "frontend"]
+
+[tasks.frontend-test]
+description = "Run frontend evidence parser tests."
+command = ["npm", "run", "test", "--prefix", "frontend"]
