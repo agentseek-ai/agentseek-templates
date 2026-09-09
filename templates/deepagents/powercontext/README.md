@@ -24,6 +24,19 @@ bounded, cited `PreparedContext` per async model call and injects it as
 untrusted historical context. The stream's first event reports the status and
 byte budget, and the browser displays it in the timeline.
 
+Copy `.env.example` to `.env` and adjust these generated settings when needed:
+
+| Cookiecutter setting | Runtime variable | Default | Purpose |
+| --- | --- | --- | --- |
+| `powercontext_url` | `POWERCONTEXT_URL` | `http://127.0.0.1:8000` | URL of the local PowerContext Server. |
+| `powercontext_scope` | `POWERCONTEXT_SCOPE_ID` | `project:<project_slug>` | Project scope used to isolate recalled context. |
+| `powercontext_max_bytes` | `POWERCONTEXT_MAX_BYTES` | `8000` | Maximum UTF-8 bytes returned in one prepared context. |
+
+The Cookiecutter settings establish the generated defaults; the runtime
+variables let you override them after scaffolding. Start the server at the
+configured URL before using recall. No credentials are required by this
+template for the local PowerContext Server.
+
 ## Feature tour
 
 The demo is an event-streaming observability surface rather than a single

@@ -10,6 +10,21 @@ untrusted historical context. The custom stream emits a `powercontext` status
 event so the UI shows whether context was prepared, empty, skipped, or unavailable.
 PowerContext failures are fail-open and do not stop the DeepAgents run.
 
+## PowerContext configuration
+
+Copy `.env.example` to `.env`. The Cookiecutter settings below provide the
+generated defaults, while the runtime variables are the values read by the
+application:
+
+| Cookiecutter setting | Runtime variable | Default | Purpose |
+| --- | --- | --- | --- |
+| `powercontext_url` | `POWERCONTEXT_URL` | `http://127.0.0.1:8000` | PowerContext Server URL. |
+| `powercontext_scope` | `POWERCONTEXT_SCOPE_ID` | `project:<project_slug>` | Scope that isolates this project's context. |
+| `powercontext_max_bytes` | `POWERCONTEXT_MAX_BYTES` | `8000` | Maximum UTF-8 bytes for one prepared context. |
+
+Start `powercontext server run` at the configured URL before sending a request.
+These settings do not contain or require credentials for the local server.
+
 ## Run locally
 
 ```bash

@@ -27,6 +27,21 @@ required = true
 description = "Credential for the selected model provider."
 aliases = ["ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "BUB_OPENAI_API_KEY"]
 
+[env.POWERCONTEXT_URL]
+required = true
+default = "{{ cookiecutter.powercontext_url }}"
+description = "URL of the local PowerContext Server used for bounded context preparation."
+
+[env.POWERCONTEXT_SCOPE_ID]
+required = true
+default = "{{ cookiecutter.powercontext_scope }}"
+description = "Project scope used to isolate recalled PowerContext context."
+
+[env.POWERCONTEXT_MAX_BYTES]
+required = true
+default = "{{ cookiecutter.powercontext_max_bytes }}"
+description = "Maximum UTF-8 bytes returned in one PreparedContext."
+
 [services.langgraph]
 name = "LangGraph API"
 url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
