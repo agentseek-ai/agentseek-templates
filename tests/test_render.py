@@ -54,6 +54,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "deepagents/content-builder": set(),
     "deepagents/default": {"agentseek-ag-ui", "agentseek-langchain"},
     "deepagents/mcp": set(),
+    "deepagents/powercontext": set(),
     "deepagents/research": set(),
     "deepagents/subagents-dynamic": set(),
     "deepagents/streaming": set(),
@@ -196,6 +197,30 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
         ),
     },
     "deepagents/streaming": {
+        "services": (
+            ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
+            (
+                "langgraph",
+                "api",
+                "advanced",
+                False,
+                ("process:langgraph",),
+                ("langgraph",),
+                ("api_docs", "docs", "studio"),
+            ),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:frontend:open",
+            "service:frontend:reference:docs",
+            "service:langgraph:copy",
+            "service:langgraph:reference:api_docs",
+            "service:langgraph:reference:docs",
+            "service:langgraph:reference:studio",
+        ),
+    },
+    "deepagents/powercontext": {
         "services": (
             ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
             (
@@ -487,6 +512,22 @@ def _registered_templates() -> list[tuple[str, Path]]:
 
 def test_reviewed_contract_covers_every_registered_template() -> None:
     assert set(INDEX) == set(EXPECTED_CORE_DEPENDENCIES) == set(EXPECTED_NORMALIZED_TOPOLOGY)
+
+
+def test_powercontext_template_declares_observable_fail_open_integration(tmp_path: Path) -> None:
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/powercontext", tmp_path / "output", tmp_path)
+    dependencies = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "dependencies"
+    ]
+    assert "powercontext[client]==0.1.0" in dependencies
+    middleware = (generated_path / "src" / generated_path.name / "powercontext_middleware.py").read_text(
+        encoding="utf-8"
+    )
+    assert "middleware=[powercontext_middleware]" in (
+        generated_path / "src" / generated_path.name / "agent.py"
+    ).read_text(encoding="utf-8")
+    assert "fail-open" in middleware.lower()
+    assert "powercontext" in (generated_path / "frontend" / "src" / "EventTimeline.tsx").read_text(encoding="utf-8")
 
 
 def _render(
