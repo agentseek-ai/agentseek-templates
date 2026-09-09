@@ -80,6 +80,8 @@ uvx agentseek task --list
 
 ## Key runtime variables
 
+> This note is a temporary review-pipeline smoke test and does not change template behavior.
+
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `BUB_MODEL` | `{{ default_model }}` | Model id used by Bub. |
