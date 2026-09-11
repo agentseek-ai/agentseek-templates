@@ -54,6 +54,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "deepagents/content-builder": set(),
     "deepagents/default": {"agentseek-ag-ui", "agentseek-langchain"},
     "deepagents/mcp": set(),
+    "deepagents/powercontext": set(),
     "deepagents/research": set(),
     "deepagents/subagents-dynamic": set(),
     "deepagents/streaming": set(),
@@ -196,6 +197,30 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
         ),
     },
     "deepagents/streaming": {
+        "services": (
+            ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
+            (
+                "langgraph",
+                "api",
+                "advanced",
+                False,
+                ("process:langgraph",),
+                ("langgraph",),
+                ("api_docs", "docs", "studio"),
+            ),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:frontend:open",
+            "service:frontend:reference:docs",
+            "service:langgraph:copy",
+            "service:langgraph:reference:api_docs",
+            "service:langgraph:reference:docs",
+            "service:langgraph:reference:studio",
+        ),
+    },
+    "deepagents/powercontext": {
         "services": (
             ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
             (
@@ -487,6 +512,41 @@ def _registered_templates() -> list[tuple[str, Path]]:
 
 def test_reviewed_contract_covers_every_registered_template() -> None:
     assert set(INDEX) == set(EXPECTED_CORE_DEPENDENCIES) == set(EXPECTED_NORMALIZED_TOPOLOGY)
+
+
+def test_powercontext_template_declares_observable_fail_open_integration(tmp_path: Path) -> None:
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/powercontext", tmp_path / "output", tmp_path)
+    dependencies = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "dependencies"
+    ]
+    assert "powercontext[client]==0.1.0" in dependencies
+    env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
+    assert "POWERCONTEXT_URL=http://127.0.0.1:8000" in env_example
+    assert "POWERCONTEXT_SCOPE_ID=project:deepagents_powercontext" in env_example
+    assert "POWERCONTEXT_MAX_BYTES=8000" in env_example
+    lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["env"]["POWERCONTEXT_URL"]["default"] == "http://127.0.0.1:8000"
+    assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["default"] == "project:deepagents_powercontext"
+    assert lifecycle["env"]["POWERCONTEXT_MAX_BYTES"]["default"] == "8000"
+    middleware = (generated_path / "src" / generated_path.name / "powercontext_middleware.py").read_text(
+        encoding="utf-8"
+    )
+    assert "middleware=[powercontext_middleware]" in (
+        generated_path / "src" / generated_path.name / "agent.py"
+    ).read_text(encoding="utf-8")
+    assert "fail-open" in middleware.lower()
+    assert "ToolMessage" in middleware
+    assert "POWERCONTEXT_RETRIEVAL_TOOL_NAME" in middleware
+    assert "POWERCONTEXT_POLICY" in middleware
+    assert "BEGIN_UNTRUSTED_POWERCONTEXT_CONTEXT" in middleware
+    assert "powercontext" in (generated_path / "frontend" / "src" / "EventTimeline.tsx").read_text(encoding="utf-8")
+    graph_config = json.loads((generated_path / "langgraph.json").read_text(encoding="utf-8"))
+    assert graph_config["http"]["cors"]["allow_origins"] == [
+        "http://127.0.0.1:5175",
+        "http://localhost:5175",
+        "http://[::1]:5175",
+    ]
+    assert "allow_origin_regex" not in graph_config["http"]["cors"]
 
 
 def _render(

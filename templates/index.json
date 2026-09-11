@@ -3,6 +3,7 @@
   "deepagents/content-builder": "DeepAgents content builder with skills, subagents, image generation, streamed UI, and AgentSeek lifecycle spec.",
   "deepagents/default": "Local create_deep_agent runnable with AgentSeek lifecycle spec.",
   "deepagents/mcp": "DeepAgents MCP Tools app with validated stdio/HTTP configuration, a local calculator example, streamed UI, and AgentSeek lifecycle spec.",
+  "deepagents/powercontext": "DeepAgents with fail-open PowerContext middleware, bounded context recall, and a UI timeline of context preparation.",
   "deepagents/research": "DeepAgents research agent with Tavily search, streamed tool/sub-agent UI, and AgentSeek lifecycle spec.",
   "deepagents/subagents-dynamic": "Dynamic Subagents Pattern Lab with six independent official-pattern assistants, evidence-driven execution UI, and AgentSeek lifecycle spec.",
   "deepagents/streaming": "DeepAgents Event Streaming v3 showcase with subagent, message, tool, state, and output projections.",
