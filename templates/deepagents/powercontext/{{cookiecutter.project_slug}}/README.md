@@ -5,8 +5,9 @@ the `researcher` sub-agent, tool execution, state snapshots, final output, and
 raw protocol events.
 
 Before each asynchronous model call, `PowerContextMiddleware` requests one bounded
-`PreparedContext` from the local PowerContext Server and injects it as cited,
-untrusted historical context. The custom stream emits a `powercontext` status
+`PreparedContext` from the local PowerContext Server and passes it as a cited,
+untrusted PowerContext retrieval tool result, never as a user instruction.
+The custom stream emits a `powercontext` status
 event so the UI shows whether context was prepared, empty, skipped, or unavailable.
 PowerContext failures are fail-open and do not stop the DeepAgents run.
 
