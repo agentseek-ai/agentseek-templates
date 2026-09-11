@@ -540,6 +540,13 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "POWERCONTEXT_POLICY" in middleware
     assert "BEGIN_UNTRUSTED_POWERCONTEXT_CONTEXT" in middleware
     assert "powercontext" in (generated_path / "frontend" / "src" / "EventTimeline.tsx").read_text(encoding="utf-8")
+    graph_config = json.loads((generated_path / "langgraph.json").read_text(encoding="utf-8"))
+    assert graph_config["http"]["cors"]["allow_origins"] == [
+        "http://127.0.0.1:5175",
+        "http://localhost:5175",
+        "http://[::1]:5175",
+    ]
+    assert "allow_origin_regex" not in graph_config["http"]["cors"]
 
 
 def _render(

@@ -7,8 +7,11 @@
   "http": {
     "app": "{{ cookiecutter.project_slug }}.routes:app",
     "cors": {
-      "allow_origins": ["http://127.0.0.1:{{ cookiecutter.frontend_port }}"],
-      "allow_origin_regex": "^https?://(?:\\[[0-9A-Fa-f:.]+\\]|[^/:]+):{{ cookiecutter.frontend_port }}$",
+      "allow_origins": [
+        "http://127.0.0.1:{{ cookiecutter.frontend_port }}",
+        "http://localhost:{{ cookiecutter.frontend_port }}",
+        "http://[::1]:{{ cookiecutter.frontend_port }}"
+      ],
       "allow_methods": ["GET", "POST", "OPTIONS"],
       "allow_headers": ["Content-Type", "Authorization"]
     },
