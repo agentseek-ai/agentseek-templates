@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
-from langchain_core.language_models.fake_chat_models import FakeListChatModel
+from langchain_core.language_models.fake_chat_models import FakeListChatModel, GenericFakeChatModel
+from langchain_core.messages import AIMessage
 
 os.environ.setdefault("OPENAI_API_KEY", "offline-test-key")
 os.environ.setdefault("AGENTSEEK_MODEL_PROVIDER", "openai")
@@ -20,6 +23,30 @@ class ToolCapableFakeModel(FakeListChatModel):
 
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):  # type: ignore[no-untyped-def]
         return self
+
+
+class ToolCapableScriptedModel(GenericFakeChatModel):
+    """Offline model that drives one coordinator-to-researcher delegation."""
+
+    def bind_tools(self, tools, *, tool_choice=None, **kwargs):  # type: ignore[no-untyped-def]
+        return self
+
+
+class SuccessfulPowerContextClient:
+    requests: list[object] = []
+
+    def __init__(self, _url: str) -> None:
+        pass
+
+    async def __aenter__(self) -> "SuccessfulPowerContextClient":
+        return self
+
+    async def __aexit__(self, *_args: object) -> None:
+        return None
+
+    async def prepare_context(self, request: object) -> SimpleNamespace:
+        self.requests.append(request)
+        return SimpleNamespace(status="ready", content="retrieved reference", content_bytes=19)
 
 
 def test_real_deepagents_graph_reaches_v3_projection_route(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -62,3 +89,62 @@ def test_stream_route_persists_history_across_follow_up_requests(monkeypatch) ->
     snapshot = persistent_graph.get_state({"configurable": {"thread_id": "persisted-thread"}})
     user_messages = [message.content for message in snapshot.values["messages"] if message.type == "human"]
     assert user_messages == ["first question", "follow up question"]
+
+
+@pytest.mark.anyio
+async def test_delegation_applies_powercontext_to_coordinator_and_researcher(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    SuccessfulPowerContextClient.requests = []
+    monkeypatch.setattr(
+        "{{ cookiecutter.project_slug }}.powercontext_middleware.PowerContextClient",
+        SuccessfulPowerContextClient,
+    )
+    graph = build_stream_graph(
+        ToolCapableScriptedModel(
+            messages=iter(
+                [
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "task",
+                                "args": {
+                                    "description": "Research Event Streaming v3.",
+                                    "subagent_type": "researcher",
+                                },
+                                "id": "task-1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    ),
+                    AIMessage(
+                        content="",
+                        tool_calls=[
+                            {
+                                "name": "inspect_streaming_topic",
+                                "args": {"topic": "Event Streaming v3"},
+                                "id": "inspect-1",
+                                "type": "tool_call",
+                            }
+                        ],
+                    ),
+                    AIMessage(content="Research complete."),
+                    AIMessage(content="Coordinator summary."),
+                ]
+            )
+        )
+    )
+
+    await graph.ainvoke(
+        {"messages": [{"role": "user", "content": "Explain Event Streaming v3."}]},
+        {"configurable": {"thread_id": "delegation-powercontext"}},
+    )
+
+    assert len(SuccessfulPowerContextClient.requests) == 4
+    assert [request.query for request in SuccessfulPowerContextClient.requests] == [
+        "Explain Event Streaming v3.",
+        "Research Event Streaming v3.",
+        "Research Event Streaming v3.",
+        "Explain Event Streaming v3.",
+    ]

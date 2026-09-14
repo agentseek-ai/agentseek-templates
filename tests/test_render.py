@@ -534,6 +534,8 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "middleware=[powercontext_middleware]" in (
         generated_path / "src" / generated_path.name / "agent.py"
     ).read_text(encoding="utf-8")
+    agent = (generated_path / "src" / generated_path.name / "agent.py").read_text(encoding="utf-8")
+    assert '"middleware": [powercontext_middleware]' in agent
     assert "fail-open" in middleware.lower()
     assert "ToolMessage" in middleware
     assert "POWERCONTEXT_RETRIEVAL_TOOL_NAME" in middleware

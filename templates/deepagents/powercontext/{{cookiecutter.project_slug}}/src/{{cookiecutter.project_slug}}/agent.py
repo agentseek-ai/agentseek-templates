@@ -96,6 +96,7 @@ researcher = {
         "a concise note for the coordinator."
     ),
     "tools": [inspect_streaming_topic],
+    "middleware": [powercontext_middleware],
 }
 
 
