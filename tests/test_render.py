@@ -543,7 +543,7 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "BEGIN_UNTRUSTED_POWERCONTEXT_CONTEXT" in middleware
     assert "powercontext" in (generated_path / "frontend" / "src" / "EventTimeline.tsx").read_text(encoding="utf-8")
     readme = (generated_path / "README.md").read_text(encoding="utf-8")
-    assert "PowerContext provides durable, project-scoped context" in readme
+    assert "PowerContext is an open-source context layer for AI agents" in readme
     assert "Deep Agents model" in readme
     graph_config = json.loads((generated_path / "langgraph.json").read_text(encoding="utf-8"))
     assert graph_config["http"]["cors"]["allow_origins"] == [

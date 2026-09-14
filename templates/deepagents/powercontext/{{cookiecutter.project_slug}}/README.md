@@ -6,10 +6,21 @@ raw protocol events.
 
 ## PowerContext
 
-PowerContext provides durable, project-scoped context for agents. The local
-PowerContext Server keeps Memory and returns an ephemeral, read-only, bounded
-`PreparedContext` for one request. Before each asynchronous Deep Agents model
-call, `PowerContextMiddleware` retrieves that value through the Python Client SDK.
+PowerContext is an open-source context layer for AI agents. It keeps durable,
+project-scoped Memory separate from an individual model request, then prepares
+a bounded `PreparedContext` for the current turn. This lets an agent use useful
+project knowledge across runs without putting an entire history into every
+prompt.
+
+The PowerContext Server owns durable Memory, while `PreparedContext` is
+ephemeral and read-only for one request. PowerContext provides Server, Python
+Client SDK, HTTP, and MCP interfaces; this project uses its Python Client SDK.
+Before each asynchronous Deep Agents model call, `PowerContextMiddleware` asks
+the Server to prepare context for the current query, scope, and byte budget.
+
+This project demonstrates read-only recall only. It does not create, revise,
+or retire Memory; use PowerContext's supported interfaces and workflows to
+manage those durable records.
 
 The `PreparedContext` is cited, untrusted historical reference data. The
 middleware passes it as a PowerContext retrieval tool result, never as a user

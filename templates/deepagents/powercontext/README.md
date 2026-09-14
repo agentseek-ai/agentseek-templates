@@ -17,11 +17,24 @@ out of components.
 
 ## PowerContext integration
 
-PowerContext provides durable, project-scoped context for agents. Its Server
-keeps Memory and exposes an ephemeral, read-only, bounded `PreparedContext` for
-one request. This template uses the released `powercontext[client]==0.1.0`
-package to call `POST /v1/context/prepare` through `PowerContextClient` before
-each asynchronous Deep Agents model call.
+PowerContext is an open-source context layer for AI agents. It is designed to
+keep durable, project-scoped Memory separate from an individual model request,
+then prepare a bounded `PreparedContext` that an agent can use for the current
+turn. In other words, it provides a way to carry useful project knowledge
+across runs without treating an entire history as prompt text on every call.
+
+The PowerContext Server owns the durable Memory, while a prepared context is
+ephemeral and read-only for one request. The project provides Server, Python
+Client SDK, HTTP, and MCP interfaces, so an application can choose the
+integration surface that fits its runtime. This template uses the released
+`powercontext[client]==0.1.0` Python Client SDK: before each asynchronous Deep
+Agents model call, it calls `POST /v1/context/prepare` through
+`PowerContextClient` with the current query, project scope, and byte budget.
+
+This template intentionally demonstrates recall only. It does not create,
+revise, or retire Memory; manage those durable records through PowerContext's
+own supported interfaces and workflows. That boundary keeps the example
+focused on how a Deep Agents application consumes prepared context.
 
 The returned `PreparedContext` is cited, untrusted historical reference data;
 it is passed to the model as a PowerContext retrieval tool result, never as a
