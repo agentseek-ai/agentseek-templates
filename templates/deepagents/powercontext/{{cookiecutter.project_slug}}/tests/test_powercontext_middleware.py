@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
+from {{ cookiecutter.project_slug }}.event_adapter import powercontext_event
 from {{ cookiecutter.project_slug }}.powercontext_middleware import (
     POWERCONTEXT_BEGIN,
     POWERCONTEXT_END,
@@ -14,6 +16,7 @@ from {{ cookiecutter.project_slug }}.powercontext_middleware import (
     _latest_user_query,
     _with_context,
     powercontext_middleware,
+    prepare_context,
 )
 
 
@@ -91,3 +94,32 @@ async def test_middleware_execution_keeps_malicious_retrieval_out_of_user_input(
     ]
     assert isinstance(seen_messages[-1], ToolMessage)
     assert malicious in str(seen_messages[-1].content)
+
+
+@pytest.mark.anyio
+async def test_powercontext_exception_text_is_not_serialized_for_the_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_url = "https://token:secret@example.invalid/powercontext"
+
+    class FailingPowerContextClient:
+        def __init__(self, _url: str) -> None:
+            pass
+
+        async def __aenter__(self) -> "FailingPowerContextClient":
+            raise RuntimeError(f"Connection failed for {secret_url}")
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "{{ cookiecutter.project_slug }}.powercontext_middleware.PowerContextClient",
+        FailingPowerContextClient,
+    )
+
+    content, status = await prepare_context(Request())
+    serialized_event = json.dumps(powercontext_event(**status))
+
+    assert content is None
+    assert status == {"status": "unavailable", "content_bytes": 0}
+    assert secret_url not in serialized_event

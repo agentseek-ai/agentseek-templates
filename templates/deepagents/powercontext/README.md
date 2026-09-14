@@ -22,8 +22,8 @@ The generated app uses the released `powercontext[client]==0.1.0` package and
 calls `POST /v1/context/prepare` through `PowerContextClient`. It requests one
 bounded, cited `PreparedContext` per async model call and passes it as an
 untrusted PowerContext retrieval tool result, never as a user instruction.
-The stream's first event reports the status and
-byte budget, and the browser displays it in the timeline.
+The stream emits a status event with the byte budget, and the browser displays
+it in the timeline.
 
 Copy `.env.example` to `.env` and adjust these generated settings when needed:
 

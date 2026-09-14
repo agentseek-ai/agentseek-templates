@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
@@ -11,6 +12,8 @@ from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResp
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from powercontext.client import PowerContextClient
 from powercontext.http import PrepareContextRequest
+
+logger = logging.getLogger(__name__)
 
 _event_sink: ContextVar[Callable[[dict[str, Any]], Awaitable[None]] | None] = ContextVar(
     "powercontext_event_sink", default=None
@@ -70,8 +73,9 @@ async def prepare_context(request: ModelRequest) -> tuple[str | None, dict[str, 
         }
         await _publish(context_status)
         return content if status == "ready" else None, context_status
-    except Exception as exc:  # PowerContext must never block the agent.  # noqa: BLE001
-        status = {"status": "unavailable", "content_bytes": 0, "detail": str(exc)}
+    except Exception:  # PowerContext must never block the agent.  # noqa: BLE001
+        logger.warning("PowerContext context preparation failed", exc_info=True)
+        status = {"status": "unavailable", "content_bytes": 0}
         await _publish(status)
         return None, status
 
