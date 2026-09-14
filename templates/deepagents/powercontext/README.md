@@ -1,6 +1,6 @@
-# DeepAgents — PowerContext template
+# Deep Agents — PowerContext template
 
-Scaffolds a DeepAgents PowerContext context continuity showcase. It uses a coordinator and
+Scaffolds a Deep Agents and PowerContext context-continuity showcase. It uses a coordinator and
 one `researcher` sub-agent, then presents the official event-streaming
 projections in a browser UI:
 
@@ -17,13 +17,21 @@ out of components.
 
 ## PowerContext integration
 
-Start the local PowerContext server separately with `powercontext server run`.
-The generated app uses the released `powercontext[client]==0.1.0` package and
-calls `POST /v1/context/prepare` through `PowerContextClient`. It requests one
-bounded, cited `PreparedContext` per async model call and passes it as an
-untrusted PowerContext retrieval tool result, never as a user instruction.
-The stream emits a status event with the byte budget, and the browser displays
-it in the timeline.
+PowerContext provides durable, project-scoped context for agents. Its Server
+keeps Memory and exposes an ephemeral, read-only, bounded `PreparedContext` for
+one request. This template uses the released `powercontext[client]==0.1.0`
+package to call `POST /v1/context/prepare` through `PowerContextClient` before
+each asynchronous Deep Agents model call.
+
+The returned `PreparedContext` is cited, untrusted historical reference data;
+it is passed to the model as a PowerContext retrieval tool result, never as a
+user instruction. Recall is read-only: this template does not create, revise,
+or retire Memory. The stream emits a PowerContext status event with the byte
+budget, and the browser displays it in the timeline.
+
+Start a local Server separately with `powercontext server run`. The default
+local listener is `http://127.0.0.1:8000`; this template needs no credentials
+for that local default.
 
 Copy `.env.example` to `.env` and adjust these generated settings when needed:
 
@@ -120,7 +128,7 @@ not treat `completed` as success for tools until `error` is also checked.
 
 ## Version boundary
 
-The generated project pins `deepagents==0.6.12`, the first DeepAgents release
+The generated project pins `deepagents==0.6.12`, the first Deep Agents release
 used by the sibling MCP template for the v3-era runtime surface. Do not copy
 the raw event adapter into unrelated components; if the protocol changes,
 update the adapter and its tests first.
@@ -135,4 +143,6 @@ The backend is served by `langgraph dev`, and the frontend uses Vite.
 - [Deep Agents Event Streaming](https://docs.langchain.com/oss/python/deepagents/event-streaming)
 - [LangChain Event Streaming](https://docs.langchain.com/oss/python/langchain/event-streaming)
 - [LangGraph Event Streaming](https://docs.langchain.com/oss/python/langgraph/event-streaming)
+- [PowerContext](https://github.com/oceanbase/powercontext)
+- [PowerContext interfaces](https://github.com/oceanbase/powercontext/blob/master/docs/en/docs/reference/interfaces.md)
 - [PR #99](https://github.com/datawhalechina/deepagents-in-action/pull/99)

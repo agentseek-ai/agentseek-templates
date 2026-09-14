@@ -1,15 +1,22 @@
-# {{ cookiecutter.project_name }}
+# {{ cookiecutter.project_name | replace("DeepAgents", "Deep Agents") }}
 
 This project demonstrates Deep Agents Event Streaming v3 with a coordinator,
 the `researcher` sub-agent, tool execution, state snapshots, final output, and
 raw protocol events.
 
-Before each asynchronous model call, `PowerContextMiddleware` requests one bounded
-`PreparedContext` from the local PowerContext Server and passes it as a cited,
-untrusted PowerContext retrieval tool result, never as a user instruction.
-The custom stream emits a `powercontext` status
-event so the UI shows whether context was prepared, empty, skipped, or unavailable.
-PowerContext failures are fail-open and do not stop the DeepAgents run.
+## PowerContext
+
+PowerContext provides durable, project-scoped context for agents. The local
+PowerContext Server keeps Memory and returns an ephemeral, read-only, bounded
+`PreparedContext` for one request. Before each asynchronous Deep Agents model
+call, `PowerContextMiddleware` retrieves that value through the Python Client SDK.
+
+The `PreparedContext` is cited, untrusted historical reference data. The
+middleware passes it as a PowerContext retrieval tool result, never as a user
+instruction. Recall is read-only: this project does not create, revise, or
+retire Memory. The custom stream emits a `powercontext` status event so the UI
+shows whether context was prepared, empty, skipped, or unavailable.
+PowerContext failures are fail-open and do not stop the Deep Agents run.
 
 ## PowerContext configuration
 
@@ -24,7 +31,8 @@ application:
 | `powercontext_max_bytes` | `POWERCONTEXT_MAX_BYTES` | `8000` | Maximum UTF-8 bytes for one prepared context. |
 
 Start `powercontext server run` at the configured URL before sending a request.
-These settings do not contain or require credentials for the local server.
+The default local Server listener is `http://127.0.0.1:8000`; these settings do
+not contain or require credentials for that local default.
 
 ## Run locally
 
@@ -89,3 +97,7 @@ API key in `.env`. OpenAI-compatible gateways can set `OPENAI_API_BASE`.
 
 The generated project pins `deepagents==0.6.12` and declares
 `langgraph-cli[inmem]>=0.4` for the development runtime.
+
+For PowerContext installation, Server configuration, and its Python, HTTP, and
+MCP interfaces, see the [PowerContext repository](https://github.com/oceanbase/powercontext)
+and [interface reference](https://github.com/oceanbase/powercontext/blob/master/docs/en/docs/reference/interfaces.md).
