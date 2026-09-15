@@ -113,6 +113,10 @@ Conversation history uses an in-process checkpointer and is lost on backend rest
 persists in the separate PowerContext Server's configured database. Restarting with a different or
 empty database cannot recover previous Memory.
 
+Direct callers of `POST /custom/stream` must supply a nonblank `thread_id`. Reuse it for follow-up
+messages and choose a new ID for a fresh conversation. The browser manages these IDs automatically;
+missing, null, empty, or whitespace-only IDs return HTTP 422 before a run starts.
+
 ```bash
 uv sync --extra dev
 uv run pytest

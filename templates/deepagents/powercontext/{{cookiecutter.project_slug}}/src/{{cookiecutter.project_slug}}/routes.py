@@ -32,7 +32,7 @@ app.include_router(memory_router)
 
 class StreamRequest(BaseModel):
     messages: list[dict[str, Any]] = Field(min_length=1)
-    thread_id: str | None = None
+    thread_id: str = Field(min_length=1, pattern=r"\S")
     recall_enabled: bool = True
     max_bytes: int | None = Field(default=None, ge=512, le=32768)
 
@@ -128,7 +128,7 @@ async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str,
 
         event_token = set_event_sink(publish_context)
         recall_token = recall_options.set((request.recall_enabled, request.max_bytes))
-        config = {"configurable": {"thread_id": request.thread_id}} if request.thread_id else None
+        config = {"configurable": {"thread_id": request.thread_id}}
         run = await graph.astream_events({"messages": request.messages}, config=config, version="v3")
         subagent_tasks: list[asyncio.Task[None]] = []
 

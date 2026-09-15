@@ -164,7 +164,7 @@ def test_stream_returns_structured_error_event(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(routes, "graph", FailingGraph())
     response = TestClient(routes.app).post(
         "/custom/stream",
-        json={"messages": [{"role": "user", "content": "fail"}]},
+        json={"thread_id": "failing-thread", "messages": [{"role": "user", "content": "fail"}]},
     )
 
     assert response.status_code == 200
@@ -179,7 +179,7 @@ def test_output_method_is_called_and_output_failure_is_structured(
     monkeypatch.setattr(routes, "graph", OutputFailGraph())
     response = TestClient(routes.app).post(
         "/custom/stream",
-        json={"messages": [{"role": "user", "content": "output failure"}]},
+        json={"thread_id": "output-failure-thread", "messages": [{"role": "user", "content": "output failure"}]},
     )
 
     assert response.status_code == 200
@@ -208,6 +208,25 @@ def test_stream_reuses_the_same_thread_id_for_follow_up_requests(
     ]
 
 
+@pytest.mark.parametrize(
+    "thread_fields",
+    [{}, {"thread_id": None}, {"thread_id": ""}, {"thread_id": " \t\n"}],
+    ids=["missing", "null", "empty", "whitespace"],
+)
+def test_stream_rejects_invalid_thread_before_starting_graph(
+    client: tuple[TestClient, FakeGraph], thread_fields: dict[str, Any]
+) -> None:
+    test_client, fake_graph = client
+    response = test_client.post(
+        "/custom/stream",
+        json={**thread_fields, "messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "thread_id"]
+    assert fake_graph.calls == []
+
+
 def test_stream_rejects_empty_messages() -> None:
-    response = TestClient(routes.app).post("/custom/stream", json={"messages": []})
+    response = TestClient(routes.app).post("/custom/stream", json={"thread_id": "empty-messages", "messages": []})
     assert response.status_code == 422
