@@ -27,14 +27,14 @@ def test_tool_event_distinguishes_delta_completion_and_error() -> None:
         phase="delta",
         source="subagent",
         path=("researcher:abc",),
-        name="inspect_streaming_topic",
+        name="release_checklist",
         delta={"part": 1},
     )
     failure = tool_event(
         phase="failed",
         source="subagent",
         path=("researcher:abc",),
-        name="inspect_streaming_topic",
+        name="release_checklist",
         error="offline",
     )
     assert delta["delta"] == {"part": 1}

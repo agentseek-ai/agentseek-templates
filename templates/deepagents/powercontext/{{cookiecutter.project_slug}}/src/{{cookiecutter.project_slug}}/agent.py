@@ -54,13 +54,13 @@ if timeout_value:
 
 
 @tool
-def inspect_streaming_topic(topic: str) -> str:
-    """Return a local reference note so the UI can show a real tool lifecycle."""
+def release_checklist(topic: str) -> str:
+    """Return a generic release checklist; it contains no saved project decisions."""
     cleaned = topic.strip() or "the requested topic"
     return (
-        f"Local reference lookup completed for {cleaned}. "
-        "The coordinator should explain the researcher messages, tool calls, "
-        "state snapshots, and final output separately."
+        f"Release planning checklist for {cleaned}: verify the target environment, "
+        "deployment window, approval requirements, rollback plan, and success checks. "
+        "This generic checklist does not establish any project-specific decision."
     )
 
 
@@ -89,13 +89,14 @@ model = init_chat_model(**MODEL_INIT_KWARGS)
 
 researcher = {
     "name": "researcher",
-    "description": "Investigate one streaming concept and return a concise explanation.",
+    "description": "Review a release plan against project decisions and a deployment checklist.",
     "system_prompt": (
-        "You are the researcher sub-agent. Always use inspect_streaming_topic "
-        "once, then explain one concrete Event Streaming v3 concept. Return "
-        "a concise note for the coordinator."
+        "You are the release researcher. Use release_checklist once. "
+        "Use relevant PowerContext evidence to identify project constraints. "
+        "If the evidence is absent, say which decisions are unknown instead of inventing them. "
+        "Current user instructions override historical notes. Return a concise release recommendation."
     ),
-    "tools": [inspect_streaming_topic],
+    "tools": [release_checklist],
     "middleware": [powercontext_middleware],
 }
 
@@ -107,13 +108,15 @@ def _build_graph(
 ) -> CompiledStateGraph:
     return create_deep_agent(
         model=agent_model,
-        tools=[inspect_streaming_topic],
+        tools=[release_checklist],
         system_prompt=(
-            "You are a coordinator demonstrating Deep Agents Event Streaming. "
-            "For every user request, delegate the explanation to the researcher "
-            "sub-agent before answering. Do not answer from memory first. After "
-            "the researcher returns, summarize the result and explicitly mention "
-            "that the UI can observe messages, tool calls, values, subagents, and output."
+            "You are a project release assistant. Delegate a release review to the researcher, "
+            "including the project name and any relevant recalled constraints in the task. "
+            "Then provide a concise actionable plan. Distinguish saved project decisions from "
+            "generic suggestions, and state unknowns when no evidence was supplied. "
+            "Follow current user instructions over conflicting history. Do not claim to remember "
+            "or save new facts: the user saves durable decisions in the Memory panel. "
+            "Answer in the language used by the user."
         ),
         subagents=[researcher],
         middleware=[powercontext_middleware],

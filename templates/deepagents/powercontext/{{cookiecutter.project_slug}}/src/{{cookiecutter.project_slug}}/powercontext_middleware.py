@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from collections.abc import Awaitable, Callable
@@ -10,10 +11,12 @@ from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from powercontext.client import PowerContextClient
 from powercontext.http import PrepareContextRequest
 
+from .project_memory import TIMEOUT_SECONDS, open_client, resolve_scope
+
 logger = logging.getLogger(__name__)
+recall_options: ContextVar[tuple[bool, int | None]] = ContextVar("recall_options", default=(True, None))
 
 _event_sink: ContextVar[Callable[[dict[str, Any]], Awaitable[None]] | None] = ContextVar(
     "powercontext_event_sink", default=None
@@ -51,30 +54,40 @@ def _latest_user_query(messages: list[Any]) -> str:
 
 
 async def prepare_context(request: ModelRequest) -> tuple[str | None, dict[str, Any]]:
+    enabled, requested_budget = recall_options.get()
     query = _latest_user_query(list(request.messages))
-    if not query.strip():
-        status = {"status": "skipped", "content_bytes": 0}
+    if not enabled or not query.strip():
+        status = {"status": "disabled" if not enabled else "skipped", "content_bytes": 0}
         await _publish(status)
         return None, status
     try:
-        async with PowerContextClient(os.getenv("POWERCONTEXT_URL", "http://127.0.0.1:8000")) as client:
+        configured_budget = int(os.getenv("POWERCONTEXT_MAX_BYTES", "8000"))
+        max_bytes = min(configured_budget, requested_budget or configured_budget)
+        async with asyncio.timeout(TIMEOUT_SECONDS), open_client() as client:
+            scope_id = await resolve_scope(client)
             result = await client.prepare_context(
                 PrepareContextRequest(
-                    scope_id=os.getenv("POWERCONTEXT_SCOPE_ID", "project:deepagents"),
-                    query=query,
-                    max_bytes=int(os.getenv("POWERCONTEXT_MAX_BYTES", "8000")),
+                    scope_id=scope_id,
+                    query=query[:8192],
+                    max_bytes=max_bytes,
                 )
             )
-        status = str(getattr(result, "status", "empty"))
-        content = getattr(result, "content", None)
+        status = str(result.status)
+        content = result.content if status == "ready" else None
+        content_bytes = len((content or "").encode("utf-8"))
+        if content_bytes > max_bytes:
+            raise ValueError("PreparedContext exceeded the requested budget")
         context_status = {
             "status": status,
-            "content_bytes": int(getattr(result, "content_bytes", 0)),
+            "content_bytes": content_bytes,
+            "max_bytes": max_bytes,
+            "scope_id": scope_id,
+            "content": content,
         }
         await _publish(context_status)
         return content if status == "ready" else None, context_status
     except Exception:  # PowerContext must never block the agent.  # noqa: BLE001
-        logger.warning("PowerContext context preparation failed", exc_info=True)
+        logger.warning("PowerContext recall unavailable; continuing without historical context")
         status = {"status": "unavailable", "content_bytes": 0}
         await _publish(status)
         return None, status
@@ -89,7 +102,7 @@ async def _publish(status: dict[str, Any]) -> None:
 def _with_context(request: ModelRequest, content: str | None) -> ModelRequest:
     if not content:
         return request
-    blocks = list(request.system_message.content_blocks)
+    blocks = list(request.system_message.content_blocks) if request.system_message is not None else []
     blocks.append({"type": "text", "text": POWERCONTEXT_POLICY})
     retrieval_call = AIMessage(
         content="",

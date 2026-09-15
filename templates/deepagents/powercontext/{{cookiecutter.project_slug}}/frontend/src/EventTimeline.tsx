@@ -20,6 +20,9 @@ export type StreamEvent = {
   data?: unknown;
   message?: string;
   content_bytes?: number;
+  max_bytes?: number;
+  scope_id?: string;
+  content?: string | null;
   detail?: string;
 };
 
@@ -112,7 +115,11 @@ export default function EventTimeline({ events }: { events: StreamEvent[] }): Re
           return (
             <article className="event-card event-card--powercontext" key={key}>
               <div className="event-card__eyebrow">PowerContext · {event.status}</div>
-              <p>{event.content_bytes ?? 0} UTF-8 bytes prepared{event.detail ? ` · ${event.detail}` : ""}</p>
+              <p>{event.content_bytes ?? 0}{event.max_bytes !== undefined ? ` / ${event.max_bytes}` : ""} UTF-8 bytes prepared{event.detail ? ` · ${event.detail}` : ""}</p>
+              {event.status === "empty" && <p>No relevant memory fit this query and budget. Try matching project terms or increasing the budget.</p>}
+              {event.status === "disabled" && <p>Recall is off for this run.</p>}
+              {event.status === "unavailable" && <p>Project memory could not be reached. The agent continues without recalled context.</p>}
+              {event.content && <details><summary>Context supplied to this model call</summary><pre>{event.content}</pre><small>Historical evidence; current instructions take precedence. This context is not saved in conversation history.</small></details>}
             </article>
           );
         }

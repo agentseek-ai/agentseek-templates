@@ -1,7 +1,7 @@
 version = 2
 template = "deepagents/powercontext"
 name = "{{ cookiecutter.project_name }}"
-description = "DeepAgents Event Streaming v3 application with projection-aware UI."
+description = "Project release assistant with durable Memory and inspectable bounded recall."
 env_file = ".env"
 guide = "README.md"
 
@@ -33,9 +33,14 @@ default = "{{ cookiecutter.powercontext_url }}"
 description = "URL of the local PowerContext Server used for bounded context preparation."
 
 [env.POWERCONTEXT_SCOPE_ID]
-required = true
+required = false
 default = "{{ cookiecutter.powercontext_scope }}"
-description = "Project scope used to isolate recalled PowerContext context."
+description = "Optional existing Server-owned Scope ID; otherwise initialize project memory in the UI."
+
+[env.POWERCONTEXT_PROJECT_KEY]
+required = true
+default = "{{ cookiecutter.project_slug }}"
+description = "Stable project binding; choose a different key for independent projects."
 
 [env.POWERCONTEXT_MAX_BYTES]
 required = true

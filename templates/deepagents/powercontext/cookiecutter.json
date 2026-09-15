@@ -8,7 +8,7 @@
   "frontend_port": "5175",
   "_agentseek_source_url": "https://github.com/ob-labs/agentseek.git",
   "_agentseek_source_ref": "900f89518c32f8570d7648897394ed96a86a647a",
-  "powercontext_scope": "project:{{ cookiecutter.project_slug }}",
+  "powercontext_scope": "",
   "powercontext_url": "http://127.0.0.1:8000",
   "powercontext_max_bytes": "8000"
 }

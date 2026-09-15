@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 
 import pytest
-from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-
 from {{ cookiecutter.project_slug }}.event_adapter import powercontext_event
 from {{ cookiecutter.project_slug }}.powercontext_middleware import (
     POWERCONTEXT_BEGIN,
@@ -17,7 +16,9 @@ from {{ cookiecutter.project_slug }}.powercontext_middleware import (
     _with_context,
     powercontext_middleware,
     prepare_context,
+    recall_options,
 )
+from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 
 class Request:
@@ -99,6 +100,7 @@ async def test_middleware_execution_keeps_malicious_retrieval_out_of_user_input(
 @pytest.mark.anyio
 async def test_powercontext_exception_text_is_not_serialized_for_the_stream(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     secret_url = "https://token:secret@example.invalid/powercontext"
 
@@ -106,15 +108,15 @@ async def test_powercontext_exception_text_is_not_serialized_for_the_stream(
         def __init__(self, _url: str) -> None:
             pass
 
-        async def __aenter__(self) -> "FailingPowerContextClient":
+        async def __aenter__(self) -> FailingPowerContextClient:
             raise RuntimeError(f"Connection failed for {secret_url}")
 
         async def __aexit__(self, *_args: object) -> None:
             return None
 
     monkeypatch.setattr(
-        "{{ cookiecutter.project_slug }}.powercontext_middleware.PowerContextClient",
-        FailingPowerContextClient,
+        "{{ cookiecutter.project_slug }}.powercontext_middleware.open_client",
+        lambda: FailingPowerContextClient("unused"),
     )
 
     content, status = await prepare_context(Request())
@@ -123,3 +125,46 @@ async def test_powercontext_exception_text_is_not_serialized_for_the_stream(
     assert content is None
     assert status == {"status": "unavailable", "content_bytes": 0}
     assert secret_url not in serialized_event
+    assert secret_url not in caplog.text
+
+
+@pytest.mark.anyio
+async def test_disabled_recall_never_opens_a_client(monkeypatch) -> None:
+    def unexpected_client():
+        pytest.fail("Disabled recall must not contact PowerContext")
+
+    monkeypatch.setattr("{{ cookiecutter.project_slug }}.powercontext_middleware.open_client", unexpected_client)
+    token = recall_options.set((False, None))
+    try:
+        assert await prepare_context(Request()) == (None, {"status": "disabled", "content_bytes": 0})
+    finally:
+        recall_options.reset(token)
+
+
+@pytest.mark.anyio
+async def test_stalled_recall_releases_model_within_operation_deadline(monkeypatch) -> None:
+    class StalledClient:
+        async def __aenter__(self):
+            await asyncio.Event().wait()
+
+        async def __aexit__(self, *_args):
+            pass
+
+    monkeypatch.setattr("{{ cookiecutter.project_slug }}.powercontext_middleware.open_client", StalledClient)
+    monkeypatch.setattr("{{ cookiecutter.project_slug }}.powercontext_middleware.TIMEOUT_SECONDS", 0.02)
+
+    async def handler(request):
+        return "model continued"
+
+    async with asyncio.timeout(1):
+        assert await powercontext_middleware.awrap_model_call(Request(), handler) == "model continued"
+
+
+def test_recall_does_not_mutate_original_conversation_and_handles_no_system_message() -> None:
+    request = Request()
+    request.system_message = None
+    original = list(request.messages)
+    result = _with_context(request, "Historical decision")
+    assert request.messages == original
+    assert len(result.messages) == len(original) + 2
+    assert request.system_message is None

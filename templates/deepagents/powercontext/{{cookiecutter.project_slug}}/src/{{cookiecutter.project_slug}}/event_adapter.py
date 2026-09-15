@@ -83,8 +83,18 @@ def error_event(*, message: Any) -> dict[str, Any]:
     return {"kind": "error", "message": _value(message)}
 
 
-def powercontext_event(*, status: str, content_bytes: int = 0, detail: str | None = None) -> dict[str, Any]:
+def powercontext_event(
+    *,
+    status: str,
+    content_bytes: int = 0,
+    detail: str | None = None,
+    max_bytes: int | None = None,
+    scope_id: str | None = None,
+    content: str | None = None,
+) -> dict[str, Any]:
     event: dict[str, Any] = {"kind": "powercontext", "status": status, "content_bytes": content_bytes}
+    if max_bytes is not None:
+        event.update(max_bytes=max_bytes, scope_id=scope_id, content=content)
     if detail:
         event["detail"] = detail
     return event

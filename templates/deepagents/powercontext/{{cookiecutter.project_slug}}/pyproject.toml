@@ -12,7 +12,8 @@ dependencies = [
     "langchain-google-genai>=4.0",
     "langchain-openai>=0.3",
     "python-dotenv>=1.0",
-    "powercontext[client]==0.1.0",
+    "powercontext[client] @ git+https://github.com/oceanbase/powercontext.git@04b780cd51b603736a83d4ce6bc43d27eb6e01a4",
+    "fastapi>=0.115,<1",
     "langgraph-cli[inmem]>=0.4",
 ]
 

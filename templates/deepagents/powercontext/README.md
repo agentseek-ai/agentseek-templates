@@ -1,161 +1,54 @@
-# Deep Agents — PowerContext template
+# Deep Agents — PowerContext
 
-Scaffolds a Deep Agents and PowerContext context-continuity showcase. It uses a coordinator and
-one `researcher` sub-agent, then presents the official event-streaming
-projections in a browser UI:
+A project release assistant that makes cross-conversation Memory visible. Save a project decision,
+open a new conversation, and inspect the bounded context supplied to the coordinator and researcher.
+Turn recall off to compare a fresh run without the saved evidence.
 
-- sub-agent lifecycle and nested paths;
-- coordinator and sub-agent messages;
-- tool execution lifecycle, inputs, output deltas, final output, and errors;
-- state snapshots and final output;
-- a raw protocol/debug view with sequence, method, namespace, and payload.
+The template includes:
 
-The backend uses the documented `graph.astream_events(input, version="v3")`
-API and converts typed projections into a small application event protocol.
-The React UI only consumes that application protocol, so protocol details stay
-out of components.
+- Explicit Memory writes, saved entry citations, and a persistent Server-owned project Scope binding.
+- A **New conversation** control that clears conversation context while retaining project Memory.
+- A recall switch and UTF-8 byte budget; changing either starts a fresh comparison thread.
+- Actual prepared-context text in the execution timeline, plus separate empty, disabled, and unavailable states.
+- A three-second recall deadline, fail-open model execution, and request-local context injection.
+- The underlying Deep Agents v3 messages, tool calls, sub-agent lifecycle, and optional protocol/state views.
 
-## PowerContext integration
+## Try it
 
-PowerContext is an open-source context layer for AI agents. It is designed to
-keep durable, project-scoped Memory separate from an individual model request,
-then prepare a bounded `PreparedContext` that an agent can use for the current
-turn. In other words, it provides a way to carry useful project knowledge
-across runs without treating an entire history as prompt text on every call.
-
-The PowerContext Server owns the durable Memory, while a prepared context is
-ephemeral and read-only for one request. The project provides Server, Python
-Client SDK, HTTP, and MCP interfaces, so an application can choose the
-integration surface that fits its runtime. This template uses the released
-`powercontext[client]==0.1.0` Python Client SDK: before each asynchronous Deep
-Agents model call, it calls `POST /v1/context/prepare` through
-`PowerContextClient` with the current query, project scope, and byte budget.
-
-This template intentionally demonstrates recall only. It does not create,
-revise, or retire Memory; manage those durable records through PowerContext's
-own supported interfaces and workflows. That boundary keeps the example
-focused on how a Deep Agents application consumes prepared context.
-
-The returned `PreparedContext` is cited, untrusted historical reference data;
-it is passed to the model as a PowerContext retrieval tool result, never as a
-user instruction. Recall is read-only: this template does not create, revise,
-or retire Memory. The stream emits a PowerContext status event with the byte
-budget, and the browser displays it in the timeline.
-
-Start a local Server separately with `powercontext server run`. The default
-local listener is `http://127.0.0.1:8000`; this template needs no credentials
-for that local default.
-
-Copy `.env.example` to `.env` and adjust these generated settings when needed:
-
-| Cookiecutter setting | Runtime variable | Default | Purpose |
-| --- | --- | --- | --- |
-| `powercontext_url` | `POWERCONTEXT_URL` | `http://127.0.0.1:8000` | URL of the local PowerContext Server. |
-| `powercontext_scope` | `POWERCONTEXT_SCOPE_ID` | `project:<project_slug>` | Project scope used to isolate recalled context. |
-| `powercontext_max_bytes` | `POWERCONTEXT_MAX_BYTES` | `8000` | Maximum UTF-8 bytes returned in one prepared context. |
-
-The Cookiecutter settings establish the generated defaults; the runtime
-variables let you override them after scaffolding. Start the server at the
-configured URL before using recall. No credentials are required by this
-template for the local PowerContext Server.
-
-## Feature tour
-
-The demo is an event-streaming observability surface rather than a single
-answer box. Each request produces a timeline that makes the execution tree and
-the final result visible:
-
-| Projection | What it represents | What the UI shows |
-| --- | --- | --- |
-| `messages` | Coordinator and sub-agent text | Source, text, and path |
-| `subagents` | Delegated agent lifecycle | Name, path, phase, and status |
-| `tool_calls` | Tool execution | Input, output deltas, result, and errors |
-| `values` | State snapshots during the run | Expandable state/debug payload |
-| `output` | Final run state/result | Expandable final output |
-| raw protocol | Ordered transport events | Sequence, method, namespace, and data |
-
-The coordinator is instructed to delegate to `researcher`, and the researcher
-uses the local `inspect_streaming_topic` tool. This makes delegation and tool
-events observable without requiring a search provider. The UI also keeps a
-stable `thread_id`, updates projection counters as events arrive, and renders
-provider or stream failures as structured error cards.
-The custom route keeps thread history in memory for the current backend
-process; restarting `langgraph dev` starts a new session.
-
-The backend consumes the official v3 projections concurrently through the
-LangGraph development server. The raw stream
-preserves the protocol envelope (`seq`, `method`, `params.namespace`, and
-`params.data`) while the adapter converts typed projections into a small,
-frontend-safe event protocol. This first version intentionally keeps the
-runtime on `langgraph dev` so the v3 projection behavior can be exercised
-without depending on AgentSeek API projection support. AgentSeek API migration
-can be added after the projection contract is stable.
-
-## Quickstart
-
-```bash
-cp .env.example .env
-cp frontend/.env.example frontend/.env
-$EDITOR .env
-
-uv sync
-npm install --prefix frontend
-uv run langgraph dev --port 2024 --no-browser
-# In another terminal:
-npm run dev --prefix frontend
-```
-
-Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}` and try:
+Render `deepagents/powercontext`, then follow the generated README. Start a matching PowerContext
+Server, configure the agent model, and run the backend/frontend. Click **Create project memory**,
+review and save the example Project Phoenix release decision, then ask:
 
 ```text
-Explain how Event Streaming v3 separates coordinator messages, sub-agent work, and tool calls.
+What is the release plan for Project Phoenix?
 ```
 
-The demo prompt asks the coordinator to delegate to `researcher`, which makes
-the lifecycle visible without relying on an accidental model decision.
+Repeat the question after **New conversation** and with recall disabled. The saved Singapore/Tuesday/
+approval/rollback facts are not embedded in the agent prompt or checklist tool; they come from the
+explicitly saved Memory. The scenario is an illustrative demonstration, not a benchmark claim.
 
-## Environment
+## Configuration and boundaries
 
-`AGENTSEEK_MODEL_PROVIDER` selects `openai`, `anthropic`, or `google_genai`.
-`AGENTSEEK_MODEL` selects the model. Fill the matching provider credential in
-`.env`; a blank provider base URL uses that provider's official endpoint.
+`powercontext_url` defaults to `http://127.0.0.1:8000`, `powercontext_max_bytes` to `8000`, and
+`powercontext_scope` to empty. An optional Scope value must be a real Server-owned ID. Otherwise,
+**Create project memory** creates a Scope and binds `POWERCONTEXT_PROJECT_KEY` (the project slug
+by default) through the public Scope API. Use distinct project keys for independent projects.
 
-The template defaults to `openai` and `gpt-4.1-mini`. OpenAI-compatible gateways
-can be used with `OPENAI_API_BASE` and a model served by that gateway.
+The generated SDK dependency is pinned to PowerContext commit
+`04b780cd51b603736a83d4ce6bc43d27eb6e01a4`; the old `0.1.0` package has no Scope binding API.
+The generated README includes matching Server installation, provider settings, and verification commands.
 
-## What the UI demonstrates
+Only explicit user saves write Memory. Automatic transcript capture, Handoff, Work Contract,
+Experience review, and Task Outcome are outside this template. Historical context is untrusted and
+never enters the saved chat history. PowerContext holds project Memory in its own database; the
+custom route's conversation history lasts only for the current backend process.
 
-The backend follows the official Deep Agents event-streaming projections:
+The template is a local development app. Backend configuration owns the Server URL, bearer token,
+and Scope selection. Shared deployment needs application authentication and authorization. The UI
+shows project Memory and the context supplied to the model, so it belongs within that same access boundary.
 
-```text
-stream.subagents  -> delegation cards and lifecycle
-stream.messages   -> coordinator/sub-agent message rows
-stream.tool_calls -> tool input, deltas, completion, and errors
-stream.values     -> state snapshot panel
-stream.output     -> final run output
-for event in stream -> raw protocol debug panel
-```
+The subtree is self-contained and declares lifecycle version 2. It retains Deep Agents `0.6.12`
+and the native `langgraph dev` event-streaming runtime. See the generated README for the full tour.
 
-`name` is a display label. `path` is used as the stable branch key. The UI does
-not treat `completed` as success for tools until `error` is also checked.
-
-## Version boundary
-
-The generated project pins `deepagents==0.6.12`, the first Deep Agents release
-used by the sibling MCP template for the v3-era runtime surface. Do not copy
-the raw event adapter into unrelated components; if the protocol changes,
-update the adapter and its tests first.
-
-## Lifecycle
-
-The generated project declares lifecycle version 2 in `.agentseek/lifecycle.toml`.
-The backend is served by `langgraph dev`, and the frontend uses Vite.
-
-## References
-
-- [Deep Agents Event Streaming](https://docs.langchain.com/oss/python/deepagents/event-streaming)
-- [LangChain Event Streaming](https://docs.langchain.com/oss/python/langchain/event-streaming)
-- [LangGraph Event Streaming](https://docs.langchain.com/oss/python/langgraph/event-streaming)
 - [PowerContext](https://github.com/oceanbase/powercontext)
-- [PowerContext interfaces](https://github.com/oceanbase/powercontext/blob/master/docs/en/docs/reference/interfaces.md)
-- [PR #99](https://github.com/datawhalechina/deepagents-in-action/pull/99)
+- [Deep Agents Event Streaming](https://docs.langchain.com/oss/python/deepagents/event-streaming)

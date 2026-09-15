@@ -38,11 +38,14 @@ class SuccessfulPowerContextClient:
     def __init__(self, _url: str) -> None:
         pass
 
-    async def __aenter__(self) -> "SuccessfulPowerContextClient":
+    async def __aenter__(self) -> SuccessfulPowerContextClient:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
         return None
+
+    async def resolve_scope_binding(self, request: object) -> SimpleNamespace:
+        return SimpleNamespace(scope_id="server-owned-test-scope")
 
     async def prepare_context(self, request: object) -> SimpleNamespace:
         self.requests.append(request)
@@ -60,9 +63,7 @@ def test_real_deepagents_graph_reaches_v3_projection_route(monkeypatch) -> None:
 
     assert response.status_code == 200
     events = [
-        json.loads(line.removeprefix("data: "))
-        for line in response.text.splitlines()
-        if line.startswith("data: ")
+        json.loads(line.removeprefix("data: ")) for line in response.text.splitlines() if line.startswith("data: ")
     ]
     assert {event["kind"] for event in events} >= {"message", "values", "raw", "output"}
     output_events = [event for event in events if event["kind"] == "output"]
@@ -97,8 +98,8 @@ async def test_delegation_applies_powercontext_to_coordinator_and_researcher(
 ) -> None:
     SuccessfulPowerContextClient.requests = []
     monkeypatch.setattr(
-        "{{ cookiecutter.project_slug }}.powercontext_middleware.PowerContextClient",
-        SuccessfulPowerContextClient,
+        "{{ cookiecutter.project_slug }}.powercontext_middleware.open_client",
+        lambda: SuccessfulPowerContextClient("unused"),
     )
     graph = build_stream_graph(
         ToolCapableScriptedModel(
@@ -122,7 +123,7 @@ async def test_delegation_applies_powercontext_to_coordinator_and_researcher(
                         content="",
                         tool_calls=[
                             {
-                                "name": "inspect_streaming_topic",
+                                "name": "release_checklist",
                                 "args": {"topic": "Event Streaming v3"},
                                 "id": "inspect-1",
                                 "type": "tool_call",
@@ -148,3 +149,18 @@ async def test_delegation_applies_powercontext_to_coordinator_and_researcher(
         "Research Event Streaming v3.",
         "Explain Event Streaming v3.",
     ]
+
+
+@pytest.mark.anyio
+async def test_recalled_context_is_not_saved_in_checkpoint(monkeypatch):
+    monkeypatch.setattr(
+        "{{ cookiecutter.project_slug }}.powercontext_middleware.open_client",
+        lambda: SuccessfulPowerContextClient("unused"),
+    )
+    graph = build_stream_graph(ToolCapableFakeModel(responses=["answer"]))
+    config = {"configurable": {"thread_id": "ephemeral-recall"}}
+    await graph.ainvoke({"messages": [{"role": "user", "content": "Project release?"}]}, config)
+    snapshot = await graph.aget_state(config)
+    messages = snapshot.values["messages"]
+    assert [message.content for message in messages] == ["Project release?", "answer"]
+    assert "retrieved reference" not in str(messages)

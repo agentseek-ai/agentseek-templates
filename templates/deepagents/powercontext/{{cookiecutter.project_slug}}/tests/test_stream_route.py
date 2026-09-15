@@ -34,7 +34,7 @@ class FakeMessage:
 
 
 class FakeToolCall:
-    tool_name = "inspect_streaming_topic"
+    tool_name = "release_checklist"
     input = {"topic": "v3"}
     output_deltas = AsyncItems(["first", " second"])
     completed = True

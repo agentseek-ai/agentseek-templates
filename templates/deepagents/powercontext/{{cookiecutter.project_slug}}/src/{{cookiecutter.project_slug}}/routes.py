@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from .agent import stream_graph as graph
 from .event_adapter import (
     error_event,
     message_event,
@@ -22,15 +23,18 @@ from .event_adapter import (
     tool_event,
     values_event,
 )
-from .agent import stream_graph as graph
-from .powercontext_middleware import reset_event_sink, set_event_sink
+from .powercontext_middleware import recall_options, reset_event_sink, set_event_sink
+from .project_memory import router as memory_router
 
 app = FastAPI(title="{{ cookiecutter.project_name }} Event Streaming")
+app.include_router(memory_router)
 
 
 class StreamRequest(BaseModel):
     messages: list[dict[str, Any]] = Field(min_length=1)
     thread_id: str | None = None
+    recall_enabled: bool = True
+    max_bytes: int | None = Field(default=None, ge=512, le=32768)
 
 
 async def _resolve(value: Any) -> Any:
@@ -118,10 +122,12 @@ async def _consume_subagent(run: Any, queue: asyncio.Queue[dict[str, Any] | None
 
 async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str, Any] | None]) -> None:
     try:
+
         async def publish_context(status: dict[str, Any]) -> None:
             await queue.put(powercontext_event(**status))
 
         event_token = set_event_sink(publish_context)
+        recall_token = recall_options.set((request.recall_enabled, request.max_bytes))
         config = {"configurable": {"thread_id": request.thread_id}} if request.thread_id else None
         run = await graph.astream_events({"messages": request.messages}, config=config, version="v3")
         subagent_tasks: list[asyncio.Task[None]] = []
@@ -173,6 +179,8 @@ async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str,
     finally:
         if "event_token" in locals():
             reset_event_sink(event_token)
+        if "recall_token" in locals():
+            recall_options.reset(recall_token)
         await queue.put(None)
 
 
