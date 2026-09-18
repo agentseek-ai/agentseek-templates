@@ -605,6 +605,19 @@ def test_powercontext_template_starts_on_agentseek_api_with_bilingual_ui(tmp_pat
     assert (frontend / "App.test.tsx").read_text(encoding="utf-8").count("新会话") >= 1
 
 
+def test_powercontext_memory_routes_survive_the_custom_app_merge(tmp_path: Path) -> None:
+    """AgentSeek API copies concrete custom-app routes and drops lazy include_router entries.
+
+    Recent FastAPI versions keep ``app.include_router`` behind a lazy
+    ``_IncludedRouter`` whose path is ``None``; the AgentSeek API custom-app merge
+    skips path-less entries, which silently removed every ``/custom/memory`` route.
+    """
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/powercontext", tmp_path / "output", tmp_path)
+    routes_source = (generated_path / "src" / generated_path.name / "routes.py").read_text(encoding="utf-8")
+    assert "app.include_router(" not in routes_source
+    assert "app.router.routes.extend(memory_router.routes)" in routes_source
+
+
 def _render(
     template_root: Path,
     output_root: Path,

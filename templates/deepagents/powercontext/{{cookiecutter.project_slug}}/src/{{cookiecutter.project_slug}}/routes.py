@@ -27,7 +27,13 @@ from .powercontext_middleware import recall_options, reset_event_sink, set_event
 from .project_memory import router as memory_router
 
 app = FastAPI(title="{{ cookiecutter.project_name }} Event Streaming")
-app.include_router(memory_router)
+# Register the memory router's concrete routes directly instead of calling
+# ``app.include_router``. AgentSeek API merges a custom app by copying
+# ``app.router.routes`` and skipping entries without a concrete path, while recent
+# FastAPI versions defer ``include_router`` behind a lazy ``_IncludedRouter`` whose
+# path is ``None``. The lazy entry would be dropped and every /custom/memory route
+# would return 404 under the AgentSeek API runtime.
+app.router.routes.extend(memory_router.routes)
 
 
 class StreamRequest(BaseModel):
