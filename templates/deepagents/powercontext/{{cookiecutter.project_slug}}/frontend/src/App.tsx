@@ -1,14 +1,9 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import EventTimeline, { type StreamEvent } from "./EventTimeline";
 import MemoryPanel from "./MemoryPanel";
 import { I18nProvider, useI18n } from "./i18n";
 
-function projectionCounts(events: StreamEvent[]): Record<string, number> {
-  return events.reduce<Record<string, number>>((counts, event) => {
-    counts[event.kind] = (counts[event.kind] ?? 0) + 1;
-    return counts;
-  }, {});
-}
+const VISIBLE_EVENT_KINDS = ["powercontext", "message", "error"];
 
 async function readSse(response: Response, onEvent: (event: StreamEvent) => void): Promise<void> {
   if (!response.ok || !response.body) throw new Error(`Streaming request failed (${response.status})`);
@@ -52,9 +47,9 @@ function AppShell() {
   const [recallEnabled, setRecallEnabled] = useState(true);
   const [maxBytes, setMaxBytes] = useState(8000);
   const [lastQuestion, setLastQuestion] = useState("");
-  const [showDebug, setShowDebug] = useState(false);
-  const counts = useMemo(() => projectionCounts(events), [events]);
-  const visibleEvents = showDebug ? events : events.filter((event) => !["raw", "values", "output"].includes(event.kind));
+  // Only the recalled PowerContext evidence and the agents' answer are shown;
+  // protocol projections (raw, values, sub-agent and tool events) stay hidden.
+  const visibleEvents = events.filter((event) => VISIBLE_EVENT_KINDS.includes(event.kind));
   const demoQuestion = t("demo.question");
 
   function newConversation() {
@@ -133,16 +128,6 @@ function AppShell() {
       </form>
       {lastQuestion && <p className="question">{lastQuestion}</p>}
 
-      <section className="projection-strip" aria-label="Projection summary">
-        <div><strong>{counts.powercontext ?? 0}</strong><span>{t("projection.powercontext")}</span></div>
-        <div><strong>{counts.subagent ?? 0}</strong><span>{t("projection.subagent")}</span></div>
-        <div><strong>{counts.message ?? 0}</strong><span>{t("projection.message")}</span></div>
-        <div><strong>{counts.tool_call ?? 0}</strong><span>{t("projection.tool")}</span></div>
-        <div><strong>{counts.values ?? 0}</strong><span>{t("projection.values")}</span></div>
-        <div><strong>{counts.raw ?? 0}</strong><span>{t("projection.raw")}</span></div>
-      </section>
-
-      <label className="debug-toggle"><input type="checkbox" checked={showDebug} onChange={(event) => setShowDebug(event.target.checked)} /> {t("debug.toggle")}</label>
       <EventTimeline events={visibleEvents} />
       {isLoading && <div className="activity" aria-live="polite">{t("activity.streaming")}</div>}
       {error && <p className="error-text">{error}</p>}
