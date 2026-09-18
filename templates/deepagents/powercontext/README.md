@@ -11,6 +11,8 @@ The template includes:
 - A recall switch and UTF-8 byte budget; changing either starts a fresh comparison thread.
 - Actual prepared-context text in the execution timeline, plus separate empty, disabled, and unavailable states.
 - A three-second recall deadline, fail-open model execution, and request-local context injection.
+- A bilingual (English / Simplified Chinese) interface with a header language button that switches
+  every label and remembers the reader's choice.
 - The underlying Deep Agents v3 messages, tool calls, sub-agent lifecycle, and optional protocol/state views.
 
 ## Try it
@@ -47,8 +49,9 @@ The template is a local development app. Backend configuration owns the Server U
 and Scope selection. Shared deployment needs application authentication and authorization. The UI
 shows project Memory and the context supplied to the model, so it belongs within that same access boundary.
 
-The subtree is self-contained and declares lifecycle version 2. It retains Deep Agents `0.6.12`
-and the native `langgraph dev` event-streaming runtime. See the generated README for the full tour.
+The subtree is self-contained and declares lifecycle version 2. It retains Deep Agents `0.6.12` and
+serves the graph through the AgentSeek API runtime with embedded SeekDB persistence. See the generated
+README for the full tour.
 
 - [PowerContext](https://github.com/oceanbase/powercontext)
 - [Deep Agents Event Streaming](https://docs.langchain.com/oss/python/deepagents/event-streaming)

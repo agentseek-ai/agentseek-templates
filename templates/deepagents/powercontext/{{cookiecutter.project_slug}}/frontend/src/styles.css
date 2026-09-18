@@ -9,6 +9,9 @@
 body { margin: 0; }
 main { max-width: 920px; margin: 0 auto; padding: 3rem 1rem 6rem; }
 .hero { margin-bottom: 1.5rem; }
+.hero__top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.hero__top .eyebrow { margin: 0; }
+.language-toggle { flex: 0 0 auto; white-space: nowrap; }
 .eyebrow { color: #167c80; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
 h1 { margin: .35rem 0 .75rem; font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.05; }
 .lede { max-width: 700px; color: #5f6d77; line-height: 1.7; }

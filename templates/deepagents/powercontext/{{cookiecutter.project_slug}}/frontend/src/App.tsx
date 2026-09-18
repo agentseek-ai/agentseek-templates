@@ -1,6 +1,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import EventTimeline, { type StreamEvent } from "./EventTimeline";
-import MemoryPanel, { DEMO_QUESTION } from "./MemoryPanel";
+import MemoryPanel from "./MemoryPanel";
+import { I18nProvider, useI18n } from "./i18n";
 
 function projectionCounts(events: StreamEvent[]): Record<string, number> {
   return events.reduce<Record<string, number>>((counts, event) => {
@@ -26,7 +27,22 @@ async function readSse(response: Response, onEvent: (event: StreamEvent) => void
   }
 }
 
-export default function App() {
+function LanguageToggle() {
+  const { language, toggleLanguage, t } = useI18n();
+  return (
+    <button
+      type="button"
+      className="secondary language-toggle"
+      aria-label={language === "en" ? t("language.ariaToZh") : t("language.ariaToEn")}
+      onClick={toggleLanguage}
+    >
+      {t("language.switch")}
+    </button>
+  );
+}
+
+function AppShell() {
+  const { t } = useI18n();
   const apiUrl = import.meta.env.VITE_STREAMING_API_URL ?? "http://127.0.0.1:{{ cookiecutter.langgraph_port }}";
   const [input, setInput] = useState("");
   const [events, setEvents] = useState<StreamEvent[]>([]);
@@ -39,6 +55,7 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false);
   const counts = useMemo(() => projectionCounts(events), [events]);
   const visibleEvents = showDebug ? events : events.filter((event) => !["raw", "values", "output"].includes(event.kind));
+  const demoQuestion = t("demo.question");
 
   function newConversation() {
     setThreadId("");
@@ -81,51 +98,63 @@ export default function App() {
   return (
     <main>
       <header className="hero">
-        <p className="eyebrow">Deep Agents + PowerContext</p>
+        <div className="hero__top">
+          <p className="eyebrow">{t("app.eyebrow")}</p>
+          <LanguageToggle />
+        </div>
         <h1>{{ cookiecutter.project_name }}</h1>
-        <p className="lede">New conversation. Same project knowledge. Save a release decision, start fresh, and watch your agents pick it up from PowerContext.</p>
+        <p className="lede">{t("app.lede")}</p>
       </header>
 
       <MemoryPanel apiUrl={apiUrl} disabled={isLoading} />
 
       <section className="session-banner" aria-label="Session">
-        <p className="eyebrow">02 · Start fresh</p>
-        <strong>{threadId ? "Thread active" : "Thread ready"}</strong>
-        <span>{threadId ? threadId : "Your next request starts a fresh conversation. Project memory is kept."}</span>
+        <p className="eyebrow">{t("session.eyebrow")}</p>
+        <strong>{threadId ? t("session.threadActive") : t("session.threadReady")}</strong>
+        <span>{threadId ? threadId : t("session.threadReadyHint")}</span>
+        {threadId && <span>{t("session.threadActiveHint")}</span>}
         <div className="actions">
-          <button disabled={isLoading} onClick={newConversation}>New conversation</button>
-          <label><input type="checkbox" checked={recallEnabled} disabled={isLoading} onChange={(event) => { setRecallEnabled(event.target.checked); newConversation(); }} /> Recall project memory</label>
-          <label>Context budget <select value={maxBytes} disabled={isLoading} onChange={(event) => { setMaxBytes(Number(event.target.value)); newConversation(); }}>
-            <option value={512}>512 bytes</option><option value={2000}>2,000 bytes</option><option value={8000}>8,000 bytes</option>
+          <button disabled={isLoading} onClick={newConversation}>{t("session.newConversation")}</button>
+          <label><input type="checkbox" checked={recallEnabled} disabled={isLoading} onChange={(event) => { setRecallEnabled(event.target.checked); newConversation(); }} /> {t("session.recall")}</label>
+          <label>{t("session.budget")} <select value={maxBytes} disabled={isLoading} onChange={(event) => { setMaxBytes(Number(event.target.value)); newConversation(); }}>
+            <option value={512}>{t("session.bytes512")}</option><option value={2000}>{t("session.bytes2000")}</option><option value={8000}>{t("session.bytes8000")}</option>
           </select></label>
         </div>
-        <p className="hint">Changing recall or its budget starts a fresh conversation for comparison. The backend may apply a lower configured budget.</p>
+        <p className="hint">{t("session.hint")}</p>
       </section>
 
-      <div className="section-heading"><div><p className="eyebrow">03 · Recall and inspect</p><h2>Plan the next release</h2></div>
-        <button className="secondary" disabled={isLoading} onClick={() => setInput(DEMO_QUESTION)}>Try release question</button>
+      <div className="section-heading"><div><p className="eyebrow">{t("plan.eyebrow")}</p><h2>{t("plan.heading")}</h2></div>
+        <button className="secondary" disabled={isLoading} onClick={() => setInput(demoQuestion)}>{t("plan.tryDemo")}</button>
       </div>
 
       <form className="composer" onSubmit={onSubmit}>
-        <input aria-label="Message" value={input} onChange={(event) => setInput(event.target.value)} placeholder="Ask about your project's release…" disabled={isLoading} />
-        <button type="submit" disabled={isLoading || !input.trim()}>Send</button>
+        <input aria-label={t("composer.messageLabel")} value={input} onChange={(event) => setInput(event.target.value)} placeholder={t("composer.placeholder")} disabled={isLoading} />
+        <button type="submit" disabled={isLoading || !input.trim()}>{t("composer.send")}</button>
       </form>
       {lastQuestion && <p className="question">{lastQuestion}</p>}
 
       <section className="projection-strip" aria-label="Projection summary">
-        <div><strong>{counts.powercontext ?? 0}</strong><span>PowerContext events</span></div>
-        <div><strong>{counts.subagent ?? 0}</strong><span>subagent events</span></div>
-        <div><strong>{counts.message ?? 0}</strong><span>messages</span></div>
-        <div><strong>{counts.tool_call ?? 0}</strong><span>tool events</span></div>
-        <div><strong>{counts.values ?? 0}</strong><span>state snapshots</span></div>
-        <div><strong>{counts.raw ?? 0}</strong><span>raw events</span></div>
+        <div><strong>{counts.powercontext ?? 0}</strong><span>{t("projection.powercontext")}</span></div>
+        <div><strong>{counts.subagent ?? 0}</strong><span>{t("projection.subagent")}</span></div>
+        <div><strong>{counts.message ?? 0}</strong><span>{t("projection.message")}</span></div>
+        <div><strong>{counts.tool_call ?? 0}</strong><span>{t("projection.tool")}</span></div>
+        <div><strong>{counts.values ?? 0}</strong><span>{t("projection.values")}</span></div>
+        <div><strong>{counts.raw ?? 0}</strong><span>{t("projection.raw")}</span></div>
       </section>
 
-      <label className="debug-toggle"><input type="checkbox" checked={showDebug} onChange={(event) => setShowDebug(event.target.checked)} /> Show protocol and state details</label>
+      <label className="debug-toggle"><input type="checkbox" checked={showDebug} onChange={(event) => setShowDebug(event.target.checked)} /> {t("debug.toggle")}</label>
       <EventTimeline events={visibleEvents} />
-      {isLoading && <div className="activity" aria-live="polite">Streaming the run…</div>}
+      {isLoading && <div className="activity" aria-live="polite">{t("activity.streaming")}</div>}
       {error && <p className="error-text">{error}</p>}
-      {events.length === 0 && !isLoading && <p className="hint">Try: “{DEMO_QUESTION}” Then turn recall off and ask the same question in a fresh conversation.</p>}
+      {events.length === 0 && !isLoading && <p className="hint">{t("app.emptyHint", { question: demoQuestion })}</p>}
     </main>
+  );
+}
+
+export default function App() {
+  return (
+    <I18nProvider>
+      <AppShell />
+    </I18nProvider>
   );
 }

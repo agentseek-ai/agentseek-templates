@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useI18n } from "./i18n";
 
 export type StreamEvent = {
   kind: string;
@@ -35,19 +36,27 @@ function json(value: unknown): string {
   }
 }
 
-function pathLabel(path: string[] | undefined): string {
-  return path && path.length > 0 ? path.join(" / ") : "coordinator";
-}
-
 export default function EventTimeline({ events }: { events: StreamEvent[] }): ReactNode {
+  const { t } = useI18n();
+
+  function sourceLabel(source: string | undefined): string {
+    if (source === "coordinator") return t("timeline.source.coordinator");
+    if (source === "subagent") return t("timeline.source.subagent");
+    return source ?? t("timeline.source.agent");
+  }
+
+  function pathLabel(path: string[] | undefined): string {
+    return path && path.length > 0 ? path.join(" / ") : t("timeline.source.coordinator");
+  }
+
   return (
-    <section className="timeline" aria-label="Event timeline">
+    <section className="timeline" aria-label={t("timeline.aria")}>
       {events.map((event, index) => {
         const key = `${event.kind}-${event.sequence ?? index}`;
         if (event.kind === "message") {
           return (
             <article className="event-card event-card--message" key={key}>
-              <div className="event-card__eyebrow">{event.source ?? "agent"} · message</div>
+              <div className="event-card__eyebrow">{sourceLabel(event.source)} · {t("timeline.message")}</div>
               <p>{event.text}</p>
               <small>{pathLabel(event.path)}</small>
             </article>
@@ -56,7 +65,7 @@ export default function EventTimeline({ events }: { events: StreamEvent[] }): Re
         if (event.kind === "subagent") {
           return (
             <article className={`event-card event-card--subagent event-card--${event.phase}`} key={key}>
-              <div className="event-card__eyebrow">subagents · {event.phase}</div>
+              <div className="event-card__eyebrow">{t("timeline.subagents")} · {event.phase}</div>
               <strong>{event.name}</strong>
               <span className="event-card__badge">{event.status}</span>
               <small>{pathLabel(event.path)}</small>
@@ -74,14 +83,14 @@ export default function EventTimeline({ events }: { events: StreamEvent[] }): Re
               {event.delta !== undefined && <pre>{json(event.delta)}</pre>}
               {event.output !== undefined && <pre>{json(event.output)}</pre>}
               {event.error !== undefined && <pre className="error-text">{json(event.error)}</pre>}
-              <small>{event.source ?? "agent"} · {pathLabel(event.path)}</small>
+              <small>{sourceLabel(event.source)} · {pathLabel(event.path)}</small>
             </details>
           );
         }
         if (event.kind === "values") {
           return (
             <details className="event-card event-card--values" key={key}>
-              <summary>values · state snapshot</summary>
+              <summary>{t("timeline.values")}</summary>
               <pre>{json(event.snapshot)}</pre>
             </details>
           );
@@ -89,7 +98,7 @@ export default function EventTimeline({ events }: { events: StreamEvent[] }): Re
         if (event.kind === "output") {
           return (
             <details className={`event-card event-card--output event-card--${event.phase ?? "completed"}`} key={key} open>
-              <summary>output · {event.phase === "failed" ? "failed" : "final run state"}</summary>
+              <summary>{event.phase === "failed" ? t("timeline.outputFailed") : t("timeline.output")}</summary>
               {event.error !== undefined ? <pre className="error-text">{json(event.error)}</pre> : <pre>{json(event.output)}</pre>}
             </details>
           );
@@ -97,8 +106,8 @@ export default function EventTimeline({ events }: { events: StreamEvent[] }): Re
         if (event.kind === "raw") {
           return (
             <details className="event-card event-card--raw" key={key}>
-              <summary>raw · seq {event.sequence ?? "?"} · {event.method}</summary>
-              <small>namespace: {pathLabel(event.namespace)}</small>
+              <summary>{t("timeline.raw", { sequence: event.sequence ?? "?" })} · {event.method}</summary>
+              <small>{t("timeline.namespace")} {pathLabel(event.namespace)}</small>
               <pre>{json(event.data)}</pre>
             </details>
           );
@@ -106,7 +115,7 @@ export default function EventTimeline({ events }: { events: StreamEvent[] }): Re
         if (event.kind === "error") {
           return (
             <article className="event-card event-card--error" key={key}>
-              <div className="event-card__eyebrow">stream · error</div>
+              <div className="event-card__eyebrow">{t("timeline.streamError")}</div>
               <p className="error-text">{event.message}</p>
             </article>
           );
@@ -115,11 +124,11 @@ export default function EventTimeline({ events }: { events: StreamEvent[] }): Re
           return (
             <article className="event-card event-card--powercontext" key={key}>
               <div className="event-card__eyebrow">PowerContext · {event.status}</div>
-              <p>{event.content_bytes ?? 0}{event.max_bytes !== undefined ? ` / ${event.max_bytes}` : ""} UTF-8 bytes prepared{event.detail ? ` · ${event.detail}` : ""}</p>
-              {event.status === "empty" && <p>No relevant memory fit this query and budget. Try matching project terms or increasing the budget.</p>}
-              {event.status === "disabled" && <p>Recall is off for this run.</p>}
-              {event.status === "unavailable" && <p>Project memory could not be reached. The agent continues without recalled context.</p>}
-              {event.content && <details><summary>Context supplied to this model call</summary><pre>{event.content}</pre><small>Historical evidence; current instructions take precedence. This context is not saved in conversation history.</small></details>}
+              <p>{t("timeline.bytesPrepared", { bytes: event.content_bytes ?? 0 })}{event.max_bytes !== undefined ? ` / ${event.max_bytes}` : ""}{event.detail ? ` · ${event.detail}` : ""}</p>
+              {event.status === "empty" && <p>{t("timeline.empty")}</p>}
+              {event.status === "disabled" && <p>{t("timeline.disabled")}</p>}
+              {event.status === "unavailable" && <p>{t("timeline.unavailable")}</p>}
+              {event.content && <details><summary>{t("timeline.contextSummary")}</summary><pre>{event.content}</pre><small>{t("timeline.contextNote")}</small></details>}
             </article>
           );
         }

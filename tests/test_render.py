@@ -31,6 +31,7 @@ AGENTSEEK_API_CANONICAL_NAME = canonicalize_name("agentseek-api")
 MIGRATED_RUNTIME_TEMPLATES = {
     "deepagents/content-builder",
     "deepagents/mcp",
+    "deepagents/powercontext",
     "deepagents/research",
     "langchain/agentic-rag",
     "langchain/agentic-rag-hybrid",
@@ -44,6 +45,7 @@ MIGRATED_RUNTIME_TEMPLATES = {
 REVIEWER_LOCAL_RUNTIME_TEMPLATES = {
     "deepagents/content-builder",
     "deepagents/mcp",
+    "deepagents/powercontext",
     "deepagents/research",
     "langchain/agentic-rag-hybrid",
     "langchain/cli-remote",
@@ -557,6 +559,50 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
         "http://[::1]:5175",
     ]
     assert "allow_origin_regex" not in graph_config["http"]["cors"]
+
+
+def test_powercontext_template_starts_on_agentseek_api_with_bilingual_ui(tmp_path: Path) -> None:
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/powercontext", tmp_path / "output", tmp_path)
+
+    lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["services"]["langgraph"]["tech"] == "agentseek-api"
+    assert lifecycle["services"]["langgraph"]["name"] == "AgentSeek API"
+    assert lifecycle["processes"]["langgraph"]["command"] == [
+        "uv",
+        "run",
+        "agentseek-api",
+        "dev",
+        "--port",
+        "2024",
+    ]
+    assert lifecycle["checks"]["langgraph"]["target"] == "http://127.0.0.1:2024/health"
+    assert "agentseek-api" not in lifecycle["tools"]["required"]
+
+    dependencies = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "dependencies"
+    ]
+    assert "agentseek-api[embedded]==0.2.3" in dependencies
+    assert "mcp>=1.27.1,<2" in dependencies
+    assert "langgraph-cli[inmem]>=0.4" not in dependencies
+
+    env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
+    assert "SEEKDB_EMBED=true" in env_example
+    assert "SEEKDB_EMBED_DIR=~/.agentseek/deepagents_powercontext/seekdb" in env_example
+    assert "OCEANBASE_DB_NAME=test" in env_example
+    for name in ("SEEKDB_EMBED", "SEEKDB_EMBED_DIR", "OCEANBASE_DB_NAME"):
+        assert name in lifecycle["env"]
+
+    frontend = generated_path / "frontend" / "src"
+    i18n = (frontend / "i18n.tsx").read_text(encoding="utf-8")
+    assert "zh" in i18n
+    assert "中文" in i18n
+    assert "localStorage" in i18n
+    app = (frontend / "App.tsx").read_text(encoding="utf-8")
+    assert "language.switch" in app
+    assert "LanguageToggle" in app
+    assert "useI18n" in app
+    assert "New conversation" not in app
+    assert (frontend / "App.test.tsx").read_text(encoding="utf-8").count("新会话") >= 1
 
 
 def _render(

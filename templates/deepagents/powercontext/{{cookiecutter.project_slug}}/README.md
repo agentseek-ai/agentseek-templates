@@ -7,6 +7,10 @@ PowerContext is an open-source context layer for AI agents. This example demonst
 Memory and bounded recall before each asynchronous Deep Agents model call. The release scenario is
 illustrative; it is not a benchmark or a customer case study.
 
+The browser UI ships in English and Simplified Chinese. The language button in the header switches
+every label at once and remembers the choice in the browser; the agent answers in the language of
+your question.
+
 ## Run locally
 
 The generated app uses Python 3.12+, Node.js 22.12+ (or a Vite-compatible newer release), and uv.
@@ -28,7 +32,7 @@ cp frontend/.env.example frontend/.env
 # Edit .env: set the selected agent provider's API key and model.
 uv sync
 npm install --prefix frontend
-uv run langgraph dev --port {{ cookiecutter.langgraph_port }} --no-browser
+uv run agentseek-api dev --port {{ cookiecutter.langgraph_port }}
 ```
 
 Start the frontend in another terminal:
@@ -56,6 +60,9 @@ Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. The same setup is avai
 5. Turn recall back on, or restart the application and refresh Memory. The same project decisions
    remain available from the Server. Try the 512-byte budget as well: a smaller budget may omit
    entries or yield `empty`. The server keeps the whole Memory entry; it does not truncate durable data.
+6. Click the language button in the header. Every label, button, and status message switches between
+   English and Simplified Chinese, the choice is remembered in this browser, and the layout stays
+   readable on a narrow viewport.
 
 The default full-text search needs matching terms such as `Project Phoenix` and `release`. Semantic
 paraphrase retrieval requires PowerContext vector configuration. Current instructions override historical
@@ -71,6 +78,7 @@ notes, so you can also try: “For this exercise, plan Project Phoenix for Frida
 | Turning recall off creates a clean comparison thread | A run can proceed without historical context |
 | Stopping PowerContext produces `unavailable`, then the agent continues | Recall has a three-second operation deadline and fails open |
 | Saving shows an entry citation and version | Durable writes return inspectable evidence |
+| The header language button switches every label between English and Chinese | A bilingual UI keeps the same evidence readable for both audiences |
 
 `empty` means no matching content fit the request; `unavailable` means recall failed. Neither means
 that the agent has recovered missing facts. Prepared context is untrusted historical evidence, carried
@@ -93,6 +101,9 @@ Experience review, and Task Outcome are separate PowerContext workflows, not fea
 | `POWERCONTEXT_MAX_BYTES` | `8000` | Server request budget, 512–32768 UTF-8 bytes; the UI can lower it |
 | `AGENTSEEK_MODEL_PROVIDER` | `{{ cookiecutter.default_model_provider }}` | `openai`, `anthropic`, or `google_genai` |
 | `AGENTSEEK_MODEL` | `{{ cookiecutter.default_model }}` | Agent model identifier |
+| `SEEKDB_EMBED` | `true` | Use embedded SeekDB checkpoint persistence for the AgentSeek API runtime |
+| `SEEKDB_EMBED_DIR` | `~/.agentseek/{{ cookiecutter.project_slug }}/seekdb` | Embedded SeekDB data directory, kept outside the generated project |
+| `OCEANBASE_DB_NAME` | `test` | Embedded SeekDB database name |
 
 Use `OPENAI_API_BASE` for an OpenAI-compatible gateway. The browser never supplies a PowerContext
 URL, token, or Scope ID. A project key is a data boundary, not an authentication mechanism. This is
@@ -104,10 +115,15 @@ Scope/Memory API used here. The earlier `0.1.0` package does not expose the Scop
 
 ## Runtime and verification
 
-The custom route uses Deep Agents `0.6.12`, `langgraph dev`, and the documented v3 projections.
-The researcher calls `release_checklist`, a deterministic local checklist that contains no saved
-Phoenix decisions. Both agents have recall middleware. Protocol and state details remain available
-behind **Show protocol and state details**.
+The custom route uses Deep Agents `0.6.12`, the AgentSeek API runtime, and the documented v3
+projections. `uv run agentseek-api dev` serves the `streaming` graph, the custom FastAPI routes, and
+the `/health` endpoint used by the lifecycle check. The researcher calls `release_checklist`, a
+deterministic local checklist that contains no saved Phoenix decisions. Both agents have recall
+middleware. Protocol and state details remain available behind **Show protocol and state details**.
+
+The browser interface is bilingual. The language button in the header switches every label between
+English and Simplified Chinese and stores the choice in `localStorage`; the frontend test suite covers
+both languages.
 
 Conversation history uses an in-process checkpointer and is lost on backend restart. Project Memory
 persists in the separate PowerContext Server's configured database. Restarting with a different or

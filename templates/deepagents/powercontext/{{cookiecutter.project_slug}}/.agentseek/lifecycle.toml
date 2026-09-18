@@ -5,6 +5,21 @@ description = "Project release assistant with durable Memory and inspectable bou
 env_file = ".env"
 guide = "README.md"
 
+[env.SEEKDB_EMBED]
+required = true
+default = "true"
+description = "Use embedded AgentSeek API checkpoint persistence."
+
+[env.SEEKDB_EMBED_DIR]
+required = true
+default = "~/.agentseek/{{ cookiecutter.project_slug }}/seekdb"
+description = "Embedded AgentSeek API persistence directory."
+
+[env.OCEANBASE_DB_NAME]
+required = true
+default = "test"
+description = "Embedded AgentSeek API database name."
+
 [tools]
 required = ["uv", "node", "npm"]
 
@@ -48,13 +63,13 @@ default = "{{ cookiecutter.powercontext_max_bytes }}"
 description = "Maximum UTF-8 bytes returned in one PreparedContext."
 
 [services.langgraph]
-name = "LangGraph API"
+name = "AgentSeek API"
 url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
-tech = "langgraph"
+tech = "agentseek-api"
 kind = "api"
 display = "advanced"
 primary = false
-description = "LangGraph development API that runs the DeepAgents powercontext graph."
+description = "AgentSeek API runtime that runs the DeepAgents powercontext graph."
 links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
 
 [services.frontend]
@@ -68,7 +83,7 @@ tech = "vite"
 links = { docs = "https://vite.dev/guide/" }
 
 [processes.langgraph]
-command = ["uv", "run", "langgraph", "dev", "--port", "{{ cookiecutter.langgraph_port }}", "--no-browser"]
+command = ["uv", "run", "agentseek-api", "dev", "--port", "{{ cookiecutter.langgraph_port }}"]
 
 [processes.frontend]
 command = ["npm", "run", "dev"]
@@ -76,7 +91,7 @@ cwd = "frontend"
 
 [checks.langgraph]
 type = "http"
-target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/health"
 service = "langgraph"
 timeout = 2
 attempts = 3

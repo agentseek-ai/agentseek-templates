@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import type { StreamEvent } from "./EventTimeline";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.history.replaceState({}, "", "/"); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); window.history.replaceState({}, "", "/"); });
 
 function mockBackend(events: StreamEvent[] = [{ kind: "message", source: "coordinator", text: "hello" }]) {
   const fetchMock = vi.fn(async (url: string, _options?: RequestInit) => {
@@ -67,5 +67,18 @@ describe("Project continuity UI", () => {
     render(<App />);
     await send();
     await waitFor(() => expect(screen.getByText("provider unavailable")).toBeTruthy());
+  });
+
+  it("switches the whole interface between English and Chinese", async () => {
+    mockBackend();
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Switch the interface to Chinese" }));
+    expect(screen.getByRole("button", { name: "新会话" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "发送" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "消息" })).toBeTruthy();
+    expect(document.documentElement.lang).toBe("zh-CN");
+    fireEvent.click(screen.getByRole("button", { name: "将界面切换为英文" }));
+    expect(screen.getByRole("button", { name: "New conversation" })).toBeTruthy();
+    expect(document.documentElement.lang).toBe("en");
   });
 });

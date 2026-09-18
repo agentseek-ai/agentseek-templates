@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-
-export const DEMO_QUESTION = "What is the release plan for Project Phoenix?";
-const DEMO_MEMORY = "Project Phoenix release: deploy to the Singapore region on Tuesday at 10:00 UTC. Require Mei's approval and a tested rollback before release.";
+import { useI18n } from "./i18n";
 
 type Entry = {
   text: string;
@@ -11,8 +9,9 @@ type Entry = {
 type Inventory = { scope_id: string; entries: Entry[] };
 
 export default function MemoryPanel({ apiUrl, disabled }: { apiUrl: string; disabled: boolean }) {
+  const { t } = useI18n();
   const [inventory, setInventory] = useState<Inventory | null>(null);
-  const [text, setText] = useState(DEMO_MEMORY);
+  const [text, setText] = useState(() => t("demo.memory"));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -22,7 +21,7 @@ export default function MemoryPanel({ apiUrl, disabled }: { apiUrl: string; disa
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Memory request failed.");
+    if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : t("memory.requestError"));
     return data;
   }
 
@@ -30,7 +29,7 @@ export default function MemoryPanel({ apiUrl, disabled }: { apiUrl: string; disa
     setBusy(true);
     setError(null);
     try { setInventory(await request()); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load project memory."); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : t("memory.loadError")); }
     finally { setBusy(false); }
   }
 
@@ -42,41 +41,41 @@ export default function MemoryPanel({ apiUrl, disabled }: { apiUrl: string; disa
     setNotice("");
     try {
       const result = await request(action === "initialize" ? "/initialize" : "", action === "save" ? { text: text.trim() } : {});
-      setNotice(action === "initialize" ? "Project memory is ready." : result.entry
-        ? `Saved to PowerContext · entry version ${result.entry.version}.`
-        : "PowerContext accepted the write without an entry receipt. Refresh to inspect it.");
+      setNotice(action === "initialize" ? t("memory.ready") : result.entry
+        ? t("memory.saved", { version: result.entry.version })
+        : t("memory.savedNoEntry"));
       if (action === "save") setText("");
       setInventory(await request());
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Memory operation was not confirmed.");
+      setError(cause instanceof Error ? cause.message : t("memory.unconfirmed"));
     } finally { setBusy(false); }
   }
 
   return (
-    <section className="memory-panel" aria-label="Project memory">
+    <section className="memory-panel" aria-label={t("memory.aria")}>
       <div className="section-heading">
-        <div><p className="eyebrow">01 · Remember</p><h2>Project decisions</h2></div>
-        <button className="secondary" disabled={disabled || busy} onClick={() => void refresh()}>Refresh memory</button>
+        <div><p className="eyebrow">{t("memory.eyebrow")}</p><h2>{t("memory.heading")}</h2></div>
+        <button className="secondary" disabled={disabled || busy} onClick={() => void refresh()}>{t("memory.refresh")}</button>
       </div>
-      <p>Save a decision here. It stays in PowerContext when you start a new conversation or restart this app.</p>
-      {!inventory && <button disabled={disabled || busy} onClick={() => void mutate("initialize")}>Create project memory</button>}
+      <p>{t("memory.intro")}</p>
+      {!inventory && <button disabled={disabled || busy} onClick={() => void mutate("initialize")}>{t("memory.create")}</button>}
       {inventory && <>
-        <label htmlFor="memory-text">Decision to keep across conversations</label>
+        <label htmlFor="memory-text">{t("memory.textLabel")}</label>
         <textarea id="memory-text" value={text} onChange={(event) => setText(event.target.value)} maxLength={2000} disabled={disabled || busy} rows={3} />
         <div className="actions">
-          <button disabled={disabled || busy || !text.trim()} onClick={() => void mutate("save")}>Save decision</button>
-          <button className="secondary" disabled={disabled || busy} onClick={() => setText(DEMO_MEMORY)}>Use example decision</button>
+          <button disabled={disabled || busy || !text.trim()} onClick={() => void mutate("save")}>{t("memory.save")}</button>
+          <button className="secondary" disabled={disabled || busy} onClick={() => setText(t("demo.memory"))}>{t("memory.useExample")}</button>
         </div>
         <div className="memory-entries">
-          {inventory.entries.length === 0 && <p className="hint">No saved decisions yet. Save the example to try cross-conversation recall.</p>}
+          {inventory.entries.length === 0 && <p className="hint">{t("memory.empty")}</p>}
           {inventory.entries.map((entry) => <article key={entry.citation.entry_id} className="memory-entry">
             <p>{entry.text}</p>
-            <details><summary>Saved evidence · version {entry.version}</summary><pre>{JSON.stringify(entry.citation, null, 2)}</pre></details>
+            <details><summary>{t("memory.savedEvidence", { version: entry.version })}</summary><pre>{JSON.stringify(entry.citation, null, 2)}</pre></details>
           </article>)}
         </div>
-        <details className="scope-details"><summary>Project scope</summary><code>{inventory.scope_id}</code></details>
+        <details className="scope-details"><summary>{t("memory.scope")}</summary><code>{inventory.scope_id}</code></details>
       </>}
-      {busy && <p role="status">Connecting to PowerContext…</p>}
+      {busy && <p role="status">{t("memory.connecting")}</p>}
       {notice && <p role="status" className="success-text">{notice}</p>}
       {error && <p role="alert" className="error-text">{error}</p>}
     </section>
