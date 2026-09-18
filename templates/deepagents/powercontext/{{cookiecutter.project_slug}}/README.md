@@ -125,6 +125,11 @@ agents' final answer, and stream errors. The protocol projections (raw events, s
 sub-agent and tool lifecycles) are consumed and discarded, so a run ships kilobytes instead of
 megabytes to the browser.
 
+Every model call in a run recalls against the run's original question. A delegated sub-agent task is a
+long, model-written paragraph that PowerContext's full-text search frequently fails to match, which
+used to surface as a confusing `0 bytes / empty` recall even though the project memory existed.
+Scoping recall to the original question keeps the coordinator and the researcher on the same evidence.
+
 The browser interface is bilingual. The language button in the header switches every label between
 English and Simplified Chinese and stores the choice in `localStorage`; the frontend test suite covers
 both languages.

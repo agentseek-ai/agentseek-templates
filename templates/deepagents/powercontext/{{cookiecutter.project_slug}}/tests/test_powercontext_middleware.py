@@ -13,10 +13,13 @@ from {{ cookiecutter.project_slug }}.powercontext_middleware import (
     POWERCONTEXT_RETRIEVAL_TOOL_CALL_ID,
     POWERCONTEXT_RETRIEVAL_TOOL_NAME,
     _latest_user_query,
+    _recall_query,
     _with_context,
     powercontext_middleware,
     prepare_context,
     recall_options,
+    reset_recall_query,
+    set_recall_query,
 )
 from langchain.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
@@ -66,6 +69,21 @@ def test_latest_user_query_ignores_assistant_and_tool_messages() -> None:
     ]
 
     assert _latest_user_query(messages) == "Use the current user request for recall."
+
+
+def test_run_scoped_query_overrides_the_delegated_task_for_recall() -> None:
+    delegated_task = [HumanMessage(content="A long delegated task the server cannot match.")]
+
+    assert _recall_query(delegated_task) == "A long delegated task the server cannot match."
+
+    token = set_recall_query("What is the release plan for Project Phoenix?")
+    try:
+        assert _recall_query(delegated_task) == "What is the release plan for Project Phoenix?"
+        assert _latest_user_query(delegated_task) == "A long delegated task the server cannot match."
+    finally:
+        reset_recall_query(token)
+
+    assert _recall_query(delegated_task) == "A long delegated task the server cannot match."
 
 
 @pytest.mark.anyio

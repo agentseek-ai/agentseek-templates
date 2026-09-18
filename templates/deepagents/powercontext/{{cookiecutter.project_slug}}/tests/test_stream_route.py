@@ -94,6 +94,14 @@ class PowerContextFakeGraph(FakeGraph):
         return await super().astream_events(input, config=config, version=version)
 
 
+class RecallQueryFakeGraph(FakeGraph):
+    seen_query: str | None = None
+
+    async def astream_events(self, input: dict[str, Any], *, config: Any, version: str) -> FakeRun:
+        self.seen_query = powercontext_middleware._recall_query([])
+        return await super().astream_events(input, config=config, version=version)
+
+
 class FailingGraph:
     async def astream_events(self, input: dict[str, Any], *, config: Any, version: str) -> FakeRun:
         raise RuntimeError("local provider unavailable")
@@ -172,6 +180,20 @@ def test_stream_forwards_powercontext_recall_events(monkeypatch: pytest.MonkeyPa
         "scope_id": "scope-1",
         "content": "evidence",
     }
+
+
+def test_stream_scopes_recall_to_the_original_user_question(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_graph = RecallQueryFakeGraph()
+    monkeypatch.setattr(routes, "graph", fake_graph)
+    response = TestClient(routes.app).post(
+        "/custom/stream",
+        json={"thread_id": "recall-query", "messages": [{"role": "user", "content": "What is the release plan?"}]},
+    )
+
+    assert response.status_code == 200
+    assert fake_graph.seen_query == "What is the release plan?"
+    # The run-scoped question must not leak into later requests.
+    assert powercontext_middleware._recall_query([]) == ""
 
 
 def test_stream_returns_structured_error_event(monkeypatch: pytest.MonkeyPatch) -> None:

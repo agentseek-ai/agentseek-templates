@@ -17,6 +17,10 @@ from .project_memory import TIMEOUT_SECONDS, open_client, resolve_scope
 
 logger = logging.getLogger(__name__)
 recall_options: ContextVar[tuple[bool, int | None]] = ContextVar("recall_options", default=(True, None))
+# The run's original question. Every model call in the run recalls the same
+# evidence, so a delegated sub-agent task cannot turn recall into a confusing
+# ``empty`` result.
+recall_query: ContextVar[str | None] = ContextVar("recall_query", default=None)
 
 _event_sink: ContextVar[Callable[[dict[str, Any]], Awaitable[None]] | None] = ContextVar(
     "powercontext_event_sink", default=None
@@ -41,6 +45,14 @@ def reset_event_sink(token: object) -> None:
     _event_sink.reset(token)  # type: ignore[arg-type]
 
 
+def set_recall_query(value: str | None):
+    return recall_query.set(value)
+
+
+def reset_recall_query(token: object) -> None:
+    recall_query.reset(token)  # type: ignore[arg-type]
+
+
 def _text(message: Any) -> str:
     content = getattr(message, "content", message)
     return content if isinstance(content, str) else str(content)
@@ -53,9 +65,23 @@ def _latest_user_query(messages: list[Any]) -> str:
     return ""
 
 
+def _recall_query(messages: list[Any]) -> str:
+    """Return the run-scoped question, falling back to the latest user message.
+
+    A delegated sub-agent task is a long, model-written paragraph. PowerContext's
+    full-text search frequently fails to match it, which surfaced as a confusing
+    ``0 bytes / empty`` recall even though the project memory existed. The
+    run-scoped question keeps every model call on the same, matchable evidence.
+    """
+    override = recall_query.get()
+    if override and override.strip():
+        return override.strip()
+    return _latest_user_query(messages)
+
+
 async def prepare_context(request: ModelRequest) -> tuple[str | None, dict[str, Any]]:
     enabled, requested_budget = recall_options.get()
-    query = _latest_user_query(list(request.messages))
+    query = _recall_query(list(request.messages))
     if not enabled or not query.strip():
         status = {"status": "disabled" if not enabled else "skipped", "content_bytes": 0}
         await _publish(status)

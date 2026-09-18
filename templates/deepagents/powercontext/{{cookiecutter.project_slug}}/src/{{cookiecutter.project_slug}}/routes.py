@@ -21,7 +21,13 @@ from pydantic import BaseModel, Field
 
 from .agent import stream_graph as graph
 from .event_adapter import error_event, message_event, powercontext_event
-from .powercontext_middleware import recall_options, reset_event_sink, set_event_sink
+from .powercontext_middleware import (
+    recall_options,
+    reset_event_sink,
+    reset_recall_query,
+    set_event_sink,
+    set_recall_query,
+)
 from .project_memory import router as memory_router
 
 app = FastAPI(title="{{ cookiecutter.project_name }} Event Streaming")
@@ -65,6 +71,15 @@ async def _consume_messages(
         await queue.put(message_event(source=source, path=path, text=await _text(message.text)))
 
 
+def _request_query(messages: list[dict[str, Any]]) -> str:
+    """Return the run's original user question, used to scope every recall."""
+    for message in reversed(messages):
+        if str(message.get("role", "")).lower() == "user":
+            content = message.get("content", "")
+            return content if isinstance(content, str) else str(content)
+    return ""
+
+
 async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str, Any] | None]) -> None:
     try:
 
@@ -73,6 +88,7 @@ async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str,
 
         event_token = set_event_sink(publish_context)
         recall_token = recall_options.set((request.recall_enabled, request.max_bytes))
+        query_token = set_recall_query(_request_query(request.messages))
         config = {"configurable": {"thread_id": request.thread_id}}
         run = await graph.astream_events({"messages": request.messages}, config=config, version="v3")
         # Draining the message projection drives the run to completion and lets
@@ -85,6 +101,8 @@ async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str,
             reset_event_sink(event_token)
         if "recall_token" in locals():
             recall_options.reset(recall_token)
+        if "query_token" in locals():
+            reset_recall_query(query_token)
         await queue.put(None)
 
 
