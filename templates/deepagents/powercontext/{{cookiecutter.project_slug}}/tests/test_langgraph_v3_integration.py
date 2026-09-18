@@ -65,10 +65,8 @@ def test_real_deepagents_graph_reaches_v3_projection_route(monkeypatch) -> None:
     events = [
         json.loads(line.removeprefix("data: ")) for line in response.text.splitlines() if line.startswith("data: ")
     ]
-    assert {event["kind"] for event in events} >= {"message", "values", "raw", "output"}
-    output_events = [event for event in events if event["kind"] == "output"]
-    assert output_events
-    assert output_events[-1]["phase"] == "completed"
+    assert {event["kind"] for event in events} == {"message"}
+    assert any(event["text"] == "offline answer" for event in events)
     assert "bound method" not in response.text
     assert "AsyncGraphRunStream.output" not in response.text
 

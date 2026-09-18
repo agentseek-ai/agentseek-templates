@@ -12,7 +12,7 @@ os.environ.setdefault("OPENAI_API_KEY", "test-key")
 os.environ.setdefault("AGENTSEEK_MODEL_PROVIDER", "openai")
 os.environ.setdefault("AGENTSEEK_MODEL", "gpt-4.1-mini")
 
-from {{ cookiecutter.project_slug }} import routes  # noqa: E402
+from {{ cookiecutter.project_slug }} import powercontext_middleware, routes  # noqa: E402
 from {{ cookiecutter.project_slug }}.routes import _resolve  # noqa: E402
 
 
@@ -52,6 +52,8 @@ class FakeSubagent:
 
 
 class FakeRun:
+    """Exposes every v3 projection so the route can prove it discards most of them."""
+
     messages = AsyncItems([FakeMessage("coordinator result")])
     tool_calls = AsyncItems([FakeToolCall()])
     subagents = AsyncItems([FakeSubagent()])
@@ -84,19 +86,17 @@ class FakeGraph:
         return FakeRun()
 
 
+class PowerContextFakeGraph(FakeGraph):
+    async def astream_events(self, input: dict[str, Any], *, config: Any, version: str) -> FakeRun:
+        await powercontext_middleware._publish(
+            {"status": "ready", "content_bytes": 12, "max_bytes": 8000, "scope_id": "scope-1", "content": "evidence"}
+        )
+        return await super().astream_events(input, config=config, version=version)
+
+
 class FailingGraph:
     async def astream_events(self, input: dict[str, Any], *, config: Any, version: str) -> FakeRun:
         raise RuntimeError("local provider unavailable")
-
-
-class OutputFailRun(FakeRun):
-    async def output(self) -> dict[str, list[str]]:
-        raise RuntimeError("output projection unavailable")
-
-
-class OutputFailGraph:
-    async def astream_events(self, input: dict[str, Any], *, config: Any, version: str) -> OutputFailRun:
-        return OutputFailRun()
 
 
 def sse_events(body: str) -> list[dict[str, Any]]:
@@ -125,7 +125,7 @@ def test_custom_health_is_public() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_stream_projects_all_v3_channels_and_preserves_thread_config(
+def test_stream_returns_only_the_answer_and_discards_protocol_projections(
     client: tuple[TestClient, FakeGraph],
 ) -> None:
     test_client, fake_graph = client
@@ -143,21 +143,35 @@ def test_stream_projects_all_v3_channels_and_preserves_thread_config(
             "version": "v3",
         }
     ]
+    assert sse_events(response.text) == [
+        {
+            "kind": "message",
+            "source": "coordinator",
+            "path": [],
+            "text": "coordinator result",
+            "final": False,
+        }
+    ]
+
+
+def test_stream_forwards_powercontext_recall_events(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(routes, "graph", PowerContextFakeGraph())
+    response = TestClient(routes.app).post(
+        "/custom/stream",
+        json={"thread_id": "recall-thread", "messages": [{"role": "user", "content": "recall"}]},
+    )
+
+    assert response.status_code == 200
     events = sse_events(response.text)
-    assert {event["kind"] for event in events} == {
-        "message",
-        "subagent",
-        "tool_call",
-        "values",
-        "output",
-        "raw",
+    assert [event["kind"] for event in events] == ["powercontext", "message"]
+    assert events[0] == {
+        "kind": "powercontext",
+        "status": "ready",
+        "content_bytes": 12,
+        "max_bytes": 8000,
+        "scope_id": "scope-1",
+        "content": "evidence",
     }
-    assert any(event.get("source") == "coordinator" for event in events if event["kind"] == "message")
-    assert any(event.get("path") == ["researcher:fake"] for event in events if event["kind"] == "subagent")
-    assert any(event.get("phase") == "completed" for event in events if event["kind"] == "tool_call")
-    assert any(event.get("sequence") == 7 for event in events if event["kind"] == "raw")
-    output_events = [event for event in events if event["kind"] == "output"]
-    assert output_events == [{"kind": "output", "output": {"messages": ["final"]}, "phase": "completed"}]
 
 
 def test_stream_returns_structured_error_event(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -171,24 +185,6 @@ def test_stream_returns_structured_error_event(monkeypatch: pytest.MonkeyPatch) 
     assert sse_events(response.text) == [
         {"kind": "error", "message": "Event stream failed: local provider unavailable"}
     ]
-
-
-def test_output_method_is_called_and_output_failure_is_structured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(routes, "graph", OutputFailGraph())
-    response = TestClient(routes.app).post(
-        "/custom/stream",
-        json={"thread_id": "output-failure-thread", "messages": [{"role": "user", "content": "output failure"}]},
-    )
-
-    assert response.status_code == 200
-    assert {
-        "kind": "output",
-        "output": None,
-        "phase": "failed",
-        "error": "output projection unavailable",
-    } in sse_events(response.text)
 
 
 def test_stream_reuses_the_same_thread_id_for_follow_up_requests(

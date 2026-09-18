@@ -13,7 +13,8 @@ The template includes:
 - A three-second recall deadline, fail-open model execution, and request-local context injection.
 - A bilingual (English / Simplified Chinese) interface with a header language button that switches
   every label and remembers the reader's choice.
-- The underlying Deep Agents v3 messages, tool calls, sub-agent lifecycle, and optional protocol/state views.
+- A focused answer view: the browser shows only the recalled PowerContext evidence and the agents'
+  final answer, while the route consumes and discards the v3 protocol projections.
 
 ## Try it
 

@@ -115,11 +115,15 @@ Scope/Memory API used here. The earlier `0.1.0` package does not expose the Scop
 
 ## Runtime and verification
 
-The custom route uses Deep Agents `0.6.12`, the AgentSeek API runtime, and the documented v3
-projections. `uv run agentseek-api dev` serves the `streaming` graph, the custom FastAPI routes, and
-the `/health` endpoint used by the lifecycle check. The researcher calls `release_checklist`, a
-deterministic local checklist that contains no saved Phoenix decisions. Both agents have recall
-middleware. Protocol and state details remain available behind **Show protocol and state details**.
+The custom route uses Deep Agents `0.6.12` and the AgentSeek API runtime. `uv run agentseek-api dev`
+serves the `streaming` graph, the custom FastAPI routes, and the `/health` endpoint used by the
+lifecycle check. The researcher calls `release_checklist`, a deterministic local checklist that
+contains no saved Phoenix decisions. Both agents have recall middleware.
+
+The route drives the documented v3 run stream but forwards only the PowerContext recall events, the
+agents' final answer, and stream errors. The protocol projections (raw events, state snapshots,
+sub-agent and tool lifecycles) are consumed and discarded, so a run ships kilobytes instead of
+megabytes to the browser.
 
 The browser interface is bilingual. The language button in the header switches every label between
 English and Simplified Chinese and stores the choice in `localStorage`; the frontend test suite covers

@@ -1,11 +1,18 @@
-"""Custom SSE route for the documented Deep Agents v3 projections."""
+"""Custom SSE route that streams the recalled context and the answer.
+
+The route still drives the documented Deep Agents v3 run stream, but it only
+forwards the PowerContext recall events and the agents' messages. The protocol
+projections (raw events, state snapshots, sub-agent and tool lifecycles) are
+consumed and discarded so a run does not ship megabytes of protocol data to the
+browser.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import inspect
 import json
-from collections.abc import AsyncIterator, Iterable, Mapping
+from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import FastAPI
@@ -13,16 +20,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from .agent import stream_graph as graph
-from .event_adapter import (
-    error_event,
-    message_event,
-    output_event,
-    powercontext_event,
-    raw_event,
-    subagent_event,
-    tool_event,
-    values_event,
-)
+from .event_adapter import error_event, message_event, powercontext_event
 from .powercontext_middleware import recall_options, reset_event_sink, set_event_sink
 from .project_memory import router as memory_router
 
@@ -60,70 +58,11 @@ async def _text(value: Any) -> str:
     return str(resolved or "")
 
 
-async def _iterate(value: Any) -> AsyncIterator[Any]:
-    if hasattr(value, "__aiter__"):
-        async for item in value:
-            yield item
-    else:
-        for item in value if isinstance(value, Iterable) and not isinstance(value, (str, bytes)) else [value]:
-            yield item
-
-
 async def _consume_messages(
     run: Any, queue: asyncio.Queue[dict[str, Any] | None], *, source: str, path: list[str]
 ) -> None:
     async for message in run.messages:
         await queue.put(message_event(source=source, path=path, text=await _text(message.text)))
-
-
-async def _consume_tools(
-    run: Any, queue: asyncio.Queue[dict[str, Any] | None], *, source: str, path: list[str]
-) -> None:
-    async for call in run.tool_calls:
-        name = await _resolve(call.tool_name)
-        input_value = await _resolve(call.input)
-        await queue.put(tool_event(phase="started", source=source, path=path, name=name, input_value=input_value))
-        async for delta in _iterate(call.output_deltas):
-            await queue.put(tool_event(phase="delta", source=source, path=path, name=name, delta=await _resolve(delta)))
-        completed = await _resolve(call.completed)
-        error = await _resolve(call.error)
-        output = await _resolve(call.output)
-        phase = "failed" if error is not None else "completed" if completed else "in_progress"
-        await queue.put(
-            tool_event(
-                phase=phase,
-                source=source,
-                path=path,
-                name=name,
-                output=output,
-                error=error,
-            )
-        )
-
-
-async def _consume_subagent(run: Any, queue: asyncio.Queue[dict[str, Any] | None]) -> None:
-    name = await _resolve(run.name)
-    path = [str(part) for part in await _resolve(run.path)]
-    status = await _resolve(run.status)
-    await queue.put(subagent_event(phase="started", name=name, path=path, status=status))
-    nested_tasks: list[asyncio.Task[None]] = []
-
-    async def consume_nested() -> None:
-        async for nested in run.subagents:
-            nested_tasks.append(asyncio.create_task(_consume_subagent(nested, queue)))
-        if nested_tasks:
-            await asyncio.gather(*nested_tasks)
-
-    try:
-        await asyncio.gather(
-            _consume_messages(run, queue, source="subagent", path=path),
-            _consume_tools(run, queue, source="subagent", path=path),
-            consume_nested(),
-        )
-        final_status = await _resolve(run.status)
-        await queue.put(subagent_event(phase="completed", name=name, path=path, status=final_status))
-    except Exception as exc:
-        await queue.put(subagent_event(phase="failed", name=name, path=path, status=f"failed: {exc}"))
 
 
 async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str, Any] | None]) -> None:
@@ -136,50 +75,9 @@ async def _produce_events(request: StreamRequest, queue: asyncio.Queue[dict[str,
         recall_token = recall_options.set((request.recall_enabled, request.max_bytes))
         config = {"configurable": {"thread_id": request.thread_id}}
         run = await graph.astream_events({"messages": request.messages}, config=config, version="v3")
-        subagent_tasks: list[asyncio.Task[None]] = []
-
-        async def consume_subagents() -> None:
-            async for subagent in run.subagents:
-                subagent_tasks.append(asyncio.create_task(_consume_subagent(subagent, queue)))
-            if subagent_tasks:
-                await asyncio.gather(*subagent_tasks)
-
-        async def consume_raw() -> None:
-            async for event in run:
-                if not isinstance(event, Mapping):
-                    continue
-                params = event.get("params") or {}
-                if not isinstance(params, Mapping):
-                    continue
-                await queue.put(
-                    raw_event(
-                        sequence=event.get("seq"),
-                        method=event.get("method", "unknown"),
-                        namespace=params.get("namespace", []),
-                        data=params.get("data"),
-                    )
-                )
-
-        async def consume_values() -> None:
-            async for snapshot in run.values:
-                await queue.put(values_event(snapshot=snapshot))
-
-        async def consume_output() -> None:
-            try:
-                final_output = await _resolve(run.output)
-            except Exception as exc:
-                await queue.put(output_event(phase="failed", error=str(exc)))
-            else:
-                await queue.put(output_event(output=final_output, phase="completed"))
-
-        await asyncio.gather(
-            _consume_messages(run, queue, source="coordinator", path=[]),
-            _consume_tools(run, queue, source="coordinator", path=[]),
-            consume_subagents(),
-            consume_values(),
-            consume_raw(),
-            consume_output(),
-        )
+        # Draining the message projection drives the run to completion and lets
+        # the PowerContext middleware publish its recall events through the sink.
+        await _consume_messages(run, queue, source="coordinator", path=[])
     except Exception as exc:
         await queue.put(error_event(message=f"Event stream failed: {exc}"))
     finally:

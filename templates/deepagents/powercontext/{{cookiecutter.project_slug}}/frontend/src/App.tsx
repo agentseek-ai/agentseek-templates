@@ -3,8 +3,6 @@ import EventTimeline, { type StreamEvent } from "./EventTimeline";
 import MemoryPanel from "./MemoryPanel";
 import { I18nProvider, useI18n } from "./i18n";
 
-const VISIBLE_EVENT_KINDS = ["powercontext", "message", "error"];
-
 async function readSse(response: Response, onEvent: (event: StreamEvent) => void): Promise<void> {
   if (!response.ok || !response.body) throw new Error(`Streaming request failed (${response.status})`);
   const reader = response.body.getReader();
@@ -47,9 +45,12 @@ function AppShell() {
   const [recallEnabled, setRecallEnabled] = useState(true);
   const [maxBytes, setMaxBytes] = useState(8000);
   const [lastQuestion, setLastQuestion] = useState("");
-  // Only the recalled PowerContext evidence and the agents' answer are shown;
-  // protocol projections (raw, values, sub-agent and tool events) stay hidden.
-  const visibleEvents = events.filter((event) => VISIBLE_EVENT_KINDS.includes(event.kind));
+  // Show the recalled PowerContext evidence and stream errors, plus only the
+  // final answer. The backend already withholds the v3 protocol projections.
+  const lastMessageIndex = events.reduce((last, event, index) => (event.kind === "message" ? index : last), -1);
+  const visibleEvents = events.filter(
+    (event, index) => index === lastMessageIndex || event.kind === "powercontext" || event.kind === "error",
+  );
   const demoQuestion = t("demo.question");
 
   function newConversation() {
