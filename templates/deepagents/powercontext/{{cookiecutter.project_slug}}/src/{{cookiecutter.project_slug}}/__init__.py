@@ -1,1 +1,1 @@
-"""DeepAgents PowerContext context continuity showcase."""
+"""Deep Agents PowerContext context continuity showcase."""

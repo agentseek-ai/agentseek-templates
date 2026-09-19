@@ -1,4 +1,4 @@
-"""Optional real HTTP/SQLite Memory checks; no model calls or fabricated recall."""
+"""Optional real HTTP/database Memory checks; no model calls or fabricated recall."""
 
 from __future__ import annotations
 

@@ -37,9 +37,12 @@ explicitly saved Memory. The scenario is an illustrative demonstration, not a be
 **Create project memory** creates a Scope and binds `POWERCONTEXT_PROJECT_KEY` (the project slug
 by default) through the public Scope API. Use distinct project keys for independent projects.
 
-The generated SDK dependency is pinned to PowerContext commit
-`04b780cd51b603736a83d4ce6bc43d27eb6e01a4`; the old `0.1.0` package has no Scope binding API.
-The generated README includes matching Server installation, provider settings, and verification commands.
+The generated SDK and Server use PowerContext **1.0.0**, the latest stable PyPI release verified on
+2026-09-19. It includes the required Scope binding API, replacing the Git commit dependency.
+The generated `.env` selects embedded seekdb for PowerContext Memory, with a data directory separate
+from AgentSeek API checkpoints. `agentseek task powercontext` runs the released Server with the native
+seekdb extra and a compatible SQL driver in its own environment. Keep that terminal running alongside
+`agentseek dev`. The generated README includes provider settings and live verification commands.
 
 Only explicit user saves write Memory. Automatic transcript capture, Handoff, Work Contract,
 Experience review, and Task Outcome are outside this template. Historical context is untrusted and
@@ -51,8 +54,9 @@ and Scope selection. Shared deployment needs application authentication and auth
 shows project Memory and the context supplied to the model, so it belongs within that same access boundary.
 
 The subtree is self-contained and declares lifecycle version 2. It retains Deep Agents `0.6.12` and
-serves the graph through the AgentSeek API runtime with embedded SeekDB persistence. See the generated
-README for the full tour.
+serves the graph through the AgentSeek API runtime. PowerContext project Memory and API checkpoints
+each use their own embedded seekdb database. OpenAI-compatible streamed tool calls retain their names
+when a gateway sends empty continuation fields. See the generated README for the full tour.
 
 - [PowerContext](https://github.com/oceanbase/powercontext)
 - [Deep Agents Event Streaming](https://docs.langchain.com/oss/python/deepagents/event-streaming)

@@ -1,4 +1,4 @@
-"""A deliberately observable DeepAgents graph for the streaming template."""
+"""A deliberately observable Deep Agents graph for the streaming template."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.state import CompiledStateGraph
 
+from .openai_compat import OpenAICompatibleChatModel
 from .powercontext_middleware import powercontext_middleware
 
 load_dotenv()
@@ -85,7 +86,11 @@ elif MODEL_PROVIDER == "google_genai":
     if _nonempty_env("GOOGLE_API_BASE"):
         MODEL_INIT_KWARGS["base_url"] = _nonempty_env("GOOGLE_API_BASE")
 
-model = init_chat_model(**MODEL_INIT_KWARGS)
+model = (
+    OpenAICompatibleChatModel(**{key: value for key, value in MODEL_INIT_KWARGS.items() if key != "model_provider"})
+    if MODEL_PROVIDER == "openai"
+    else init_chat_model(**MODEL_INIT_KWARGS)
+)
 
 researcher = {
     "name": "researcher",

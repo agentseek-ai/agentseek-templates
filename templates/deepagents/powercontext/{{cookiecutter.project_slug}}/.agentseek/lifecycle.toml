@@ -52,6 +52,16 @@ required = false
 default = "{{ cookiecutter.powercontext_scope }}"
 description = "Optional existing Server-owned Scope ID; otherwise initialize project memory in the UI."
 
+[env.POWERCONTEXT_SERVER_DATABASE_KIND]
+required = true
+default = "seekdb"
+description = "PowerContext Server storage backend; seekdb runs embedded locally."
+
+[env.POWERCONTEXT_SERVER_DATABASE_PATH]
+required = true
+default = "~/.agentseek/{{ cookiecutter.project_slug }}/powercontext-seekdb"
+description = "PowerContext Memory database directory, separate from AgentSeek API checkpoints."
+
 [env.POWERCONTEXT_PROJECT_KEY]
 required = true
 default = "{{ cookiecutter.project_slug }}"
@@ -69,7 +79,7 @@ tech = "agentseek-api"
 kind = "api"
 display = "advanced"
 primary = false
-description = "AgentSeek API runtime that runs the DeepAgents powercontext graph."
+description = "AgentSeek API runtime that runs the Deep Agents powercontext graph."
 links = { docs = "https://docs.langchain.com/oss/python/langgraph/overview", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
 
 [services.frontend]
@@ -110,3 +120,7 @@ command = ["uv", "sync"]
 [tasks.frontend]
 description = "Install frontend dependencies."
 command = ["npm", "install", "--prefix", "frontend"]
+
+[tasks.powercontext]
+description = "Run PowerContext 1.0.0 with embedded seekdb in a separate terminal."
+command = ["uv", "tool", "run", "--python", "3.12", "--from", "powercontext[cli,server,seekdb]==1.0.0", "--with", "pymysql>=1.1.3,<1.2", "powercontext", "server", "run", "--env-file", ".env"]

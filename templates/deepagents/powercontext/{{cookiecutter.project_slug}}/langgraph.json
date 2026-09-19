@@ -8,6 +8,7 @@
     "app": "{{ cookiecutter.project_slug }}.routes:app",
     "cors": {
       "allow_origins": [
+        "https://smith.langchain.com",
         "http://127.0.0.1:{{ cookiecutter.frontend_port }}",
         "http://localhost:{{ cookiecutter.frontend_port }}",
         "http://[::1]:{{ cookiecutter.frontend_port }}"

@@ -1,4 +1,4 @@
-"""Fail-open PowerContext recall middleware for DeepAgents."""
+"""Fail-open PowerContext recall middleware for Deep Agents."""
 
 from __future__ import annotations
 

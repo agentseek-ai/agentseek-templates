@@ -1,4 +1,4 @@
-# {{ cookiecutter.project_name | replace("DeepAgents", "Deep Agents") }}
+# {{ cookiecutter.project_name }}
 
 Save a release decision, open a new conversation, and watch a Deep Agents coordinator and
 researcher use it through PowerContext. Turn recall off to compare a fresh run without that evidence.
@@ -14,17 +14,7 @@ your question.
 ## Run locally
 
 The generated app uses Python 3.12+, Node.js 22.12+ (or a Vite-compatible newer release), and uv.
-Install and start the matching PowerContext Server in its own terminal:
-
-```bash
-uv tool install "powercontext[cli,server] @ git+https://github.com/oceanbase/powercontext.git@04b780cd51b603736a83d4ce6bc43d27eb6e01a4"
-powercontext server run
-```
-
-The default local Server uses persistent SQLite. Explicit Memory writes and full-text recall need
-no generation or embedding model. Keep the Server running at `http://127.0.0.1:8000`.
-
-In the generated project:
+Embedded seekdb requires supported macOS or Linux. In the generated project:
 
 ```bash
 cp .env.example .env
@@ -32,17 +22,35 @@ cp frontend/.env.example frontend/.env
 # Edit .env: set the selected agent provider's API key and model.
 uv sync
 npm install --prefix frontend
-uv run agentseek-api dev --port {{ cookiecutter.langgraph_port }}
 ```
 
-Start the frontend in another terminal:
+Start PowerContext in its own terminal, from this same project directory:
 
 ```bash
+uv tool run --python 3.12 --from "powercontext[cli,server,seekdb]==1.0.0" \
+  --with "pymysql>=1.1.3,<1.2" \
+  powercontext server run --env-file .env
+```
+
+The supplied `.env` explicitly selects embedded seekdb for **PowerContext Memory**, using
+`~/.agentseek/{{ cookiecutter.project_slug }}/powercontext-seekdb`. This is separate from the AgentSeek
+API checkpoint directory. The `seekdb` extra installs the native runtime; PowerContext owns and starts
+it locally, so no database container or remote database is required. Do not omit `--env-file .env`:
+PowerContext's unconfigured default is SQLite. The driver constraint preserves the binary-escaping
+API required by aiomysql; PyMySQL 1.2 removes it and breaks Memory writes in this server version.
+
+Explicit Memory writes and full-text recall need no generation or embedding model. Keep the Server
+running at `http://127.0.0.1:8000`. Start the API and frontend in separate terminals:
+
+```bash
+uv run agentseek-api dev --port {{ cookiecutter.langgraph_port }}
+# In another terminal:
 npm run dev --prefix frontend
 ```
 
 Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. The same setup is available through
-`agentseek task sync`, `agentseek task frontend`, and `agentseek dev`.
+`agentseek task sync`, `agentseek task frontend`, `agentseek task powercontext` (keep this terminal
+running), and `agentseek dev` in another terminal.
 
 ## Five-minute demonstration
 
@@ -99,19 +107,23 @@ Experience review, and Task Outcome are separate PowerContext workflows, not fea
 | `POWERCONTEXT_SCOPE_ID` | empty | Optional existing Server-owned Scope ID, overriding the binding |
 | `POWERCONTEXT_TOKEN` | empty | Bare bearer token, read only by the backend |
 | `POWERCONTEXT_MAX_BYTES` | `8000` | Server request budget, 512–32768 UTF-8 bytes; the UI can lower it |
+| `POWERCONTEXT_SERVER_DATABASE_KIND` | `seekdb` | PowerContext Server storage; the Server starts seekdb embedded locally |
+| `POWERCONTEXT_SERVER_DATABASE_PATH` | `~/.agentseek/{{ cookiecutter.project_slug }}/powercontext-seekdb` | Durable PowerContext Memory directory; keep separate from the API database |
 | `AGENTSEEK_MODEL_PROVIDER` | `{{ cookiecutter.default_model_provider }}` | `openai`, `anthropic`, or `google_genai` |
 | `AGENTSEEK_MODEL` | `{{ cookiecutter.default_model }}` | Agent model identifier |
-| `SEEKDB_EMBED` | `true` | Use embedded SeekDB checkpoint persistence for the AgentSeek API runtime |
-| `SEEKDB_EMBED_DIR` | `~/.agentseek/{{ cookiecutter.project_slug }}/seekdb` | Embedded SeekDB data directory, kept outside the generated project |
-| `OCEANBASE_DB_NAME` | `test` | Embedded SeekDB database name |
+| `SEEKDB_EMBED` | `true` | Use embedded seekdb checkpoint persistence for the AgentSeek API runtime |
+| `SEEKDB_EMBED_DIR` | `~/.agentseek/{{ cookiecutter.project_slug }}/seekdb` | Embedded seekdb data directory, kept outside the generated project |
+| `OCEANBASE_DB_NAME` | `test` | Embedded seekdb database name |
 
 Use `OPENAI_API_BASE` for an OpenAI-compatible gateway. The browser never supplies a PowerContext
 URL, token, or Scope ID. A project key is a data boundary, not an authentication mechanism. This is
 a local development template; shared deployment needs application authentication and authorization
 in front of both stream and Memory routes.
 
-The client is pinned to PowerContext commit `04b780cd51b603736a83d4ce6bc43d27eb6e01a4`, matching the
-Scope/Memory API used here. The earlier `0.1.0` package does not expose the Scope binding API.
+The client and Server use **PowerContext 1.0.0**, the latest stable PyPI release verified on
+2026-09-19. It includes the Scope binding and Memory APIs used here, so no Git commit dependency is
+needed. The numeric release pin makes generated installations reproducible. When using an external
+Server, configure its own embedded seekdb backend and keep `POWERCONTEXT_URL` aligned with its address.
 
 ## Runtime and verification
 
@@ -124,6 +136,11 @@ The route drives the documented v3 run stream but forwards only the PowerContext
 agents' final answer, and stream errors. The protocol projections (raw events, state snapshots,
 sub-agent and tool lifecycles) are consumed and discarded, so a run ships kilobytes instead of
 megabytes to the browser.
+
+For OpenAI-compatible models, a narrow adapter normalizes empty tool-name continuation fields before
+LangChain's v3 bridge sees them. This preserves tool execution with gateways such as SiliconFlow while
+retaining model streaming. It does not patch installed dependencies or disable streaming. The regression
+test feeds the real OpenAI parser the gateway's chunk shape and verifies the checklist tool executes.
 
 Every model call in a run recalls against the run's original question. A delegated sub-agent task is a
 long, model-written paragraph that PowerContext's full-text search frequently fails to match, which
@@ -150,6 +167,10 @@ npm run build --prefix frontend
 # Optional real Server tests; creates isolated test Scopes in this Server:
 POWERCONTEXT_TEST_URL=http://127.0.0.1:8000 uv run pytest tests/test_project_memory_live.py
 ```
+
+The live tests verify durable writes, fresh recall, project isolation, disabled recall, and byte budgets
+against the running embedded seekdb Server. To verify restart persistence, save a decision, stop and
+restart only PowerContext with the same `.env`, then refresh Memory or start a fresh conversation.
 
 See [PowerContext](https://github.com/oceanbase/powercontext) and
 [Deep Agents event streaming](https://docs.langchain.com/oss/python/deepagents/event-streaming).

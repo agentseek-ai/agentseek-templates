@@ -19,7 +19,7 @@ from {{ cookiecutter.project_slug }}.agent import build_stream_graph  # noqa: E4
 
 
 class ToolCapableFakeModel(FakeListChatModel):
-    """Offline chat model that supports the tool-binding path used by DeepAgents."""
+    """Offline chat model that supports the tool-binding path used by Deep Agents."""
 
     def bind_tools(self, tools, *, tool_choice=None, **kwargs):  # type: ignore[no-untyped-def]
         return self

@@ -17,6 +17,7 @@ from agentseek.cli.lifecycle import normalize_lifecycle
 from agentseek.cli.lifecycle.authored import LifecycleSpecV2
 from agentseek.cli.lifecycle.spec import read_lifecycle_spec
 from cookiecutter.main import cookiecutter
+from dotenv import dotenv_values
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
@@ -521,10 +522,7 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     dependencies = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))["project"][
         "dependencies"
     ]
-    assert (
-        "powercontext[client] @ git+https://github.com/oceanbase/powercontext.git@04b780cd51b603736a83d4ce6bc43d27eb6e01a4"
-        in dependencies
-    )
+    assert "powercontext[client]==1.0.0" in dependencies
     env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
     assert "POWERCONTEXT_URL=http://127.0.0.1:8000" in env_example
     assert "POWERCONTEXT_SCOPE_ID=\n" in env_example
@@ -554,6 +552,7 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "Deep Agents model" in readme
     graph_config = json.loads((generated_path / "langgraph.json").read_text(encoding="utf-8"))
     assert graph_config["http"]["cors"]["allow_origins"] == [
+        "https://smith.langchain.com",
         "http://127.0.0.1:5175",
         "http://localhost:5175",
         "http://[::1]:5175",
@@ -587,7 +586,7 @@ def test_powercontext_template_starts_on_agentseek_api_with_bilingual_ui(tmp_pat
 
     env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
     assert "SEEKDB_EMBED=true" in env_example
-    assert "SEEKDB_EMBED_DIR=~/.agentseek/deepagents_powercontext/seekdb" in env_example
+    assert 'SEEKDB_EMBED_DIR="~/.agentseek/deepagents_powercontext/seekdb"' in env_example
     assert "OCEANBASE_DB_NAME=test" in env_example
     for name in ("SEEKDB_EMBED", "SEEKDB_EMBED_DIR", "OCEANBASE_DB_NAME"):
         assert name in lifecycle["env"]
@@ -900,11 +899,7 @@ def test_migrated_local_api_templates_declare_embedded_persistence(
     assert "SEEKDB_EMBED_DIR=" in env_example
     assert "OCEANBASE_DB_NAME=" in env_example
 
-    env_values = {
-        line.split("=", 1)[0]: line.split("=", 1)[1]
-        for line in env_example.splitlines()
-        if line and not line.startswith("#") and "=" in line
-    }
+    env_values = dotenv_values(generated_path / ".env.example")
     lifecycle_path = generated_path / ".agentseek" / "lifecycle.toml"
     lifecycle_text = lifecycle_path.read_text(encoding="utf-8")
     lifecycle = tomllib.loads(lifecycle_text)
