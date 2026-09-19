@@ -1,0 +1,89 @@
+name: Deep Agents PowerContext
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "templates/deepagents/powercontext/**"
+      - ".github/workflows/deepagents-powercontext.yml"
+  pull_request:
+    paths:
+      - "templates/deepagents/powercontext/**"
+      - ".github/workflows/deepagents-powercontext.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generated-seekdb-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: offline-test-key
+      AGENTSEEK_MODEL_PROVIDER: openai
+      AGENTSEEK_MODEL: offline-test-model
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - run: uv sync --frozen --dev
+      - name: Render the template
+        run: uv run cookiecutter templates/deepagents/powercontext --no-input --output-dir "${RUNNER_TEMP}/powercontext-render"
+      - name: Test streaming and Memory on embedded seekdb
+        working-directory: ${{ runner.temp }}/powercontext-render/deepagents_powercontext
+        env:
+          POWERCONTEXT_TEST_URL: http://127.0.0.1:8000
+          POWERCONTEXT_SERVER_DATABASE_PATH: ${{ runner.temp }}/powercontext-seekdb
+          POWERCONTEXT_HOME: ${{ runner.temp }}/powercontext-home
+        run: |
+          cp .env.example .env
+          uv sync --extra dev
+          # Use the generated task so the tested Server version and driver
+          # constraint cannot drift from the instructions users receive.
+          uv run python - <<'PY' > powercontext-server.log 2>&1 &
+          import os, tomllib
+          from pathlib import Path
+          command = tomllib.loads(Path(".agentseek/lifecycle.toml").read_text())["tasks"]["powercontext"]["command"]
+          os.execvp(command[0], command)
+          PY
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          uv run python - <<'PY'
+          import os, time, urllib.request
+          from pathlib import Path
+          for _ in range(180):
+              try:
+                  with urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=2) as response:
+                      if response.status == 200:
+                          break
+              except (OSError, TimeoutError):
+                  pass
+              time.sleep(1)
+          else:
+              raise SystemExit("PowerContext did not become ready on embedded seekdb")
+          assert (Path(os.environ["POWERCONTEXT_SERVER_DATABASE_PATH"]) / "run" / "sql.sock").is_socket(), "Expected the configured embedded seekdb socket"
+          PY
+          uv run python -m pytest -q
+      - name: Test and build the frontend
+        working-directory: ${{ runner.temp }}/powercontext-render/deepagents_powercontext/frontend
+        run: |
+          npm install
+          npm test
+          npm run build
+      - name: Upload Server log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: powercontext-seekdb-server
+          path: ${{ runner.temp }}/powercontext-render/deepagents_powercontext/powercontext-server.log
+          if-no-files-found: warn

@@ -17,6 +17,7 @@ from agentseek.cli.lifecycle import normalize_lifecycle
 from agentseek.cli.lifecycle.authored import LifecycleSpecV2
 from agentseek.cli.lifecycle.spec import read_lifecycle_spec
 from cookiecutter.main import cookiecutter
+from dotenv import dotenv_values
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
@@ -31,6 +32,7 @@ AGENTSEEK_API_CANONICAL_NAME = canonicalize_name("agentseek-api")
 MIGRATED_RUNTIME_TEMPLATES = {
     "deepagents/content-builder",
     "deepagents/mcp",
+    "deepagents/powercontext",
     "deepagents/research",
     "langchain/agentic-rag",
     "langchain/agentic-rag-hybrid",
@@ -44,6 +46,7 @@ MIGRATED_RUNTIME_TEMPLATES = {
 REVIEWER_LOCAL_RUNTIME_TEMPLATES = {
     "deepagents/content-builder",
     "deepagents/mcp",
+    "deepagents/powercontext",
     "deepagents/research",
     "langchain/agentic-rag-hybrid",
     "langchain/cli-remote",
@@ -54,6 +57,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "deepagents/content-builder": set(),
     "deepagents/default": {"agentseek-ag-ui", "agentseek-langchain"},
     "deepagents/mcp": set(),
+    "deepagents/powercontext": set(),
     "deepagents/research": set(),
     "deepagents/subagents-dynamic": set(),
     "deepagents/streaming": set(),
@@ -196,6 +200,30 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
         ),
     },
     "deepagents/streaming": {
+        "services": (
+            ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
+            (
+                "langgraph",
+                "api",
+                "advanced",
+                False,
+                ("process:langgraph",),
+                ("langgraph",),
+                ("api_docs", "docs", "studio"),
+            ),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:frontend:open",
+            "service:frontend:reference:docs",
+            "service:langgraph:copy",
+            "service:langgraph:reference:api_docs",
+            "service:langgraph:reference:docs",
+            "service:langgraph:reference:studio",
+        ),
+    },
+    "deepagents/powercontext": {
         "services": (
             ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
             (
@@ -489,6 +517,106 @@ def test_reviewed_contract_covers_every_registered_template() -> None:
     assert set(INDEX) == set(EXPECTED_CORE_DEPENDENCIES) == set(EXPECTED_NORMALIZED_TOPOLOGY)
 
 
+def test_powercontext_template_declares_observable_fail_open_integration(tmp_path: Path) -> None:
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/powercontext", tmp_path / "output", tmp_path)
+    dependencies = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "dependencies"
+    ]
+    assert "powercontext[client]==1.0.0" in dependencies
+    env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
+    assert "POWERCONTEXT_URL=http://127.0.0.1:8000" in env_example
+    assert "POWERCONTEXT_SCOPE_ID=\n" in env_example
+    assert "POWERCONTEXT_PROJECT_KEY=deepagents_powercontext" in env_example
+    assert "POWERCONTEXT_MAX_BYTES=8000" in env_example
+    lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["env"]["POWERCONTEXT_URL"]["default"] == "http://127.0.0.1:8000"
+    assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["default"] == ""
+    assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["required"] is False
+    assert lifecycle["env"]["POWERCONTEXT_MAX_BYTES"]["default"] == "8000"
+    middleware = (generated_path / "src" / generated_path.name / "powercontext_middleware.py").read_text(
+        encoding="utf-8"
+    )
+    assert "middleware=[powercontext_middleware]" in (
+        generated_path / "src" / generated_path.name / "agent.py"
+    ).read_text(encoding="utf-8")
+    agent = (generated_path / "src" / generated_path.name / "agent.py").read_text(encoding="utf-8")
+    assert '"middleware": [powercontext_middleware]' in agent
+    assert "fail-open" in middleware.lower()
+    assert "ToolMessage" in middleware
+    assert "POWERCONTEXT_RETRIEVAL_TOOL_NAME" in middleware
+    assert "POWERCONTEXT_POLICY" in middleware
+    assert "BEGIN_UNTRUSTED_POWERCONTEXT_CONTEXT" in middleware
+    assert "powercontext" in (generated_path / "frontend" / "src" / "EventTimeline.tsx").read_text(encoding="utf-8")
+    readme = (generated_path / "README.md").read_text(encoding="utf-8")
+    assert "PowerContext is an open-source context layer for AI agents" in readme
+    assert "Deep Agents model" in readme
+    graph_config = json.loads((generated_path / "langgraph.json").read_text(encoding="utf-8"))
+    assert graph_config["http"]["cors"]["allow_origins"] == [
+        "https://smith.langchain.com",
+        "http://127.0.0.1:5175",
+        "http://localhost:5175",
+        "http://[::1]:5175",
+    ]
+    assert "allow_origin_regex" not in graph_config["http"]["cors"]
+
+
+def test_powercontext_template_starts_on_agentseek_api_with_bilingual_ui(tmp_path: Path) -> None:
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/powercontext", tmp_path / "output", tmp_path)
+
+    lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["services"]["langgraph"]["tech"] == "agentseek-api"
+    assert lifecycle["services"]["langgraph"]["name"] == "AgentSeek API"
+    assert lifecycle["processes"]["langgraph"]["command"] == [
+        "uv",
+        "run",
+        "agentseek-api",
+        "dev",
+        "--port",
+        "2024",
+    ]
+    assert lifecycle["checks"]["langgraph"]["target"] == "http://127.0.0.1:2024/health"
+    assert "agentseek-api" not in lifecycle["tools"]["required"]
+
+    dependencies = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))["project"][
+        "dependencies"
+    ]
+    assert "agentseek-api[embedded]==0.2.3" in dependencies
+    assert "mcp>=1.27.1,<2" in dependencies
+    assert "langgraph-cli[inmem]>=0.4" not in dependencies
+
+    env_example = (generated_path / ".env.example").read_text(encoding="utf-8")
+    assert "SEEKDB_EMBED=true" in env_example
+    assert 'SEEKDB_EMBED_DIR="~/.agentseek/deepagents_powercontext/seekdb"' in env_example
+    assert "OCEANBASE_DB_NAME=test" in env_example
+    for name in ("SEEKDB_EMBED", "SEEKDB_EMBED_DIR", "OCEANBASE_DB_NAME"):
+        assert name in lifecycle["env"]
+
+    frontend = generated_path / "frontend" / "src"
+    i18n = (frontend / "i18n.tsx").read_text(encoding="utf-8")
+    assert "zh" in i18n
+    assert "中文" in i18n
+    assert "localStorage" in i18n
+    app = (frontend / "App.tsx").read_text(encoding="utf-8")
+    assert "language.switch" in app
+    assert "LanguageToggle" in app
+    assert "useI18n" in app
+    assert "New conversation" not in app
+    assert (frontend / "App.test.tsx").read_text(encoding="utf-8").count("新会话") >= 1
+
+
+def test_powercontext_memory_routes_survive_the_custom_app_merge(tmp_path: Path) -> None:
+    """AgentSeek API copies concrete custom-app routes and drops lazy include_router entries.
+
+    Recent FastAPI versions keep ``app.include_router`` behind a lazy
+    ``_IncludedRouter`` whose path is ``None``; the AgentSeek API custom-app merge
+    skips path-less entries, which silently removed every ``/custom/memory`` route.
+    """
+    generated_path = _render(TEMPLATES_ROOT / "deepagents/powercontext", tmp_path / "output", tmp_path)
+    routes_source = (generated_path / "src" / generated_path.name / "routes.py").read_text(encoding="utf-8")
+    assert "app.include_router(" not in routes_source
+    assert "app.router.routes.extend(memory_router.routes)" in routes_source
+
+
 def _render(
     template_root: Path,
     output_root: Path,
@@ -771,11 +899,7 @@ def test_migrated_local_api_templates_declare_embedded_persistence(
     assert "SEEKDB_EMBED_DIR=" in env_example
     assert "OCEANBASE_DB_NAME=" in env_example
 
-    env_values = {
-        line.split("=", 1)[0]: line.split("=", 1)[1]
-        for line in env_example.splitlines()
-        if line and not line.startswith("#") and "=" in line
-    }
+    env_values = dotenv_values(generated_path / ".env.example")
     lifecycle_path = generated_path / ".agentseek" / "lifecycle.toml"
     lifecycle_text = lifecycle_path.read_text(encoding="utf-8")
     lifecycle = tomllib.loads(lifecycle_text)

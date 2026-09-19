@@ -278,6 +278,10 @@ jobs:
             os: windows-latest
             id: mcp-windows
             database: sqlite
+          - template: deepagents/powercontext
+            os: ubuntu-latest
+            id: powercontext-linux
+            database: embedded
           - template: deepagents/research
             os: ubuntu-latest
             id: research-linux

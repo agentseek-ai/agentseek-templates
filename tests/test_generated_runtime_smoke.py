@@ -1703,6 +1703,7 @@ def test_profiles_cover_exact_retained_runtime_matrix() -> None:
     assert set(smoke.PROFILES) == {
         "deepagents/content-builder",
         "deepagents/mcp",
+        "deepagents/powercontext",
         "deepagents/research",
         "langchain/agentic-rag",
         "langchain/agentic-rag-hybrid",
@@ -1733,6 +1734,12 @@ def test_runtime_workflow_covers_every_retained_migration() -> None:
             "os": "windows-latest",
             "id": "mcp-windows",
             "database": "sqlite",
+        },
+        {
+            "template": "deepagents/powercontext",
+            "os": "ubuntu-latest",
+            "id": "powercontext-linux",
+            "database": "embedded",
         },
         {
             "template": "deepagents/research",
