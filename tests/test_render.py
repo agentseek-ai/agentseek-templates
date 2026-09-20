@@ -1709,7 +1709,7 @@ def test_rubric_generated_smoke_job_exercises_fresh_keyless_project() -> None:
     assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in job
     assert "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in job
     assert "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020" in job
-    assert "astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d" in job
+    assert "astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4" in job
     assert "cookiecutter templates/langchain/rubric" in job
     assert "cp .env.example .env" in job
     assert "uv sync --group test" in job
