@@ -95,8 +95,9 @@ PROFILES = {
         {"AGENTSEEK_MODEL_API_KEY": "smoke-model-api-key"},
     ),
     # PowerContext recall is fail-open, so the smoke run proceeds with
-    # ``status: unavailable`` while no PowerContext Server is running.
-    "deepagents/powercontext": SmokeProfile("streaming", CHAT_INPUT, {}),
+    # ``status: unavailable`` while no PowerContext Server is running. Autostart
+    # stays off so the smoke never provisions the embedded seekdb Server.
+    "deepagents/powercontext": SmokeProfile("streaming", CHAT_INPUT, {"POWERCONTEXT_AUTOSTART": "false"}),
     "deepagents/research": SmokeProfile(
         "research",
         CHAT_INPUT,

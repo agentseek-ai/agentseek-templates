@@ -5,6 +5,7 @@ import importlib.util
 import inspect
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -235,6 +236,7 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
                 ("langgraph",),
                 ("api_docs", "docs", "studio"),
             ),
+            ("powercontext", "api", "advanced", False, ("process:powercontext",), (), ()),
         ),
         "effects": {},
         "actions": (
@@ -245,6 +247,7 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
             "service:langgraph:reference:api_docs",
             "service:langgraph:reference:docs",
             "service:langgraph:reference:studio",
+            "service:powercontext:copy",
         ),
     },
     "deepagents/sandbox": {
@@ -514,6 +517,22 @@ def _registered_templates() -> list[tuple[str, Path]]:
     return [(key, TEMPLATES_ROOT / key) for key in sorted(INDEX)]
 
 
+@pytest.mark.parametrize(("template_key", "template_root"), _registered_templates(), ids=sorted(INDEX))
+def test_catalog_docs_only_reference_declared_lifecycle_tasks(template_key: str, template_root: Path) -> None:
+    """A doc that teaches a removed task sends users to a command that cannot run."""
+    spec_path = template_root / "{{cookiecutter.project_slug}}" / ".agentseek" / "lifecycle.toml"
+    declared = set(re.findall(r"^\[tasks\.([A-Za-z0-9_-]+)\]", spec_path.read_text(encoding="utf-8"), re.MULTILINE))
+    for doc in (
+        template_root / "README.md",
+        template_root / "{{cookiecutter.project_slug}}" / "README.md",
+    ):
+        if not doc.is_file():
+            continue
+        referenced = set(re.findall(r"agentseek\s+task\s+([A-Za-z0-9][A-Za-z0-9_-]*)", doc.read_text(encoding="utf-8")))
+        undeclared = referenced - declared
+        assert not undeclared, f"{doc} references undeclared lifecycle task(s): {sorted(undeclared)}"
+
+
 def test_reviewed_contract_covers_every_registered_template() -> None:
     assert set(INDEX) == set(EXPECTED_CORE_DEPENDENCIES) == set(EXPECTED_NORMALIZED_TOPOLOGY)
     assert set(AGENTSEEK_API_VERSIONS) <= set(INDEX)
@@ -530,11 +549,23 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "POWERCONTEXT_SCOPE_ID=\n" in env_example
     assert "POWERCONTEXT_PROJECT_KEY=deepagents_powercontext" in env_example
     assert "POWERCONTEXT_MAX_BYTES=8000" in env_example
+    assert "POWERCONTEXT_AUTOSTART=true" in env_example
     lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["processes"]["powercontext"]["command"] == [
+        "uv",
+        "run",
+        "python",
+        "scripts/powercontext_server.py",
+    ]
+    assert (generated_path / "scripts" / "powercontext_server.py").is_file()
+    assert (generated_path / "tests" / "test_powercontext_server.py").is_file()
+    assert "powercontext" not in lifecycle.get("tasks", {})
     assert lifecycle["env"]["POWERCONTEXT_URL"]["default"] == "http://127.0.0.1:8000"
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["default"] == ""
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["required"] is False
     assert lifecycle["env"]["POWERCONTEXT_MAX_BYTES"]["default"] == "8000"
+    assert lifecycle["env"]["POWERCONTEXT_AUTOSTART"]["default"] == "true"
+    assert lifecycle["env"]["POWERCONTEXT_AUTOSTART"]["required"] is False
     middleware = (generated_path / "src" / generated_path.name / "powercontext_middleware.py").read_text(
         encoding="utf-8"
     )
