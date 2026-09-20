@@ -531,6 +531,13 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "POWERCONTEXT_PROJECT_KEY=deepagents_powercontext" in env_example
     assert "POWERCONTEXT_MAX_BYTES=8000" in env_example
     lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["tasks"]["powercontext"]["command"] == [
+        "uv",
+        "run",
+        "python",
+        "scripts/ensure_powercontext.py",
+    ]
+    assert (generated_path / "scripts" / "ensure_powercontext.py").is_file()
     assert lifecycle["env"]["POWERCONTEXT_URL"]["default"] == "http://127.0.0.1:8000"
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["default"] == ""
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["required"] is False

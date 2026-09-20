@@ -24,7 +24,9 @@ uv sync
 npm install --prefix frontend
 ```
 
-Start PowerContext in its own terminal, from this same project directory:
+Start a compatible PowerContext Server before starting this project. Keep the
+Server running and reuse it across instance restarts; it is intentionally an
+external prerequisite rather than an automatically executed lifecycle task:
 
 ```bash
 uv tool run --python 3.12 --from "powercontext[cli,server,seekdb]==1.0.0" \
@@ -35,7 +37,7 @@ uv tool run --python 3.12 --from "powercontext[cli,server,seekdb]==1.0.0" \
 The supplied `.env` explicitly selects embedded seekdb for **PowerContext Memory**, using
 `~/.agentseek/{{ cookiecutter.project_slug }}/powercontext-seekdb`. This is separate from the AgentSeek
 API checkpoint directory. The `seekdb` extra installs the native runtime; PowerContext owns and starts
-it locally, so no database container or remote database is required. Do not omit `--env-file .env`:
+it in the external Server process, so no database container or remote database is required. Do not omit `--env-file .env`:
 PowerContext's unconfigured default is SQLite. The driver constraint preserves the binary-escaping
 API required by aiomysql; PyMySQL 1.2 removes it and breaks Memory writes in this server version.
 
@@ -48,9 +50,9 @@ uv run agentseek-api dev --port {{ cookiecutter.langgraph_port }}
 npm run dev --prefix frontend
 ```
 
-Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. The same setup is available through
-`agentseek task sync`, `agentseek task frontend`, `agentseek task powercontext` (keep this terminal
-running), and `agentseek dev` in another terminal.
+Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. The project setup is also available through
+`agentseek task sync`, `agentseek task frontend`, and `agentseek dev`. The PowerContext Server is not
+started by the project lifecycle; configure `POWERCONTEXT_URL` to the already running Server instead.
 
 ## Five-minute demonstration
 

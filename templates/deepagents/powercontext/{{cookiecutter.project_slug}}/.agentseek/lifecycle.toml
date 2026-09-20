@@ -122,5 +122,5 @@ description = "Install frontend dependencies."
 command = ["npm", "install", "--prefix", "frontend"]
 
 [tasks.powercontext]
-description = "Run PowerContext 1.0.0 with embedded seekdb in a separate terminal."
-command = ["uv", "tool", "run", "--python", "3.12", "--from", "powercontext[cli,server,seekdb]==1.0.0", "--with", "pymysql>=1.1.3,<1.2", "powercontext", "server", "run", "--env-file", ".env"]
+description = "Reuse or start the local PowerContext Server."
+command = ["uv", "run", "python", "scripts/ensure_powercontext.py"]
