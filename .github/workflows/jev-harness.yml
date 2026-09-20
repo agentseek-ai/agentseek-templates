@@ -1,0 +1,54 @@
+name: Jev harness generated checks
+
+on:
+  pull_request:
+    paths:
+      - "templates/langchain/jev-harness/**"
+      - "scripts/jev_runtime_smoke.py"
+      - ".github/workflows/jev-harness.yml"
+  push:
+    branches: [main]
+    paths:
+      - "templates/langchain/jev-harness/**"
+      - "scripts/jev_runtime_smoke.py"
+      - ".github/workflows/jev-harness.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generated:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LANGSMITH_TRACING: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+      - run: uv sync --frozen --dev
+      - name: Render and install declared dependencies
+        run: |
+          uv run cookiecutter templates/langchain/jev-harness --no-input --output-dir "${RUNNER_TEMP}/jev-render"
+          cd "${RUNNER_TEMP}/jev-render/jev_harness_lab"
+          cp .env.example .env
+          uv sync --group test
+          npm install --prefix frontend
+      - name: Test generated backend and console without provider keys
+        working-directory: ${{ runner.temp }}/jev-render/jev_harness_lab
+        run: |
+          uv run --group test pytest
+          npm test --prefix frontend
+          npm run build --prefix frontend
+      - name: Exercise actual API with loopback provider fixtures
+        run: uv run python scripts/jev_runtime_smoke.py --project "${RUNNER_TEMP}/jev-render/jev_harness_lab"

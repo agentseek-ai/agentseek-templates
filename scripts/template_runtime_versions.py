@@ -13,6 +13,7 @@ AGENTSEEK_API_VERSIONS = {
     "langchain/agentic-rag": "0.2.3",
     "langchain/agentic-rag-hybrid": "0.2.3",
     "langchain/cli-remote": "0.2.3",
+    "langchain/jev-harness": "0.3.2",
     "langchain/markdown-messages": "0.2.3",
     "langchain/rubric": "0.2.3",
 }

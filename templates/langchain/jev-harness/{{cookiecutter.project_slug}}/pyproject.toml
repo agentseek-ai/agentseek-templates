@@ -1,0 +1,29 @@
+[project]
+name = "{{ cookiecutter.project_slug }}"
+version = "0.1.0"
+description = "{{ cookiecutter.project_name }}: inspect Jev routing and Auto Mode decisions."
+authors = [{ name = "{{ cookiecutter.author }}" }]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "langchain==1.3.15",
+    "langchain-typesafe[experimental]==0.0.1a2",
+    "langchain-openai>=1.1,<2",
+    "langgraph==1.2.11",
+    "agentseek-api[embedded]==0.3.2",
+    "mcp>=1.27.1,<2",
+    "python-dotenv>=1.0,<2",
+]
+
+[dependency-groups]
+test = ["pytest>=8.3,<10", "pytest-asyncio>=0.25,<2"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

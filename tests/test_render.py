@@ -38,6 +38,7 @@ MIGRATED_RUNTIME_TEMPLATES = {
     "langchain/agentic-rag-hybrid",
     "langchain/cli-remote",
     "langchain/markdown-messages",
+    "langchain/jev-harness",
     "langchain/rubric",
 }
 # Reviewer #14's local-runtime proof explicitly covers these six templates.
@@ -68,6 +69,7 @@ EXPECTED_CORE_DEPENDENCIES = {
     "langchain/agentic-rag-openvino": set(),
     "langchain/cli-remote": {"agentseek-langchain"},
     "langchain/default": {"agentseek-ag-ui", "agentseek-langchain"},
+    "langchain/jev-harness": set(),
     "langchain/relay-observability": {"agentseek-ag-ui", "agentseek-langchain"},
     "langchain/markdown-messages": set(),
     "langchain/rubric": set(),
@@ -436,6 +438,30 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
         ),
     },
     "langchain/markdown-messages": {
+        "services": (
+            (
+                "backend",
+                "api",
+                "advanced",
+                False,
+                ("process:backend",),
+                ("backend",),
+                ("api_docs", "docs", "studio"),
+            ),
+            ("frontend", "web", "default", True, ("process:frontend",), ("frontend",), ("docs",)),
+        ),
+        "effects": {},
+        "actions": (
+            "project:start_dev",
+            "service:backend:copy",
+            "service:backend:reference:api_docs",
+            "service:backend:reference:docs",
+            "service:backend:reference:studio",
+            "service:frontend:open",
+            "service:frontend:reference:docs",
+        ),
+    },
+    "langchain/jev-harness": {
         "services": (
             (
                 "backend",

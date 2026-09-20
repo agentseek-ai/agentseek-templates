@@ -1,0 +1,109 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import App from "./App";
+
+const fixture = vi.hoisted(() => ({
+  submit: vi.fn(),
+  state: { values: {}, messages: [], isLoading: false, error: null } as Record<string, unknown>,
+}));
+vi.mock("@langchain/react", () => ({ useStream: () => ({ ...fixture.state, submit: fixture.submit }) }));
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  // Vitest can inherit Node's non-browser Storage global on recent Node releases.
+  const values = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+  });
+  window.localStorage.setItem("jev-harness-language", "en");
+  fixture.submit.mockReset();
+  fixture.state = { values: {}, messages: [], isLoading: false, error: null };
+});
+
+test("switches the entire console to Chinese and persists the selection", () => {
+  const view = render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "中文" }));
+  expect(screen.getByRole("heading", { name: "模型路由" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "运行 Harness" })).toBeTruthy();
+  expect(screen.getByLabelText("任务内容").textContent).toContain("查看 checkout");
+  expect(screen.getByText(/OPENAI_API_KEY 填写硅基流动密钥/)).toBeTruthy();
+  expect(screen.getByText("使用自己的模型服务")).toBeTruthy();
+  expect(window.localStorage.getItem("jev-harness-language")).toBe("zh");
+  expect(document.documentElement.lang).toBe("zh-CN");
+  view.unmount();
+  render(<App />);
+  expect(screen.getByRole("heading", { name: "模型路由" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("heading", { name: "Model routing" })).toBeTruthy();
+});
+
+test("language changes preserve a manually edited task", () => {
+  render(<App />);
+  fireEvent.change(screen.getByLabelText("Your request"), { target: { value: "My custom request" } });
+  fireEvent.click(screen.getByRole("button", { name: "中文" }));
+  expect((screen.getByLabelText("任务内容") as HTMLTextAreaElement).value).toBe("My custom request");
+});
+
+test("shows the key setup boundary and submits the selected scenario", () => {
+  render(<App />);
+  expect(screen.getByText(/TYPESAFE_API_KEY/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: /Read service status/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
+  expect(fixture.submit).toHaveBeenCalledWith(
+    { messages: [{ type: "human", content: "Read the checkout service status and summarize it in two sentences." }] },
+    expect.objectContaining({ config: { recursion_limit: 24 } }),
+  );
+});
+
+test("displays route confidence separately from probabilities and blocked execution", () => {
+  fixture.state = {
+    values: { route_report: { choice: "powerful", model: "my-reasoner", confidence: 0.72,
+      probabilities: { fast: 0.1, powerful: 0.9 } } },
+    messages: [{ type: "tool", name: "delete_backups", content: "Tool blocked.", tool_call_id: "a",
+      artifact: { auto_mode: { decision: "blocked", executed: false, risk_probability: 0.97 } } }],
+    isLoading: false, error: null,
+  };
+  render(<App />);
+  expect(screen.getByText("my-reasoner")).toBeTruthy();
+  expect(screen.getByText("72%")).toBeTruthy();
+  expect(screen.getByText("90%")).toBeTruthy();
+  expect(screen.getByText("Blocked")).toBeTruthy();
+  expect(screen.getByText(/Tool did not run/)).toBeTruthy();
+  expect(screen.getByText(/97%/)).toBeTruthy();
+});
+
+test("does not fabricate a risk score for an allowed tool", () => {
+  fixture.state.messages = [{ type: "tool", name: "read_service_status", content: "fixture",
+    artifact: { auto_mode: { decision: "allowed", executed: true, risk_probability: null } } }];
+  render(<App />);
+  expect(screen.getByText("Allowed")).toBeTruthy();
+  expect(screen.getByText(/Score not exposed/)).toBeTruthy();
+});
+
+test("shows provider failures and disables duplicate submissions", () => {
+  fixture.state.error = new Error("Classifier unavailable");
+  fixture.state.isLoading = true;
+  render(<App />);
+  expect(screen.getByRole("alert").textContent).toContain("Classifier unavailable");
+  expect((screen.getByRole("button", { name: "Running…" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Start new task" }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+test("offers a fresh task at the point of completion and focuses the editable request", () => {
+  const view = render(<App />);
+  fireEvent.change(screen.getByLabelText("Your request"), { target: { value: "My completed task" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
+  fixture.state.isLoading = true;
+  view.rerender(<App />);
+  expect(screen.getAllByRole("button", { name: "Start new task" })).toHaveLength(1);
+  fixture.state.isLoading = false;
+  view.rerender(<App />);
+  const buttons = screen.getAllByRole("button", { name: "Start new task" });
+  expect(buttons).toHaveLength(2);
+  fireEvent.click(buttons[1]);
+  const input = screen.getByLabelText("Your request") as HTMLTextAreaElement;
+  expect(input.disabled).toBe(false);
+  expect(input.value).not.toBe("My completed task");
+  expect(document.activeElement).toBe(input);
+  expect((screen.getByRole("button", { name: "Run harness" }) as HTMLButtonElement).disabled).toBe(false);
+});
