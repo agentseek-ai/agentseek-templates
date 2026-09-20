@@ -13,7 +13,7 @@ dependencies = [
     "langchain-openai>=0.3",
     "python-dotenv>=1.0",
     "powercontext[client]==1.0.0",
-    "agentseek-api[embedded]==0.2.3",
+    "agentseek-api[embedded]==0.3.2",
     "mcp>=1.27.1,<2",
 ]
 

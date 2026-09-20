@@ -18,9 +18,9 @@ The template includes:
 
 ## Try it
 
-Render `deepagents/powercontext`, then follow the generated README. Start a matching PowerContext
-Server, configure the agent model, and run the backend/frontend. Click **Create project memory**,
-review and save the example Project Phoenix release decision, then ask:
+Render `deepagents/powercontext`, then follow the generated README: `agentseek dev` starts the
+PowerContext Server together with the API and the frontend. Configure the agent model, click
+**Create project memory**, review and save the example Project Phoenix release decision, then ask:
 
 ```text
 What is the release plan for Project Phoenix?
@@ -40,9 +40,12 @@ by default) through the public Scope API. Use distinct project keys for independ
 The generated SDK and Server use PowerContext **1.0.0**, the latest stable PyPI release verified on
 2026-09-19. It includes the required Scope binding API, replacing the Git commit dependency.
 The generated `.env` selects embedded seekdb for PowerContext Memory, with a data directory separate
-from AgentSeek API checkpoints. `agentseek task powercontext` runs the released Server with the native
-seekdb extra and a compatible SQL driver in its own environment. Keep that terminal running alongside
-`agentseek dev`. The generated README includes provider settings and live verification commands.
+from AgentSeek API checkpoints. The Server runs as a managed lifecycle process: `agentseek dev` starts
+it with the API and the frontend, reuses one that is already ready at `powercontext_url`, and stops it
+with the rest of the project. Set `POWERCONTEXT_AUTOSTART=false` to keep the Server fully external.
+Recall is fail-open, so a Server that is missing, unreachable, unhealthy, or gone leaves the API and
+the frontend running with recall `unavailable` instead of stopping the project.
+The generated README includes provider settings and live verification commands.
 
 Only explicit user saves write Memory. Automatic transcript capture, Handoff, Work Contract,
 Experience review, and Task Outcome are outside this template. Historical context is untrusted and

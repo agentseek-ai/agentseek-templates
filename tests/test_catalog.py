@@ -73,6 +73,23 @@ def test_every_registered_template_is_self_contained_and_documented() -> None:
         _assert_self_contained_template(TEMPLATES_ROOT, key)
 
 
+@pytest.mark.parametrize(
+    "template_key",
+    [
+        key
+        for key in sorted(_registry())
+        if (TEMPLATES_ROOT / key / "{{cookiecutter.project_slug}}/frontend/package.json").is_file()
+    ],
+)
+def test_frontend_template_declares_a_literal_display_name(template_key: str) -> None:
+    package_path = TEMPLATES_ROOT / template_key / "{{cookiecutter.project_slug}}/frontend/package.json"
+    package = json.loads(package_path.read_text(encoding="utf-8"))
+    display_name = package.get("displayName")
+    assert isinstance(display_name, str), template_key
+    assert display_name and display_name == display_name.strip(), template_key
+    assert not any(token in display_name for token in ("{{", "{%", "{#")), template_key
+
+
 def test_langsmith_template_examples_include_regional_endpoint() -> None:
     examples = sorted(TEMPLATES_ROOT.glob("*/*/{{cookiecutter.project_slug}}/.env.example"))
     langsmith_examples = [path for path in examples if "LANGSMITH_" in path.read_text(encoding="utf-8")]

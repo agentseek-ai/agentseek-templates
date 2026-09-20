@@ -48,6 +48,28 @@ agentseek create bub/default \
 仅针对某个 catalog 原生模板的来源说明应写入该模板自己的 README，不应再
 建立第二份 catalog 注册表。
 
+## 模板展示名称
+
+带前端的模板通过
+`templates/<type>/<name>/{{cookiecutter.project_slug}}/frontend/package.json`
+中的自定义字段 `displayName` 声明目录展示名称：
+
+```json
+{
+  "name": "{{ cookiecutter.project_slug }}-frontend",
+  "displayName": "Deep Agents PowerContext"
+}
+```
+
+`displayName` 必须是非空的字面字符串，不含首尾空白或 Cookiecutter 表达式。
+它保留品牌名称的拼写和大小写，与模板 ID、npm 包名及用户选择的项目名称
+分别维护。
+
+目录消费者可在生成项目前直接读取模板源文件中的 JSON，并原样保留展示名称
+的大小写。对于旧目录、没有前端的模板，以及展示名称缺失或无效的情况，应
+沿用现有的基于模板 ID 的展示逻辑。`templates/index.json` 仍是 ID 和描述的
+唯一注册表。桌面端展示还需要 agentseekd 配套适配。
+
 ## 许可证
 
 Apache License 2.0，详见 [LICENSE](LICENSE)。

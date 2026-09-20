@@ -1700,6 +1700,7 @@ def test_candidate_wheel_rejects_relative_paths() -> None:
 
 
 def test_profiles_cover_exact_retained_runtime_matrix() -> None:
+    assert set(smoke.PROFILES) <= set(smoke.AGENTSEEK_API_VERSIONS)
     assert set(smoke.PROFILES) == {
         "deepagents/content-builder",
         "deepagents/mcp",
@@ -1783,7 +1784,6 @@ def test_runtime_workflow_covers_every_retained_migration() -> None:
         ' --template "${{ matrix.template }}"'
         " --catalog-mode source"
         " --agentseek-version 0.1.2"
-        " --agentseek-api-version 0.2.3"
         ' --database-mode "${{ matrix.database }}"'
         ' --output-root "${{ runner.temp }}/r/${{ matrix.id }}"'
         ' --proof-output "${{ runner.temp }}/runtime-proof/${{ matrix.id }}.json"'
@@ -1969,10 +1969,73 @@ def test_release_harness_requires_python_312() -> None:
         smoke.require_release_python(3, 13)
 
 
-def test_release_harness_rejects_previous_api_release_before_download(
+@pytest.mark.parametrize(
+    ("template", "explicit_version", "expected_version"),
+    [
+        ("deepagents/powercontext", None, "0.3.2"),
+        ("deepagents/powercontext", "0.3.2", "0.3.2"),
+        ("deepagents/research", None, "0.2.3"),
+        ("deepagents/research", "0.2.3", "0.2.3"),
+    ],
+)
+def test_release_harness_downloads_the_selected_templates_reviewed_api(
+    template: str,
+    explicit_version: str | None,
+    expected_version: str,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.setattr(
+        smoke, "AGENTSEEK_API_VERSIONS", {"deepagents/powercontext": "0.3.2", "deepagents/research": "0.2.3"}
+    )
+    monkeypatch.setattr(smoke, "require_release_python", lambda *_args: None)
+    downloads = []
+
+    class DownloadReached(Exception):
+        pass
+
+    def download(name, version, directory):
+        downloads.append((name, version))
+        raise DownloadReached
+
+    monkeypatch.setattr(smoke.runtime_proof, "download_published_wheel", download)
+    argv = [
+        "--template",
+        template,
+        "--catalog-mode",
+        "source",
+        "--agentseek-version",
+        "0.1.2",
+        "--output-root",
+        str(tmp_path / "runtime"),
+        "--proof-output",
+        str(tmp_path / "proof.json"),
+    ]
+    if explicit_version is not None:
+        argv.extend(["--agentseek-api-version", explicit_version])
+
+    with pytest.raises(DownloadReached):
+        smoke.main(argv)
+
+    assert downloads == [("agentseek-api", expected_version)]
+
+
+@pytest.mark.parametrize(
+    ("template", "requested", "expected"),
+    [
+        ("langchain/markdown-messages", "0.2.2", "0.2.3"),
+        ("deepagents/powercontext", "0.2.3", "0.3.2"),
+        ("deepagents/research", "0.3.2", "0.2.3"),
+    ],
+)
+def test_release_harness_rejects_unreviewed_api_release_before_download(
+    template: str,
+    requested: str,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(smoke, "AGENTSEEK_API_VERSIONS", {template: expected})
     monkeypatch.setattr(smoke, "require_release_python", lambda *_args: None)
     monkeypatch.setattr(
         smoke.runtime_proof,
@@ -1980,17 +2043,17 @@ def test_release_harness_rejects_previous_api_release_before_download(
         lambda *_args, **_kwargs: pytest.fail("artifact download must not start"),
     )
 
-    with pytest.raises(RuntimeError, match=r"agentseek-api==0\.2\.3"):
+    with pytest.raises(RuntimeError, match=f"agentseek-api=={expected}"):
         smoke.main(
             [
                 "--template",
-                "langchain/markdown-messages",
+                template,
                 "--catalog-mode",
                 "source",
                 "--agentseek-version",
                 "0.1.2",
                 "--agentseek-api-version",
-                "0.2.2",
+                requested,
                 "--output-root",
                 str(tmp_path / "runtime"),
                 "--proof-output",
