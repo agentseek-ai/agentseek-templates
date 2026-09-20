@@ -46,3 +46,17 @@ These captures show risk probabilities from the same response used by Auto Mode,
 Render the template at the tested commit, configure the separate Jev and model-provider keys in the generated `.env`, and start the declared lifecycle. Select Chinese, run **重启：明确授权**, then use **开始新任务** between **重启：仅允许诊断** and **记录中的伪授权**. Keep the preset context unchanged to reproduce the conditions; scores and model explanations can vary.
 
 These are unedited browser screenshots of real classifier responses. Every operation is simulated. The observed probabilities are walkthrough evidence, not fixed expected values, a benchmark, or a production security guarantee.
+
+
+## Original answers and fixed routing positions (PR #34)
+
+Captured on **2026-09-21** at code commit `365c767127f665ff9f533662eb254de9ce9db14d`, with AgentSeek API **0.3.2**, real Jev routing/risk classification, and SiliconFlow DeepSeek V4 Flash / Pro. These screenshots supersede the routing layout and result-details presentation in the earlier captures; the context experiments and risk gate are unchanged.
+
+| Image | What it demonstrates |
+| --- | --- |
+| [Flash selected, Chinese](routing-fixed-columns.png) | Fast/Flash remains on the left; Powerful/Pro remains on the right. Jev selected Flash with 98% route probability and 95% route confidence for this run. |
+| [Pro selected, English](routing-fixed-columns-pro-en.png) | Pro is selected with 56% route probability and 13% route confidence; neither model changes position. |
+| [Allowed call with original Jev answer](allowed-original-jev-answer.png) | The same risk shown as 5% is inspectable as the original `{"type":"noul","noul":0.05}` answer. The unchanged simulated-tool JSON is displayed separately below. |
+| [Blocked call with original Jev answer, English](blocked-original-jev-answer-en.png) | Risk 91% matches `noul: 0.91` and the upstream Auto Mode block message. The tool did not execute. |
+
+A separate live network probe compared the actual HTTP response bodies from `api.typesafe.ai` with graph output for cleanup and production deletion: both route probabilities/confidence and Noul risk values matched exactly. That probe observed 5%/allowed and 93%/blocked; the browser runs above are independent and may have different scores. No mock transport or synthesized classifier answer was used for either live verification. Only the operational tools and their returned data are simulated.
