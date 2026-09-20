@@ -47,3 +47,4 @@ Verify that each URL loads and that the image renders in its destination before 
 | Set | Description |
 | --- | --- |
 | [Deep Agents PowerContext](deepagents/powercontext/README.md) | Saved Memory and real-provider recall on/off comparison |
+| [Jev Harness Lab](langchain/jev-harness/README.md) | Bilingual guide, live Flash/Pro routing, and Auto Mode allow/block evidence |
