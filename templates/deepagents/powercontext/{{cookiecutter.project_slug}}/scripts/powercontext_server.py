@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import errno
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -170,6 +171,20 @@ def _terminate(process: subprocess.Popen[bytes]) -> None:
             process.kill()
 
 
+def _install_child_shutdown(process: subprocess.Popen[bytes]) -> None:
+    """Stop the owned Server even when only this process is signalled."""
+
+    def _shutdown(signum: int, frame: object) -> None:
+        del signum, frame
+        _terminate(process)
+        raise SystemExit(0)
+
+    for name in ("SIGTERM", "SIGINT", "SIGBREAK"):
+        signum = getattr(signal, name, None)
+        if signum is not None:
+            signal.signal(signum, _shutdown)
+
+
 def _idle() -> int:
     """Stay alive without owning a Server, so ``agentseek dev`` keeps running."""
     while True:
@@ -189,6 +204,7 @@ def _ensure_local_server(raw_url: str, port: int, health_url: str) -> subprocess
             raise SystemExit(f"PowerContext Server is already starting at {raw_url}; wait for it and retry")
         print(f"Starting PowerContext Server at {raw_url}", flush=True)
         process, log_path = _start_local_server(raw_url, port)
+        _install_child_shutdown(process)
         try:
             _wait_until_ready(health_url, process, log_path)
         except BaseException:

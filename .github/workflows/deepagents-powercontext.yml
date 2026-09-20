@@ -48,16 +48,18 @@ jobs:
         run: |
           cp .env.example .env
           uv sync --extra dev
-          # Use the generated task so the tested Server version and driver
-          # constraint cannot drift from the instructions users receive.
-          uv run python - <<'PY' > powercontext-server.log 2>&1 &
+          # Use the generated lifecycle process so the tested Server version and
+          # driver constraint cannot drift from the instructions users receive.
+          # setsid gives the tree its own process group, so the trap stops the
+          # Server too instead of orphaning it on port 8000.
+          setsid uv run python - <<'PY' > powercontext-server.log 2>&1 &
           import os, tomllib
           from pathlib import Path
-          command = tomllib.loads(Path(".agentseek/lifecycle.toml").read_text())["tasks"]["powercontext"]["command"]
+          command = tomllib.loads(Path(".agentseek/lifecycle.toml").read_text())["processes"]["powercontext"]["command"]
           os.execvp(command[0], command)
           PY
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          trap 'kill -TERM -- -"$server_pid" 2>/dev/null || true' EXIT
           uv run python - <<'PY'
           import os, time, urllib.request
           from pathlib import Path
