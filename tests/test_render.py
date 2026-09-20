@@ -558,6 +558,7 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
         "scripts/powercontext_server.py",
     ]
     assert (generated_path / "scripts" / "powercontext_server.py").is_file()
+    assert (generated_path / "tests" / "test_powercontext_server.py").is_file()
     assert "powercontext" not in lifecycle.get("tasks", {})
     assert lifecycle["env"]["POWERCONTEXT_URL"]["default"] == "http://127.0.0.1:8000"
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["default"] == ""

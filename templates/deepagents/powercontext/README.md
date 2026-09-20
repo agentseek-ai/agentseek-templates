@@ -43,6 +43,8 @@ The generated `.env` selects embedded seekdb for PowerContext Memory, with a dat
 from AgentSeek API checkpoints. The Server runs as a managed lifecycle process: `agentseek dev` starts
 it with the API and the frontend, reuses one that is already ready at `powercontext_url`, and stops it
 with the rest of the project. Set `POWERCONTEXT_AUTOSTART=false` to keep the Server fully external.
+Recall is fail-open, so a Server that is missing, unreachable, unhealthy, or gone leaves the API and
+the frontend running with recall `unavailable` instead of stopping the project.
 The generated README includes provider settings and live verification commands.
 
 Only explicit user saves write Memory. Automatic transcript capture, Handoff, Work Contract,

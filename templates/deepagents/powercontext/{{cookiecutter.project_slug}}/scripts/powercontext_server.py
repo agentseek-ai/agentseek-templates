@@ -8,6 +8,15 @@ same lifecycle as the API and the frontend:
   AgentSeek runtime stops it together with every other project process;
 * ``POWERCONTEXT_AUTOSTART=false`` keeps the Server fully external and turns
   this process into an idle placeholder.
+
+Rule: this process never exits on its own. The AgentSeek runtime stops the
+whole project as soon as any managed process finishes, and PowerContext is
+documented as fail-open, so an unusable Server must never stop the API and the
+frontend. Every failure path reports the reason and then idles.
+
+Direct invocations also read ``.env`` so ``POWERCONTEXT_URL`` and
+``POWERCONTEXT_AUTOSTART`` behave the same as under ``agentseek dev``. Exported
+variables win over the file, and blank values are ignored.
 """
 
 from __future__ import annotations
@@ -22,6 +31,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import urlparse
 
 
@@ -34,11 +44,38 @@ SHUTDOWN_TIMEOUT = 10.0
 TRUE_VALUES = {"1", "true", "yes", "on"}
 
 
+class Probe(NamedTuple):
+    """One readiness check. Probing never raises; the caller decides what to do."""
+
+    state: str
+    detail: str = ""
+
+
+def _load_env_file(path: Path) -> None:
+    """Apply ``.env`` defaults for direct invocations; the real environment wins."""
+    with contextlib.suppress(OSError):
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export ") :].lstrip()
+            key, separator, value = line.partition("=")
+            key = key.strip()
+            if not separator or not key or key in os.environ:
+                continue
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            if value:
+                os.environ[key] = value
+
+
 def _server_url() -> tuple[str, str, int]:
     raw_url = os.environ.get("POWERCONTEXT_URL", "http://127.0.0.1:8000").strip().rstrip("/")
     parsed = urlparse(raw_url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise SystemExit(f"Invalid POWERCONTEXT_URL: {raw_url!r}")
+        raise ValueError(f"Invalid POWERCONTEXT_URL: {raw_url!r}")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
     health_url = f"{raw_url}/health/ready"
     return raw_url, health_url, port
@@ -56,18 +93,17 @@ def _server_log_path() -> Path:
     return Path(os.environ.get("POWERCONTEXT_SERVER_LOG", str(PROJECT_ROOT / ".powercontext-server.log")))
 
 
-def _probe(health_url: str) -> str:
+def _probe(health_url: str) -> Probe:
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(health_url, timeout=HEALTH_TIMEOUT) as response:
-            return "ready" if 200 <= response.status < 300 else "unready"
+            if 200 <= response.status < 300:
+                return Probe("ready")
+            return Probe("blocked", f"PowerContext Server responded with HTTP {response.status} at {health_url}.")
     except urllib.error.HTTPError as error:
         if error.code in {502, 503, 504}:
-            return "starting"
-        raise RuntimeError(
-            f"PowerContext Server responded with HTTP {error.code} at {health_url}; "
-            "refusing to start another service on the same endpoint"
-        ) from error
+            return Probe("starting", f"PowerContext Server is starting at {health_url} (HTTP {error.code}).")
+        return Probe("blocked", f"PowerContext Server responded with HTTP {error.code} at {health_url}.")
     except urllib.error.URLError as error:
         reason = error.reason
         if isinstance(reason, OSError) and reason.errno in {
@@ -76,10 +112,10 @@ def _probe(health_url: str) -> str:
             errno.EHOSTUNREACH,
             errno.ENETUNREACH,
         }:
-            return "unavailable"
-        raise RuntimeError(f"Could not check PowerContext Server at {health_url}: {reason}") from error
-    except TimeoutError as error:
-        raise RuntimeError(f"PowerContext Server health check timed out at {health_url}") from error
+            return Probe("unavailable")
+        return Probe("blocked", f"Could not check PowerContext Server at {health_url}: {reason}.")
+    except TimeoutError:
+        return Probe("unavailable", f"PowerContext Server health check timed out at {health_url}.")
 
 
 @contextlib.contextmanager
@@ -155,7 +191,7 @@ def _wait_until_ready(health_url: str, process: subprocess.Popen[bytes], log_pat
                 f"PowerContext Server exited with code {process.returncode}; see {log_path}"
                 + (f"\n{detail}" if detail else "")
             )
-        if _probe(health_url) == "ready":
+        if _probe(health_url).state == "ready":
             return
         time.sleep(0.5)
     raise RuntimeError(f"PowerContext Server did not become ready at {health_url}; see {log_path}")
@@ -194,36 +230,37 @@ def _idle() -> int:
             return 0
 
 
-def _ensure_local_server(raw_url: str, port: int, health_url: str) -> subprocess.Popen[bytes] | None:
-    """Return the owned Server process, or ``None`` when an existing one is reused."""
+def _ensure_local_server(raw_url: str, port: int, health_url: str) -> tuple[subprocess.Popen[bytes] | None, str]:
+    """Return the owned Server process and a note, or ``None`` when none was started."""
     with _startup_lock():
-        state = _probe(health_url)
-        if state == "ready":
-            return None
-        if state == "starting":
-            raise SystemExit(f"PowerContext Server is already starting at {raw_url}; wait for it and retry")
+        probe = _probe(health_url)
+        if probe.state == "ready":
+            return None, f"Reusing PowerContext Server at {raw_url}"
+        if probe.state == "starting":
+            return None, f"PowerContext Server is already starting at {raw_url}; not starting another."
+        if probe.state == "blocked":
+            return None, f"{probe.detail} Not starting another Server there."
         print(f"Starting PowerContext Server at {raw_url}", flush=True)
-        process, log_path = _start_local_server(raw_url, port)
+        try:
+            process, log_path = _start_local_server(raw_url, port)
+        except OSError as error:
+            return None, f"PowerContext startup failed: {error}; keeping the project running without it."
         _install_child_shutdown(process)
         try:
             _wait_until_ready(health_url, process, log_path)
-        except BaseException:
+        except (OSError, RuntimeError) as error:
             _terminate(process)
-            raise
-        return process
+            return None, f"PowerContext startup failed: {error}; keeping the project running without it."
+        return process, ""
 
 
 def main() -> int:
-    raw_url, health_url, port = _server_url()
-    hostname = urlparse(raw_url).hostname or ""
-    if _probe(health_url) == "ready":
-        print(f"Reusing PowerContext Server at {raw_url}", flush=True)
+    _load_env_file(PROJECT_ROOT / ".env")
+    try:
+        raw_url, health_url, port = _server_url()
+    except ValueError as error:
+        print(f"{error}; keeping the project running without PowerContext.", file=sys.stderr, flush=True)
         return _idle()
-    if not _is_local_host(hostname):
-        raise SystemExit(
-            f"PowerContext Server is not ready at {raw_url}. "
-            "Remote POWERCONTEXT_URL values must be started externally."
-        )
     if not _autostart_enabled():
         print(
             f"POWERCONTEXT_AUTOSTART is disabled; expecting an external PowerContext Server at {raw_url}",
@@ -231,22 +268,42 @@ def main() -> int:
         )
         return _idle()
 
-    process = _ensure_local_server(raw_url, port, health_url)
-    if process is None:
+    probe = _probe(health_url)
+    if probe.state == "ready":
         print(f"Reusing PowerContext Server at {raw_url}", flush=True)
+        return _idle()
+    if not _is_local_host(urlparse(raw_url).hostname or ""):
+        print(
+            f"PowerContext Server is not ready at {raw_url}; "
+            "a remote POWERCONTEXT_URL must be started externally.",
+            file=sys.stderr,
+            flush=True,
+        )
+        return _idle()
+    if probe.state != "unavailable":
+        print(f"{probe.detail} Not starting another Server there.", file=sys.stderr, flush=True)
+        return _idle()
+
+    process, note = _ensure_local_server(raw_url, port, health_url)
+    if process is None:
+        print(note, file=sys.stderr, flush=True)
         return _idle()
     print(
         f"PowerContext Server is ready at {raw_url} (PID {process.pid}); it stops with this project",
         flush=True,
     )
     returncode = process.wait()
-    print(f"PowerContext Server exited with code {returncode}", file=sys.stderr, flush=True)
-    return returncode or 0
+    print(
+        f"PowerContext Server exited with code {returncode}; keeping the project running without it.",
+        file=sys.stderr,
+        flush=True,
+    )
+    return _idle()
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, RuntimeError) as error:
-        print(f"PowerContext startup failed: {error}", file=sys.stderr)
-        raise SystemExit(1) from error
+    except Exception as error:  # noqa: BLE001 - a sidecar must never stop the project it serves
+        print(f"PowerContext startup failed: {error}; keeping the project running without it.", file=sys.stderr)
+        raise SystemExit(_idle()) from error

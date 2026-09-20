@@ -45,6 +45,9 @@ jobs:
           POWERCONTEXT_TEST_URL: http://127.0.0.1:8000
           POWERCONTEXT_SERVER_DATABASE_PATH: ${{ runner.temp }}/powercontext-seekdb
           POWERCONTEXT_HOME: ${{ runner.temp }}/powercontext-home
+          # The launcher owns the Server's output, so the uploaded artifact has
+          # to point at the file the launcher writes instead of the default.
+          POWERCONTEXT_SERVER_LOG: powercontext-server.log
         run: |
           cp .env.example .env
           uv sync --extra dev

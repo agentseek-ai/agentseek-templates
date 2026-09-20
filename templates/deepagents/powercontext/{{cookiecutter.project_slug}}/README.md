@@ -56,6 +56,11 @@ Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. The project setup is a
 Server fully external: this project then never starts one, and recall reports `unavailable` until
 something answers at `POWERCONTEXT_URL`.
 
+The launcher reads `.env` itself, so the manual command honors `POWERCONTEXT_URL` and
+`POWERCONTEXT_AUTOSTART` exactly like `agentseek dev`; exported variables win over the file. Recall is
+fail-open and the launcher never stops the project: a Server that is missing, unreachable, unhealthy,
+or one that exits while owned all leave the API and the frontend running with recall `unavailable`.
+
 ## Five-minute demonstration
 
 1. Click **Create project memory**. The Server allocates an opaque Scope ID and stores a stable
