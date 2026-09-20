@@ -11,6 +11,7 @@ from __future__ import annotations
 import http.server
 import importlib.util
 import os
+import shutil
 import socketserver
 import subprocess
 import sys
@@ -54,11 +55,17 @@ def unhealthy_server() -> Iterator[str]:
             thread.join(timeout=10)
 
 
-def _start_launcher(environment: dict[str, str], log_path: Path) -> tuple[subprocess.Popen[bytes], IO[str]]:
+def _start_launcher(
+    environment: dict[str, str],
+    log_path: Path,
+    *,
+    script: Path = LAUNCHER,
+    cwd: Path = PROJECT_ROOT,
+) -> tuple[subprocess.Popen[bytes], IO[str]]:
     handle = log_path.open("w", encoding="utf-8")
     process = subprocess.Popen(
-        [sys.executable, str(LAUNCHER)],
-        cwd=PROJECT_ROOT,
+        [sys.executable, str(script)],
+        cwd=cwd,
         env=environment,
         stdin=subprocess.DEVNULL,
         stdout=handle,
@@ -182,3 +189,26 @@ def test_env_file_supplies_defaults_without_overriding_the_environment(
     assert os.environ["POWERCONTEXT_AUTOSTART"] == "false"
     assert os.environ["POWERCONTEXT_SCOPE_ID"] == "scope-from-file"
     assert "POWERCONTEXT_TOKEN" not in os.environ, "a blank .env value must stay unset"
+
+
+def test_manual_command_reads_the_project_env_file(tmp_path: Path) -> None:
+    """Run the documented command the way a README reader does: nothing exported."""
+    project = tmp_path / "manual-project"
+    script = project / "scripts" / "powercontext_server.py"
+    script.parent.mkdir(parents=True)
+    shutil.copy(LAUNCHER, script)
+    dotenv_url = "http://127.0.0.1:64001"
+    (project / ".env").write_text(
+        f"POWERCONTEXT_URL={dotenv_url}\nPOWERCONTEXT_AUTOSTART=false\n",
+        encoding="utf-8",
+    )
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("POWERCONTEXT")}
+    log_path = project / "launcher.log"
+    process, handle = _start_launcher(environment, log_path, script=script, cwd=project)
+    try:
+        output = _wait_for_output(process, log_path, "POWERCONTEXT_AUTOSTART is disabled")
+        _assert_kept_alive(process, log_path)
+    finally:
+        _stop_launcher(process, handle)
+    assert dotenv_url in output, "the launcher must use POWERCONTEXT_URL from .env, not the 8000 default"
+    assert not (project / ".powercontext-server.log").exists(), "autostart from .env must be honored"
