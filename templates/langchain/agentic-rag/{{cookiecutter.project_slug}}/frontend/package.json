@@ -1,5 +1,6 @@
 {
   "name": "{{ cookiecutter.project_slug }}-frontend",
+  "displayName": "LangChain Agentic RAG",
   "private": true,
   "version": "0.1.0",
   "type": "module",

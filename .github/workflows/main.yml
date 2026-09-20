@@ -328,7 +328,6 @@ jobs:
           --template "${{ matrix.template }}"
           --catalog-mode source
           --agentseek-version 0.1.2
-          --agentseek-api-version 0.2.3
           --database-mode "${{ matrix.database }}"
           --output-root "${{ runner.temp }}/r/${{ matrix.id }}"
           --proof-output "${{ runner.temp }}/runtime-proof/${{ matrix.id }}.json"

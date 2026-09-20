@@ -52,6 +52,30 @@ template.
 Template source attribution that is specific to one catalog-native template
 belongs in that template's README. It is not a second catalog registry.
 
+## Template display names
+
+Templates with a frontend declare their catalog label in the custom
+`displayName` field of
+`templates/<type>/<name>/{{cookiecutter.project_slug}}/frontend/package.json`:
+
+```json
+{
+  "name": "{{ cookiecutter.project_slug }}-frontend",
+  "displayName": "Deep Agents PowerContext"
+}
+```
+
+`displayName` is a literal, nonblank string with no surrounding whitespace or
+Cookiecutter expressions. It preserves brand spelling independently of the
+template ID, npm package name, and user-selected project name.
+
+Catalog consumers can read this JSON directly from the template source before
+generation and preserve the label's capitalization. For older catalogs,
+templates without a frontend, or missing/invalid display names, consumers should
+retain their existing ID-derived label. `templates/index.json` remains the
+registry of IDs and descriptions. Desktop support requires a corresponding
+change in agentseekd.
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE).

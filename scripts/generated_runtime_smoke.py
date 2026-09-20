@@ -37,6 +37,7 @@ if str(ROOT) not in sys.path:
 
 from scripts import runtime_proof  # noqa: E402
 from scripts.runtime_proof import ImportRecord, WheelArtifact  # noqa: E402
+from scripts.template_runtime_versions import AGENTSEEK_API_VERSIONS  # noqa: E402
 
 FAKE_PROVIDER = ROOT / "scripts" / "fake_openai_server.py"
 WINDOWS_JOB_WRAPPER = ROOT / "scripts" / "windows_job_wrapper.py"
@@ -94,8 +95,9 @@ PROFILES = {
         {"AGENTSEEK_MODEL_API_KEY": "smoke-model-api-key"},
     ),
     # PowerContext recall is fail-open, so the smoke run proceeds with
-    # ``status: unavailable`` while no PowerContext Server is running.
-    "deepagents/powercontext": SmokeProfile("streaming", CHAT_INPUT, {}),
+    # ``status: unavailable`` while no PowerContext Server is running. Autostart
+    # stays off so the smoke never provisions the embedded seekdb Server.
+    "deepagents/powercontext": SmokeProfile("streaming", CHAT_INPUT, {"POWERCONTEXT_AUTOSTART": "false"}),
     "deepagents/research": SmokeProfile(
         "research",
         CHAT_INPUT,
@@ -1753,12 +1755,18 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--template", choices=sorted(PROFILES), required=True)
     parser.add_argument("--catalog-mode", choices=("source", "default"), required=True)
     parser.add_argument("--agentseek-version", required=True)
-    parser.add_argument("--agentseek-api-version", required=True)
+    parser.add_argument(
+        "--agentseek-api-version",
+        help="Expected API version; defaults to the selected template's reviewed release",
+    )
     parser.add_argument("--agentseek-wheel", type=Path)
     parser.add_argument("--database-mode", choices=("auto", "embedded", "sqlite"), default="auto")
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--proof-output", type=Path, required=True)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.agentseek_api_version is None:
+        args.agentseek_api_version = AGENTSEEK_API_VERSIONS[args.template]
+    return args
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1771,8 +1779,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_root = Path(tempfile.mkdtemp(prefix="template-runtime-", dir=output_root)).resolve()
     profile = PROFILES[args.template]
     source_template_root = ROOT / "templates" / args.template
-    if args.agentseek_api_version != "0.2.3":
-        raise RuntimeError("this release proof requires agentseek-api==0.2.3")
+    expected_api_version = AGENTSEEK_API_VERSIONS[args.template]
+    if args.agentseek_api_version != expected_api_version:
+        raise RuntimeError(f"{args.template} release proof requires agentseek-api=={expected_api_version}")
     if args.agentseek_wheel is not None and args.agentseek_version != "0.1.3":
         raise RuntimeError("--agentseek-wheel is reserved for the AgentSeek 0.1.3 candidate proof")
 

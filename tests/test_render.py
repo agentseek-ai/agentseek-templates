@@ -5,6 +5,7 @@ import importlib.util
 import inspect
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,13 +22,13 @@ from dotenv import dotenv_values
 from packaging.requirements import Requirement
 from packaging.utils import canonicalize_name
 
+from scripts.template_runtime_versions import AGENTSEEK_API_VERSIONS
+
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES_ROOT = REPOSITORY_ROOT / "templates"
 INDEX = json.loads((TEMPLATES_ROOT / "index.json").read_text(encoding="utf-8"))
 CORE_REPOSITORY = "https://github.com/ob-labs/agentseek.git"
 CORE_COMMIT = "900f89518c32f8570d7648897394ed96a86a647a"
-AGENTSEEK_API_VERSION = "0.2.3"
-AGENTSEEK_API_DEPENDENCY = f"agentseek-api[embedded]=={AGENTSEEK_API_VERSION}"
 AGENTSEEK_API_CANONICAL_NAME = canonicalize_name("agentseek-api")
 MIGRATED_RUNTIME_TEMPLATES = {
     "deepagents/content-builder",
@@ -235,6 +236,7 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
                 ("langgraph",),
                 ("api_docs", "docs", "studio"),
             ),
+            ("powercontext", "api", "advanced", False, ("process:powercontext",), (), ()),
         ),
         "effects": {},
         "actions": (
@@ -245,6 +247,7 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
             "service:langgraph:reference:api_docs",
             "service:langgraph:reference:docs",
             "service:langgraph:reference:studio",
+            "service:powercontext:copy",
         ),
     },
     "deepagents/sandbox": {
@@ -486,13 +489,14 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
 }
 
 
-def _assert_exact_agentseek_api_dependency(requirements: list[str]) -> None:
+def _assert_exact_agentseek_api_dependency(requirements: list[str], template_key: str) -> None:
     api_dependencies: list[tuple[str, str]] = []
     for raw_requirement in requirements:
         parsed = Requirement(raw_requirement)
         if canonicalize_name(parsed.name) == AGENTSEEK_API_CANONICAL_NAME:
             api_dependencies.append((raw_requirement, str(parsed)))
-    expected = [(AGENTSEEK_API_DEPENDENCY, AGENTSEEK_API_DEPENDENCY)]
+    dependency = f"agentseek-api[embedded]=={AGENTSEEK_API_VERSIONS[template_key]}"
+    expected = [(dependency, dependency)]
     assert api_dependencies == expected, (
         f"agentseek-api dependencies must be exactly {expected}, got {api_dependencies}"
     )
@@ -500,21 +504,38 @@ def _assert_exact_agentseek_api_dependency(requirements: list[str]) -> None:
 
 def _assert_exact_api_pin_contract(generated_path: Path, template_key: str) -> None:
     project = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))
-    _assert_exact_agentseek_api_dependency(project["project"].get("dependencies", []))
+    _assert_exact_agentseek_api_dependency(project["project"].get("dependencies", []), template_key)
 
     requirements = generated_path / "requirements.txt"
     if template_key == "langchain/cli-remote":
         assert requirements.is_file(), "agentseek-api requirements.txt is missing for langchain/cli-remote"
         lines = [line.strip() for line in requirements.read_text(encoding="utf-8").splitlines() if line.strip()]
-        _assert_exact_agentseek_api_dependency(lines)
+        _assert_exact_agentseek_api_dependency(lines, template_key)
 
 
 def _registered_templates() -> list[tuple[str, Path]]:
     return [(key, TEMPLATES_ROOT / key) for key in sorted(INDEX)]
 
 
+@pytest.mark.parametrize(("template_key", "template_root"), _registered_templates(), ids=sorted(INDEX))
+def test_catalog_docs_only_reference_declared_lifecycle_tasks(template_key: str, template_root: Path) -> None:
+    """A doc that teaches a removed task sends users to a command that cannot run."""
+    spec_path = template_root / "{{cookiecutter.project_slug}}" / ".agentseek" / "lifecycle.toml"
+    declared = set(re.findall(r"^\[tasks\.([A-Za-z0-9_-]+)\]", spec_path.read_text(encoding="utf-8"), re.MULTILINE))
+    for doc in (
+        template_root / "README.md",
+        template_root / "{{cookiecutter.project_slug}}" / "README.md",
+    ):
+        if not doc.is_file():
+            continue
+        referenced = set(re.findall(r"agentseek\s+task\s+([A-Za-z0-9][A-Za-z0-9_-]*)", doc.read_text(encoding="utf-8")))
+        undeclared = referenced - declared
+        assert not undeclared, f"{doc} references undeclared lifecycle task(s): {sorted(undeclared)}"
+
+
 def test_reviewed_contract_covers_every_registered_template() -> None:
     assert set(INDEX) == set(EXPECTED_CORE_DEPENDENCIES) == set(EXPECTED_NORMALIZED_TOPOLOGY)
+    assert set(AGENTSEEK_API_VERSIONS) <= set(INDEX)
 
 
 def test_powercontext_template_declares_observable_fail_open_integration(tmp_path: Path) -> None:
@@ -528,11 +549,23 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "POWERCONTEXT_SCOPE_ID=\n" in env_example
     assert "POWERCONTEXT_PROJECT_KEY=deepagents_powercontext" in env_example
     assert "POWERCONTEXT_MAX_BYTES=8000" in env_example
+    assert "POWERCONTEXT_AUTOSTART=true" in env_example
     lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
+    assert lifecycle["processes"]["powercontext"]["command"] == [
+        "uv",
+        "run",
+        "python",
+        "scripts/powercontext_server.py",
+    ]
+    assert (generated_path / "scripts" / "powercontext_server.py").is_file()
+    assert (generated_path / "tests" / "test_powercontext_server.py").is_file()
+    assert "powercontext" not in lifecycle.get("tasks", {})
     assert lifecycle["env"]["POWERCONTEXT_URL"]["default"] == "http://127.0.0.1:8000"
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["default"] == ""
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["required"] is False
     assert lifecycle["env"]["POWERCONTEXT_MAX_BYTES"]["default"] == "8000"
+    assert lifecycle["env"]["POWERCONTEXT_AUTOSTART"]["default"] == "true"
+    assert lifecycle["env"]["POWERCONTEXT_AUTOSTART"]["required"] is False
     middleware = (generated_path / "src" / generated_path.name / "powercontext_middleware.py").read_text(
         encoding="utf-8"
     )
@@ -580,7 +613,7 @@ def test_powercontext_template_starts_on_agentseek_api_with_bilingual_ui(tmp_pat
     dependencies = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))["project"][
         "dependencies"
     ]
-    assert "agentseek-api[embedded]==0.2.3" in dependencies
+    _assert_exact_api_pin_contract(generated_path, "deepagents/powercontext")
     assert "mcp>=1.27.1,<2" in dependencies
     assert "langgraph-cli[inmem]>=0.4" not in dependencies
 
@@ -664,6 +697,12 @@ def test_registered_template_renders_as_complete_lifecycle_v2(
     output_root.mkdir()
 
     generated_path = _render(isolated_template, output_root, tmp_path)
+    project = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))
+    uses_api = any(
+        canonicalize_name(Requirement(dependency).name) == AGENTSEEK_API_CANONICAL_NAME
+        for dependency in project["project"].get("dependencies", [])
+    )
+    assert uses_api == (template_key in AGENTSEEK_API_VERSIONS), template_key
     lifecycle_path = generated_path / ".agentseek" / "lifecycle.toml"
     lifecycle_text = lifecycle_path.read_text(encoding="utf-8")
     assert "{{" not in lifecycle_text
@@ -742,8 +781,8 @@ def test_agentbase_rag_render_contains_observability_rag_and_frontend_contract(
     assert agentbase_action.url == "https://appbuild-sit.oceanbase.com/console"
 
 
-@pytest.mark.parametrize("template_key", sorted(MIGRATED_RUNTIME_TEMPLATES))
-def test_migrated_templates_pin_the_published_api_release(
+@pytest.mark.parametrize("template_key", sorted(AGENTSEEK_API_VERSIONS))
+def test_api_templates_pin_their_reviewed_published_release(
     template_key: str,
     tmp_path: Path,
 ) -> None:
@@ -771,6 +810,33 @@ def _write_exact_pin_contract_fixture(
 
 
 @pytest.mark.parametrize(
+    ("template_key", "version"),
+    [("deepagents/powercontext", "0.3.2"), ("deepagents/research", "0.2.3")],
+)
+def test_exact_api_pin_contract_accepts_independently_reviewed_versions(
+    template_key: str, version: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(AGENTSEEK_API_VERSIONS, template_key, version)
+    generated = _write_exact_pin_contract_fixture(tmp_path, [f"agentseek-api[embedded]=={version}"], None)
+
+    _assert_exact_api_pin_contract(generated, template_key)
+
+
+@pytest.mark.parametrize(
+    ("template_key", "reviewed", "version"),
+    [("deepagents/powercontext", "0.3.2", "0.2.3"), ("deepagents/research", "0.2.3", "0.3.2")],
+)
+def test_exact_api_pin_contract_rejects_another_templates_version(
+    template_key: str, reviewed: str, version: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setitem(AGENTSEEK_API_VERSIONS, template_key, reviewed)
+    generated = _write_exact_pin_contract_fixture(tmp_path, [f"agentseek-api[embedded]=={version}"], None)
+
+    with pytest.raises(AssertionError, match="agentseek-api"):
+        _assert_exact_api_pin_contract(generated, template_key)
+
+
+@pytest.mark.parametrize(
     "requirements",
     [
         pytest.param(None, id="missing"),
@@ -787,7 +853,9 @@ def _write_exact_pin_contract_fixture(
 def test_exact_api_pin_contract_rejects_invalid_cli_requirements(
     requirements: str | None,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setitem(AGENTSEEK_API_VERSIONS, "langchain/cli-remote", "0.2.3")
     generated = _write_exact_pin_contract_fixture(
         tmp_path,
         ["agentseek-api[embedded]==0.2.3"],
@@ -810,7 +878,9 @@ def test_exact_api_pin_contract_rejects_invalid_cli_requirements(
 def test_exact_api_pin_contract_rejects_invalid_pyproject_dependencies(
     dependencies: list[str],
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setitem(AGENTSEEK_API_VERSIONS, "langchain/cli-remote", "0.2.3")
     generated = _write_exact_pin_contract_fixture(
         tmp_path,
         dependencies,
@@ -1141,8 +1211,7 @@ def test_markdown_messages_declares_embedded_seekdb_for_agentseek_api(tmp_path: 
     assert "SEEKDB_EMBED=true" in env_example
     assert "SEEKDB_EMBED_DIR=" in env_example
     assert "OCEANBASE_DB_NAME=test" in env_example
-    pyproject = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))
-    assert AGENTSEEK_API_DEPENDENCY in pyproject["project"]["dependencies"]
+    _assert_exact_api_pin_contract(generated_path, "langchain/markdown-messages")
 
 
 def test_openvino_remains_on_its_reviewed_runtime_until_a_model_fixture_exists(tmp_path: Path) -> None:

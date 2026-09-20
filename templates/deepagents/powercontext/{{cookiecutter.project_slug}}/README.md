@@ -24,7 +24,10 @@ uv sync
 npm install --prefix frontend
 ```
 
-Start PowerContext in its own terminal, from this same project directory:
+`agentseek dev` starts the PowerContext Server together with the API and the
+frontend, and stops all three when it exits. A Server that is already ready at
+`POWERCONTEXT_URL` is reused as-is and never restarted, so a manually started
+Server keeps working across project restarts. To start one by hand:
 
 ```bash
 uv tool run --python 3.12 --from "powercontext[cli,server,seekdb]==1.0.0" \
@@ -35,22 +38,28 @@ uv tool run --python 3.12 --from "powercontext[cli,server,seekdb]==1.0.0" \
 The supplied `.env` explicitly selects embedded seekdb for **PowerContext Memory**, using
 `~/.agentseek/{{ cookiecutter.project_slug }}/powercontext-seekdb`. This is separate from the AgentSeek
 API checkpoint directory. The `seekdb` extra installs the native runtime; PowerContext owns and starts
-it locally, so no database container or remote database is required. Do not omit `--env-file .env`:
+it in the Server process, so no database container or remote database is required. Do not omit `--env-file .env`:
 PowerContext's unconfigured default is SQLite. The driver constraint preserves the binary-escaping
 API required by aiomysql; PyMySQL 1.2 removes it and breaks Memory writes in this server version.
 
-Explicit Memory writes and full-text recall need no generation or embedding model. Keep the Server
-running at `http://127.0.0.1:8000`. Start the API and frontend in separate terminals:
+Explicit Memory writes and full-text recall need no generation or embedding model. `agentseek dev` is
+the normal entry point; to run the three processes by hand instead:
 
 ```bash
+uv run python scripts/powercontext_server.py
 uv run agentseek-api dev --port {{ cookiecutter.langgraph_port }}
-# In another terminal:
 npm run dev --prefix frontend
 ```
 
-Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. The same setup is available through
-`agentseek task sync`, `agentseek task frontend`, `agentseek task powercontext` (keep this terminal
-running), and `agentseek dev` in another terminal.
+Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}`. The project setup is also available through
+`agentseek task sync` and `agentseek task frontend`. Set `POWERCONTEXT_AUTOSTART=false` to keep the
+Server fully external: this project then never starts one, and recall reports `unavailable` until
+something answers at `POWERCONTEXT_URL`.
+
+The launcher reads `.env` itself, so the manual command honors `POWERCONTEXT_URL` and
+`POWERCONTEXT_AUTOSTART` exactly like `agentseek dev`; exported variables win over the file. Recall is
+fail-open and the launcher never stops the project: a Server that is missing, unreachable, unhealthy,
+or one that exits while owned all leave the API and the frontend running with recall `unavailable`.
 
 ## Five-minute demonstration
 
@@ -107,6 +116,7 @@ Experience review, and Task Outcome are separate PowerContext workflows, not fea
 | `POWERCONTEXT_SCOPE_ID` | empty | Optional existing Server-owned Scope ID, overriding the binding |
 | `POWERCONTEXT_TOKEN` | empty | Bare bearer token, read only by the backend |
 | `POWERCONTEXT_MAX_BYTES` | `8000` | Server request budget, 512–32768 UTF-8 bytes; the UI can lower it |
+| `POWERCONTEXT_AUTOSTART` | `true` | Start a local Server with the project; `false` keeps it fully external |
 | `POWERCONTEXT_SERVER_DATABASE_KIND` | `seekdb` | PowerContext Server storage; the Server starts seekdb embedded locally |
 | `POWERCONTEXT_SERVER_DATABASE_PATH` | `~/.agentseek/{{ cookiecutter.project_slug }}/powercontext-seekdb` | Durable PowerContext Memory directory; keep separate from the API database |
 | `AGENTSEEK_MODEL_PROVIDER` | `{{ cookiecutter.default_model_provider }}` | `openai`, `anthropic`, or `google_genai` |
