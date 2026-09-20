@@ -104,6 +104,7 @@ def test_route_once_and_gate_before_execution(monkeypatch, probability, decision
     assert [next(iter(r["questions"])) for r in requests] == ["model_route", "is_risky"]
     assert result["route_report"]["choice"] == "fast"
     assert result["route_report"]["confidence"] == 0.8
+    assert set(result["route_report"]["models"]) == {"fast", "powerful"}
     tool = next(m for m in result["messages"] if isinstance(m, ToolMessage))
     audit = tool.artifact["auto_mode"]
     assert audit["decision"] == decision
@@ -115,6 +116,7 @@ def test_route_once_and_gate_before_execution(monkeypatch, probability, decision
     else:
         assert "checkout" in tool.content
         assert audit["risk_probability"] == probability
+    assert audit["jev_answer"] == {"type": "noul", "noul": probability}
     assert audit["confidence"] is None  # Noul has no native confidence field.
     assert audit["arguments"] == {}
 

@@ -125,6 +125,14 @@ Each new run uses a fresh conversation. Language changes preserve edited and
 submitted requests. The harness guide explains the workflow, not live progress.
 Routing stays fixed throughout a run and is recomputed on a follow-up run.
 
+The decision details retain the original Jev Noul answer for both allowed and
+blocked calls. The percentage meter only rounds that same probability for display.
+Allowed tool output remains the handler's original simulated payload, so it does
+not contain Jev's risk score. A blocked call instead contains the middleware's
+block message, which includes the score. The UI labels these sources separately.
+The routing panel keeps the fast model on the left and the powerful model on the
+right regardless of response ordering or which model is selected.
+
 **Probability and confidence are different.** The model router returns a Choice
 with probabilities and native confidence. Auto Mode returns a Noul: the probability
 that the call is risky or insufficiently authorized. Noul has **no confidence

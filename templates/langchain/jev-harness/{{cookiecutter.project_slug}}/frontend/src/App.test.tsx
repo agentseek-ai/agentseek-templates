@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
 
@@ -137,4 +137,33 @@ test("distinguishes gate approval from failed tool execution", () => {
   expect(screen.getByText("Allowed")).toBeTruthy();
   expect(screen.getByText(/argument validation or tool execution failed/)).toBeTruthy();
   expect(screen.queryByText("Simulated tool ran.")).toBeNull();
+});
+
+
+test("keeps Fast on the left and Powerful on the right when response order and winner change", () => {
+  const view = render(<App />);
+  const names = () => screen.getAllByRole("article").map(card => card.getAttribute("aria-label"));
+  expect(names()).toEqual(["Fast", "Powerful"]);
+  for (const choice of ["powerful", "fast"]) {
+    fixture.state.values = { route_report: { choice, model: choice === "fast" ? "custom-flash" : "custom-pro", confidence: 0.8,
+      models: { fast: "custom-flash", powerful: "custom-pro" },
+      probabilities: { powerful: choice === "powerful" ? 0.9 : 0.1, fast: choice === "fast" ? 0.9 : 0.1 } } };
+    view.rerender(<App />);
+    expect(names()).toEqual(["Fast", "Powerful"]);
+    expect(within(screen.getByRole("article", { name: choice === "fast" ? "Fast" : "Powerful" })).getByText("Selected")).toBeTruthy();
+    expect(screen.getByText("custom-flash")).toBeTruthy();
+    expect(screen.getByText("custom-pro")).toBeTruthy();
+  }
+});
+
+test("shows the original Jev answer separately from an unchanged allowed tool payload", () => {
+  const content = '{"simulation":true,"operation":"delete_backups"}';
+  fixture.state.messages = [{ type: "tool", name: "delete_backups", content,
+    artifact: { auto_mode: { decision: "allowed", executed: true, risk_probability: 0.052,
+      jev_answer: { type: "noul", noul: 0.052 } } } }];
+  render(<App />);
+  fireEvent.click(screen.getByText("Inspect decision and execution"));
+  expect(screen.getByLabelText("Original Jev risk answer").textContent).toContain('"noul": 0.052');
+  expect(screen.getByLabelText("Simulated tool output").textContent).toBe(content);
+  expect(screen.getByText("5%")).toBeTruthy();
 });

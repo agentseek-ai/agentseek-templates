@@ -28,6 +28,7 @@ class RouteReportMiddleware(AgentMiddleware):
             "route_report": {
                 **answer.model_dump(mode="json"),
                 "model": getattr(model, "model_name", answer.choice),
+                "models": {key: getattr(value, "model_name", key) for key, value in self.models.items()},
             }
         }
 
@@ -74,6 +75,7 @@ class ObservedAutoModeMiddleware(AutoModeMiddleware):
                 "executed": executed and result.status != "error",
                 "execution_status": "blocked" if not executed else "failed" if result.status == "error" else "completed",
                 "risk_probability": response.nouls["is_risky"].noul,
+                "jev_answer": response.nouls["is_risky"].model_dump(mode="json"),
                 "confidence": None,
                 "threshold": 0.5,
                 "arguments": request.tool_call["args"],
