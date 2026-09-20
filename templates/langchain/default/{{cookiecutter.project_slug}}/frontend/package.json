@@ -1,5 +1,6 @@
 {
   "name": "{{ cookiecutter.project_slug }}-frontend",
+  "displayName": "LangChain + CopilotKit",
   "version": "0.1.0",
   "private": true,
   "type": "module",
