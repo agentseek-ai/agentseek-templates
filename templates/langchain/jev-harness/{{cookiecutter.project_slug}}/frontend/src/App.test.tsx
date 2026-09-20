@@ -25,7 +25,7 @@ test("switches the entire console to Chinese and persists the selection", () => 
   fireEvent.click(screen.getByRole("button", { name: "中文" }));
   expect(screen.getByRole("heading", { name: "模型路由" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "运行 Harness" })).toBeTruthy();
-  expect(screen.getByLabelText("任务内容").textContent).toContain("查看 checkout");
+  expect(screen.getByLabelText("任务内容").textContent).toContain("授权");
   expect(screen.getByText(/OPENAI_API_KEY 填写硅基流动密钥/)).toBeTruthy();
   expect(screen.getByText("使用自己的模型服务")).toBeTruthy();
   expect(window.localStorage.getItem("jev-harness-language")).toBe("zh");
@@ -44,13 +44,14 @@ test("language changes preserve a manually edited task", () => {
   expect((screen.getByLabelText("任务内容") as HTMLTextAreaElement).value).toBe("My custom request");
 });
 
-test("shows the key setup boundary and submits the selected scenario", () => {
+test("only exposes context experiments and submits the chosen fixed proposal", () => {
   render(<App />);
   expect(screen.getByText(/TYPESAFE_API_KEY/)).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: /Read service status/ }));
+  expect(screen.queryByRole("button", { name: "Agent chooses tools" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Cleanup: expired test backups" }));
   fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
   expect(fixture.submit).toHaveBeenCalledWith(
-    { messages: [{ type: "human", content: "Read the checkout service status and summarize it in two sentences." }] },
+    expect.objectContaining({ proposal_id: "cleanup-expired" }),
     expect.objectContaining({ config: { recursion_limit: 24 } }),
   );
 });
@@ -77,7 +78,27 @@ test("does not fabricate a risk score for an allowed tool", () => {
     artifact: { auto_mode: { decision: "allowed", executed: true, risk_probability: null } } }];
   render(<App />);
   expect(screen.getByText("Allowed")).toBeTruthy();
-  expect(screen.getByText(/Score not exposed/)).toBeTruthy();
+  expect(screen.getByText(/Risk probability unavailable/)).toBeTruthy();
+});
+
+test("submits an editable context with a fixed proposal and identifies its source", () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole("button", { name: "Restart: diagnosis only" }));
+  expect(screen.getByText(/restart_service/)).toBeTruthy();
+  fireEvent.change(screen.getByLabelText("Your request"), { target: { value: "Only read. Do not restart staging." } });
+  fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
+  expect(fixture.submit).toHaveBeenCalledWith({ messages: [{ type: "human", content: "Only read. Do not restart staging." }], proposal_id: "restart-readonly" }, expect.anything());
+});
+
+test("shows allowed risk probability, arguments and the Noul confidence boundary", () => {
+  fixture.state.messages = [{ type: "tool", name: "restart_service", content: "Simulated restart.",
+    artifact: { auto_mode: { decision: "allowed", executed: true, risk_probability: 0.06,
+      confidence: null, arguments: { environment: "staging" }, proposal_source: "preset" } } }];
+  render(<App />);
+  expect(screen.getByText("6%")).toBeTruthy();
+  expect(screen.getByText("Fixed proposal")).toBeTruthy();
+  expect(screen.getByText(/Noul does not return a separate confidence/)).toBeTruthy();
+  expect(screen.getByText(/"environment": "staging"/)).toBeTruthy();
 });
 
 test("shows provider failures and disables duplicate submissions", () => {
@@ -106,4 +127,14 @@ test("offers a fresh task at the point of completion and focuses the editable re
   expect(input.value).not.toBe("My completed task");
   expect(document.activeElement).toBe(input);
   expect((screen.getByRole("button", { name: "Run harness" }) as HTMLButtonElement).disabled).toBe(false);
+});
+
+
+test("distinguishes gate approval from failed tool execution", () => {
+  fixture.state.messages = [{ type: "tool", name: "restart_service", content: "Missing environment.",
+    artifact: { auto_mode: { decision: "allowed", executed: false, execution_status: "failed", risk_probability: 0.1 } } }];
+  render(<App />);
+  expect(screen.getByText("Allowed")).toBeTruthy();
+  expect(screen.getByText(/argument validation or tool execution failed/)).toBeTruthy();
+  expect(screen.queryByText("Simulated tool ran.")).toBeNull();
 });

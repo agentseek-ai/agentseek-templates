@@ -4,7 +4,10 @@ A LangChain `create_agent` lab for the two harness decisions in
 [Building a Harness with Jev](https://www.langchain.com/blog/building-a-harness-with-jev):
 select a chat model before the run, and evaluate proposed tools before execution.
 The generated browser console shows the selected model, route probabilities,
-confidence, tool outcomes, and final response.
+confidence, tool outcomes, and final response. A context-experiment mode compares
+fixed restart/cleanup proposals under different authorization contexts. The
+console uses the actual upstream Auto Mode gate and reports risk probability for allowed and
+blocked calls. Noul does not return a separate confidence value.
 
 The default runtime is `agentseek-api[embedded]==0.3.2`. The console supports
 Chinese and English, with a persisted language switch and localized scenarios.
@@ -28,7 +31,7 @@ npm install --prefix frontend
 
 Fill `TYPESAFE_API_KEY` and the chat-provider settings in `.env` before any live
 test. Follow the generated README for lifecycle commands, offline validation,
-the explicit live smoke test, and the four teaching scenarios. Never put
+the explicit live smoke test, and the context experiments. Never put
 provider credentials in the frontend environment.
 
 ## Inputs

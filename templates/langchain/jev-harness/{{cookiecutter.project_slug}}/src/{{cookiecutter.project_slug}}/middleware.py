@@ -1,10 +1,12 @@
 """Observe the upstream middleware without duplicating its risk decision."""
 
+from contextvars import ContextVar
 from typing import Annotated
 
 from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain.agents.middleware.types import OmitFromSchema
 from langchain_core.messages import ToolMessage
+from langchain_core.runnables import RunnableLambda
 from langchain_typesafe.experimental.middleware import AutoModeMiddleware
 from typing_extensions import NotRequired
 
@@ -34,38 +36,50 @@ class RouteReportMiddleware(AgentMiddleware):
 
 
 class ObservedAutoModeMiddleware(AutoModeMiddleware):
-    """Keep upstream allow/block behavior and attach UI evidence to ToolMessages.
+    """Observe the SAME classifier response used by the upstream gate.
 
-    The pinned upstream version exposes the probability to its blocked-message
-    hook only. Allowed probabilities remain unknown; we do not classify twice
-    or infer a score from success. Execution flags are local to each tool call.
+    The runnable tap does not classify again or replace upstream threshold logic.
+    Each tool call owns its response bucket, including parallel async calls.
+    Noul returns a probability, not a separate confidence value.
     """
 
-    def _blocked_tool_message(self, request, probability):
-        result = super()._blocked_tool_message(request, probability)
-        result.artifact = {
-            "auto_mode": {
-                "decision": "blocked",
-                "executed": False,
-                "risk_probability": probability,
-                "threshold": 0.5,
-            }
-        }
-        return result
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._responses = ContextVar("auto_mode_responses", default=None)
+        self.risk_classifier = self.classifier
+        self.classifier = self.risk_classifier | RunnableLambda(self._observe_response)
+
+    def _observe_response(self, response):
+        bucket = self._responses.get()
+        if bucket is not None:
+            bucket.append(response)
+        return response
 
     @staticmethod
-    def _report(result, executed):
+    def _report(result, executed, responses, request):
         if not isinstance(result, ToolMessage):
             raise TypeError("Harness tools must return ToolMessages.")
-        if executed:
-            result.artifact = {
-                "auto_mode": {
-                    "decision": "allowed",
-                    "executed": True,
-                    "risk_probability": None,
-                    "threshold": 0.5,
-                }
+        if not responses:
+            return result  # Unlisted tools bypass the upstream gate; never label them allowed.
+        response = responses[0]
+        source = "agent"
+        for message in reversed(request.state.get("messages", [])):
+            if any(call["id"] == request.tool_call["id"] for call in getattr(message, "tool_calls", [])):
+                source = message.additional_kwargs.get("proposal_source", "agent")
+                break
+        result.artifact = {
+            **(result.artifact or {}),
+            "auto_mode": {
+                "decision": "allowed" if executed else "blocked",
+                "executed": executed and result.status != "error",
+                "execution_status": "blocked" if not executed else "failed" if result.status == "error" else "completed",
+                "risk_probability": response.nouls["is_risky"].noul,
+                "confidence": None,
+                "threshold": 0.5,
+                "arguments": request.tool_call["args"],
+                "proposal_source": source,
             }
+        }
         return result
 
     def wrap_tool_call(self, request, handler):
@@ -76,7 +90,13 @@ class ObservedAutoModeMiddleware(AutoModeMiddleware):
             executed = True
             return handler(req)
 
-        return self._report(super().wrap_tool_call(request, observe), executed)
+        responses = []
+        token = self._responses.set(responses)
+        try:
+            result = super().wrap_tool_call(request, observe)
+            return self._report(result, executed, responses, request)
+        finally:
+            self._responses.reset(token)
 
     async def awrap_tool_call(self, request, handler):
         executed = False
@@ -86,4 +106,10 @@ class ObservedAutoModeMiddleware(AutoModeMiddleware):
             executed = True
             return await handler(req)
 
-        return self._report(await super().awrap_tool_call(request, observe), executed)
+        responses = []
+        token = self._responses.set(responses)
+        try:
+            result = await super().awrap_tool_call(request, observe)
+            return self._report(result, executed, responses, request)
+        finally:
+            self._responses.reset(token)
