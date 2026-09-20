@@ -1790,7 +1790,7 @@ def test_runtime_workflow_covers_every_retained_migration() -> None:
     )
     expected_upload = {
         "name": "Upload published-runtime proof",
-        "uses": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+        "uses": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
         "with": {
             "name": "runtime-proof-${{ matrix.id }}",
             "path": "${{ runner.temp }}/runtime-proof/${{ matrix.id }}.json",
