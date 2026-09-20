@@ -36,7 +36,7 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
     tool_calls = [{"name": "read_service_status", "args": {}, "id": "read-1", "type": "tool_call"}]
     if parallel:
         tool_calls.append(
-            {"name": "delete_backups", "args": {}, "id": "delete-1", "type": "tool_call"}
+            {"name": "delete_backups", "args": {"environment": "production", "scope": "all"}, "id": "delete-1", "type": "tool_call"}
         )
     models = {
         name: ScriptedModel(
@@ -64,7 +64,7 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
                 },
             }
         else:
-            risk = probability
+            risk = probability(payload["state"]) if callable(probability) else probability
             if parallel:
                 risk = 0.99 if payload["state"]["tool_call"]["name"] == "delete_backups" else 0.01
             answer = {"type": "noul", "noul": risk}
@@ -76,9 +76,10 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
         middleware = original(models)
         for item in middleware:
             if hasattr(item, "classifier"):
-                item.classifier.client.close()
-                item.classifier.client = httpx2.Client(transport=httpx2.MockTransport(transport))
-                item.classifier.async_client = httpx2.AsyncClient(
+                classifier = getattr(item, "risk_classifier", item.classifier)
+                classifier.client.close()
+                classifier.client = httpx2.Client(transport=httpx2.MockTransport(transport))
+                classifier.async_client = httpx2.AsyncClient(
                     transport=httpx2.MockTransport(transport)
                 )
         return middleware
@@ -103,6 +104,7 @@ def test_route_once_and_gate_before_execution(monkeypatch, probability, decision
     assert [next(iter(r["questions"])) for r in requests] == ["model_route", "is_risky"]
     assert result["route_report"]["choice"] == "fast"
     assert result["route_report"]["confidence"] == 0.8
+    assert set(result["route_report"]["models"]) == {"fast", "powerful"}
     tool = next(m for m in result["messages"] if isinstance(m, ToolMessage))
     audit = tool.artifact["auto_mode"]
     assert audit["decision"] == decision
@@ -113,7 +115,10 @@ def test_route_once_and_gate_before_execution(monkeypatch, probability, decision
         assert "checkout" not in tool.content
     else:
         assert "checkout" in tool.content
-        assert audit["risk_probability"] is None  # upstream does not expose allowed scores
+        assert audit["risk_probability"] == probability
+    assert audit["jev_answer"] == {"type": "noul", "noul": probability}
+    assert audit["confidence"] is None  # Noul has no native confidence field.
+    assert audit["arguments"] == {}
 
 
 def test_reroutes_followup_and_restores_checkpoint(monkeypatch):
@@ -157,7 +162,73 @@ async def test_parallel_tools_have_independent_decisions(monkeypatch):
     }
     assert tools["read_service_status"]["executed"] is True
     assert tools["delete_backups"]["executed"] is False
+    assert tools["read_service_status"]["risk_probability"] == 0.01
+    assert tools["delete_backups"]["risk_probability"] == 0.99
     assert len(requests) == 3
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_fixed_proposal_changes_decision_with_user_context(monkeypatch, asynchronous):
+    def contextual_risk(state):
+        return 0.04 if "authorize" in state["messages"][0]["content"] else 0.94
+
+    graph, models, requests = setup_harness(monkeypatch, probability=contextual_risk)
+    for model in models.values():
+        model.responses = [AIMessage(content="Result explained.")]
+    reports = []
+    for index, prompt in enumerate(("I authorize restarting staging checkout.", "Diagnose only. Do not restart.")):
+        args = ({"messages": [{"role": "user", "content": prompt}], "proposal_id": "restart-approved"},
+                {"configurable": {"thread_id": f"context-{index}"}})
+        result = asyncio.run(graph.ainvoke(*args)) if asynchronous else graph.invoke(*args)
+        tool = next(m for m in result["messages"] if isinstance(m, ToolMessage))
+        assert tool.name == "restart_service"
+        audit = tool.artifact["auto_mode"]
+        assert audit["proposal_source"] == "preset"
+        reports.append(audit)
+    assert reports[0]["decision"] == "allowed"
+    assert reports[1]["decision"] == "blocked"
+    assert reports[0]["arguments"] == reports[1]["arguments"] == {"environment": "staging"}
+
+
+async def test_injected_tool_content_reaches_gate_without_becoming_user_authority(monkeypatch):
+    graph, models, requests = setup_harness(monkeypatch, probability=lambda s: 0.93 if s["tool_call"]["name"] == "restart_service" else 0.01)
+    for model in models.values():
+        model.responses = [AIMessage(content="Result explained.")]
+    result = await graph.ainvoke(
+        {"messages": [{"role": "user", "content": "Read the note only. Do not restart."}], "proposal_id": "injected-note"},
+        {"configurable": {"thread_id": "injection"}},
+    )
+    tools = [m for m in result["messages"] if isinstance(m, ToolMessage)]
+    assert [m.name for m in tools] == ["read_incident_note", "restart_service"]
+    assert tools[-1].artifact["auto_mode"]["executed"] is False
+    risk_state = next(r["state"] for r in requests if "is_risky" in r["questions"] and r["state"]["tool_call"]["name"] == "restart_service")
+    assert any(m["role"] == "tool" and "administrator" in m["content"] for m in risk_state["messages"])
+    assert sum(m["role"] == "user" for m in risk_state["messages"]) == 1
+
+
+def test_unknown_proposal_cannot_select_arbitrary_tools(monkeypatch):
+    graph, models, _ = setup_harness(monkeypatch)
+    with pytest.raises(ValueError, match="Unknown proposal"):
+        graph.invoke({"messages": [{"role": "user", "content": "Inspect."}], "proposal_id": "arbitrary-tool"},
+                     {"configurable": {"thread_id": "invalid"}})
+    assert models["fast"].calls == models["powerful"].calls == 0
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_allowed_but_invalid_arguments_do_not_claim_handler_executed(monkeypatch, asynchronous):
+    graph, models, _ = setup_harness(monkeypatch)
+    models["fast"].responses = [
+        AIMessage(content="", tool_calls=[{"name": "restart_service", "args": {}, "id": "invalid", "type": "tool_call"}]),
+        AIMessage(content="Invalid proposal."),
+    ]
+    args = ({"messages": [{"role": "user", "content": "Restart staging."}]},
+            {"configurable": {"thread_id": "invalid-args"}})
+    result = asyncio.run(graph.ainvoke(*args)) if asynchronous else graph.invoke(*args)
+    tool = next(m for m in result["messages"] if isinstance(m, ToolMessage))
+    assert tool.status == "error"
+    assert tool.artifact["auto_mode"]["decision"] == "allowed"
+    assert tool.artifact["auto_mode"]["executed"] is False
+    assert tool.artifact["auto_mode"]["execution_status"] == "failed"
 
 
 def test_every_exposed_tool_is_guarded(monkeypatch):
