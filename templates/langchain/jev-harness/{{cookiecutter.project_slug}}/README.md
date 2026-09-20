@@ -13,6 +13,8 @@ in their original form, and the chat model is asked to answer in your language.
 
 ## Setup: fill your keys before live testing
 
+Use Python 3.12 or 3.13, Node.js 24 or newer, and npm 11 or newer.
+
 ```bash
 cp .env.example .env
 uv sync --group test
