@@ -72,6 +72,19 @@ required = true
 default = "{{ cookiecutter.powercontext_max_bytes }}"
 description = "Maximum UTF-8 bytes returned in one PreparedContext."
 
+[env.POWERCONTEXT_AUTOSTART]
+required = false
+default = "true"
+description = "Start a local PowerContext Server with the project; set to false to keep it fully external."
+
+[services.powercontext]
+name = "PowerContext Server"
+url = "{{ cookiecutter.powercontext_url }}"
+kind = "api"
+display = "advanced"
+description = "External context layer holding durable project Memory for bounded recall."
+tech = "powercontext"
+
 [services.langgraph]
 name = "AgentSeek API"
 url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
@@ -91,6 +104,9 @@ primary = true
 description = "Projection-aware Event Streaming browser UI."
 tech = "vite"
 links = { docs = "https://vite.dev/guide/" }
+
+[processes.powercontext]
+command = ["uv", "run", "python", "scripts/powercontext_server.py"]
 
 [processes.langgraph]
 command = ["uv", "run", "agentseek-api", "dev", "--port", "{{ cookiecutter.langgraph_port }}"]
@@ -120,7 +136,3 @@ command = ["uv", "sync"]
 [tasks.frontend]
 description = "Install frontend dependencies."
 command = ["npm", "install", "--prefix", "frontend"]
-
-[tasks.powercontext]
-description = "Reuse or start the local PowerContext Server."
-command = ["uv", "run", "python", "scripts/ensure_powercontext.py"]

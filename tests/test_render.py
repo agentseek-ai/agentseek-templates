@@ -235,6 +235,7 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
                 ("langgraph",),
                 ("api_docs", "docs", "studio"),
             ),
+            ("powercontext", "api", "advanced", False, ("process:powercontext",), (), ()),
         ),
         "effects": {},
         "actions": (
@@ -245,6 +246,7 @@ EXPECTED_NORMALIZED_TOPOLOGY = {
             "service:langgraph:reference:api_docs",
             "service:langgraph:reference:docs",
             "service:langgraph:reference:studio",
+            "service:powercontext:copy",
         ),
     },
     "deepagents/sandbox": {
@@ -530,18 +532,22 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     assert "POWERCONTEXT_SCOPE_ID=\n" in env_example
     assert "POWERCONTEXT_PROJECT_KEY=deepagents_powercontext" in env_example
     assert "POWERCONTEXT_MAX_BYTES=8000" in env_example
+    assert "POWERCONTEXT_AUTOSTART=true" in env_example
     lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
-    assert lifecycle["tasks"]["powercontext"]["command"] == [
+    assert lifecycle["processes"]["powercontext"]["command"] == [
         "uv",
         "run",
         "python",
-        "scripts/ensure_powercontext.py",
+        "scripts/powercontext_server.py",
     ]
-    assert (generated_path / "scripts" / "ensure_powercontext.py").is_file()
+    assert (generated_path / "scripts" / "powercontext_server.py").is_file()
+    assert "powercontext" not in lifecycle.get("tasks", {})
     assert lifecycle["env"]["POWERCONTEXT_URL"]["default"] == "http://127.0.0.1:8000"
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["default"] == ""
     assert lifecycle["env"]["POWERCONTEXT_SCOPE_ID"]["required"] is False
     assert lifecycle["env"]["POWERCONTEXT_MAX_BYTES"]["default"] == "8000"
+    assert lifecycle["env"]["POWERCONTEXT_AUTOSTART"]["default"] == "true"
+    assert lifecycle["env"]["POWERCONTEXT_AUTOSTART"]["required"] is False
     middleware = (generated_path / "src" / generated_path.name / "powercontext_middleware.py").read_text(
         encoding="utf-8"
     )
