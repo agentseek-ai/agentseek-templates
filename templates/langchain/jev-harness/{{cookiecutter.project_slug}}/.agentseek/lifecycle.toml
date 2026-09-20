@@ -1,0 +1,125 @@
+version = 2
+template = "langchain/jev-harness"
+name = "{{ cookiecutter.project_name }}"
+description = "Jev model routing and Auto Mode tool decisions with a simulated operations lab."
+env_file = ".env"
+guide = "README.md"
+
+[env.SEEKDB_EMBED]
+required = true
+default = "true"
+description = "Use embedded AgentSeek API checkpoint persistence."
+
+[env.SEEKDB_EMBED_DIR]
+required = true
+default = "~/.agentseek/{{ cookiecutter.project_slug }}/seekdb"
+description = "Embedded AgentSeek API persistence directory."
+
+[env.OCEANBASE_DB_NAME]
+required = true
+default = "test"
+description = "Embedded AgentSeek API database name."
+
+[tools]
+required = ["uv", "node", "npm"]
+
+[paths]
+required = ["pyproject.toml", "langgraph.json", "frontend/package.json", "frontend/node_modules"]
+
+[env.TYPESAFE_API_KEY]
+required = true
+description = "Jev classifier API key. Fill .env before live tests."
+
+[env.TYPESAFE_BASE_URL]
+required = false
+default = "https://api.typesafe.ai"
+description = "TypeSafe API root URL."
+
+[env.OPENAI_API_KEY]
+required = true
+description = "SiliconFlow key shared by Flash and Pro; separate from Jev. / 硅基流动密钥，与 Jev 密钥不同。"
+
+[env.OPENAI_API_BASE]
+required = false
+default = "{{ cookiecutter.chat_api_base }}"
+description = "Chat Completions endpoint; change with the provider key and model IDs. / 更换服务商时同步修改接口、密钥和模型 ID。"
+
+[env.CHAT_MODEL_EXTRA_BODY]
+required = false
+default = '{"enable_thinking":false}'
+description = "Provider JSON options; use {} if enable_thinking is unsupported. / 服务商 JSON 参数；不支持思考开关时设为 {}。"
+
+[env.JEV_FAST_MODEL]
+required = true
+default = "{{ cookiecutter.fast_model }}"
+description = "Chat model for direct lookups and simple summaries."
+
+[env.JEV_POWERFUL_MODEL]
+required = true
+default = "{{ cookiecutter.powerful_model }}"
+description = "Chat model for complex reasoning and recovery plans."
+
+[services.backend]
+name = "AgentSeek API"
+url = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}"
+kind = "api"
+display = "advanced"
+primary = false
+description = "AgentSeek API runtime that runs the LangChain chat agent."
+tech = "agentseek-api"
+links = { docs = "https://github.com/ob-labs/agentseek-api", api_docs = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/docs", studio = "https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:{{ cookiecutter.langgraph_port }}" }
+
+[services.frontend]
+name = "Jev Harness Lab"
+url = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+kind = "web"
+display = "default"
+primary = true
+description = "Inspect the selected model, route probabilities, and allowed or blocked tool calls."
+tech = "vite"
+links = { docs = "https://vite.dev/guide/" }
+
+[processes.backend]
+command = ["uv", "run", "agentseek-api", "dev", "--port", "{{ cookiecutter.langgraph_port }}"]
+
+[processes.frontend]
+command = ["npm", "run", "dev"]
+cwd = "frontend"
+
+[checks.backend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.langgraph_port }}/health"
+service = "backend"
+timeout = 2
+attempts = 3
+
+[checks.frontend]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.frontend_port }}"
+service = "frontend"
+timeout = 2
+attempts = 3
+
+[tasks.sync]
+description = "Install Python dependencies."
+command = ["uv", "sync"]
+
+[tasks.frontend]
+description = "Install frontend dependencies."
+command = ["npm", "install", "--prefix", "frontend"]
+
+[tasks.test]
+description = "Run offline middleware and tool tests with fake provider responses."
+command = ["uv", "run", "--group", "test", "pytest"]
+
+[tasks.frontend-test]
+description = "Run the decision console tests."
+command = ["npm", "test", "--prefix", "frontend"]
+
+[tasks.frontend-build]
+description = "Type-check and build the decision console."
+command = ["npm", "run", "build", "--prefix", "frontend"]
+
+[tasks.live-smoke]
+description = "Call real Jev and chat providers; configure .env first."
+command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.live_smoke"]

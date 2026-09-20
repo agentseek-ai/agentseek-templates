@@ -1,0 +1,12 @@
+{
+  "project_name": "Jev Harness Lab",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_') }}",
+  "author": "Your Name",
+  "fast_model": "deepseek-ai/DeepSeek-V4-Flash",
+  "powerful_model": "deepseek-ai/DeepSeek-V4-Pro",
+  "chat_api_base": "https://api.siliconflow.cn/v1",
+  "langgraph_port": "2024",
+  "frontend_port": "5176",
+  "_agentseek_source_url": "https://github.com/ob-labs/agentseek.git",
+  "_agentseek_source_ref": "900f89518c32f8570d7648897394ed96a86a647a"
+}
