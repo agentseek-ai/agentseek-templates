@@ -5,6 +5,7 @@ import importlib.util
 import inspect
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -514,6 +515,22 @@ def _assert_exact_api_pin_contract(generated_path: Path, template_key: str) -> N
 
 def _registered_templates() -> list[tuple[str, Path]]:
     return [(key, TEMPLATES_ROOT / key) for key in sorted(INDEX)]
+
+
+@pytest.mark.parametrize(("template_key", "template_root"), _registered_templates(), ids=sorted(INDEX))
+def test_catalog_docs_only_reference_declared_lifecycle_tasks(template_key: str, template_root: Path) -> None:
+    """A doc that teaches a removed task sends users to a command that cannot run."""
+    spec_path = template_root / "{{cookiecutter.project_slug}}" / ".agentseek" / "lifecycle.toml"
+    declared = set(re.findall(r"^\[tasks\.([A-Za-z0-9_-]+)\]", spec_path.read_text(encoding="utf-8"), re.MULTILINE))
+    for doc in (
+        template_root / "README.md",
+        template_root / "{{cookiecutter.project_slug}}" / "README.md",
+    ):
+        if not doc.is_file():
+            continue
+        referenced = set(re.findall(r"agentseek\s+task\s+([A-Za-z0-9][A-Za-z0-9_-]*)", doc.read_text(encoding="utf-8")))
+        undeclared = referenced - declared
+        assert not undeclared, f"{doc} references undeclared lifecycle task(s): {sorted(undeclared)}"
 
 
 def test_reviewed_contract_covers_every_registered_template() -> None:
