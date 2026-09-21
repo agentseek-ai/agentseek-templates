@@ -180,7 +180,7 @@ def test_paired_release_metadata_separates_core_dependencies_from_import_provena
     release = json.loads(RELEASE_PATH.read_text(encoding="utf-8"))
     assert release == {
         "schema_version": 1,
-        "catalog_release": "v0.1.5",
+        "catalog_release": "v0.1.6",
         "lifecycle_version": 2,
         "core_repository": EXPECTED_CORE_REPOSITORY,
         "core_commit": EXPECTED_CORE_COMMIT,
