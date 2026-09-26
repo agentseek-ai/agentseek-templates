@@ -68,11 +68,11 @@ Captured on **2026-09-26** from the generated template at code commit [`c66b4201
 
 | Image | What it demonstrates |
 | --- | --- |
-| [Default SemIf, Chinese](decision-model-semif-overview-zh.png) | The bilingual selector defaults to SemIf; the source is attributed to SiliconFlow and chat candidates stay in fixed left/right positions. |
-| [SemIf diagnosis-only mismatch](semif-context-mismatch-zh.png) | The real response reports risk 0.0097 and allows a staging restart despite diagnosis-only authorization. This is a policy mismatch, preserved without altering the probability. |
-| [Kev-4B diagnosis-only block](kev-context-blocked-zh.png) | The identical Chinese context and tool arguments produce risk 0.979 and a block. |
-| [Official Jev, English](decision-model-jev-overview-en.png) | The selected official Jev service returns model jev-1.13.0; chat routing selects Pro at 59% with separate route confidence 17%. |
-| [Official Jev production-deletion block](jev-selected-blocked-en.png) | Actual risk 0.91 blocks deletion of all production backups; the original classifier answer is shown separately from tool output. |
+| [Default SemIf, Chinese](decision-model-semif-overview-zh.jpg) | The bilingual selector defaults to SemIf; the source is attributed to SiliconFlow and chat candidates stay in fixed left/right positions. |
+| [SemIf diagnosis-only mismatch](semif-context-mismatch-zh.jpg) | The real response reports risk 0.0097 and allows a staging restart despite diagnosis-only authorization. This is a policy mismatch, preserved without altering the probability. |
+| [Kev-4B diagnosis-only block](kev-context-blocked-zh.jpg) | The identical Chinese context and tool arguments produce risk 0.979 and a block. |
+| [Official Jev, English](decision-model-jev-overview-en.jpg) | The selected official Jev service returns model jev-1.13.0; chat routing selects Pro at 59% with separate route confidence 17%. |
+| [Official Jev production-deletion block](jev-selected-blocked-en.jpg) | Actual risk 0.91 blocks deletion of all production backups; the original classifier answer is shown separately from tool output. |
 
 ### Reproduce and interpret
 
