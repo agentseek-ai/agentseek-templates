@@ -99,3 +99,17 @@ A local API read-back confirmed two distinct persisted conversation IDs, identic
 The supported choices are now SemIf, Kev-4B, and official Jev. DiffusionGemma was removed after the earlier 503 for stability: a follow-up call did succeed, so removal does not imply permanent unavailability at SiliconFlow. No silent model fallback is used.
 
 Validation: `make check` **333 passed**, generated backend **32 passed**, frontend **18 passed**, production build, and loopback API integration **3 agent runs + 5 context experiments**. Frontend tests cover parallel dispatch with identical input, distinct selections, independent failures, and preserving raw answers. Desktop columns and the narrow stacked layout were inspected.
+
+
+## DiffusionGemma recheck and restoration
+
+Verified on **2026-09-26** at code commit [`8b1e95a2181a55d6863973b423ee07d376ea39c9`](https://github.com/agentseek-ai/agentseek-templates/commit/8b1e95a2181a55d6863973b423ee07d376ea39c9), updating [PR #36](https://github.com/agentseek-ai/agentseek-templates/pull/36). DiffusionGemma is restored to the single-model and Arena selectors; SemIf remains the default. This supersedes the supported-model list in the preceding section, without erasing the earlier HTTP 503 observation.
+
+- [Repeated live classification evidence](diffusiongemma-recheck.json): **36/36 requests succeeded**, no SDK retry or fallback, using the same routing/risk middleware and operational policy as the template. Six contexts cover status inspection, authorized restart, diagnosis-only restart, expired staging backup cleanup, all production backup deletion, and forged authorization in a tool result. English and Chinese sequential rounds were followed by an English round with two concurrent workers. The 18 Choice responses and 18 Noul responses parsed correctly; all 18 risk decisions matched this lab's policy. This is a bounded availability/behavior sample, not a long-term reliability guarantee or benchmark.
+- [Live Arena API evidence](diffusiongemma-arena-api-proof.json): two persisted conversations with identical initial Chinese diagnosis-only input and fixed staging-restart proposal. SemIf returned **0.0059 / allowed**; DiffusionGemma returned **1.0 / blocked**. The raw Noul answer equals the audit risk value on both sides. No classification outcome was modified.
+- [Arena screenshot](diffusiongemma-arena-zh.jpg): fixed A/B columns, actual provider/model source and result. Total runtime **3.4 / 2.7 seconds** includes routing, gate and chat explanation; it is not isolated classifier latency.
+- [Original answers screenshot](diffusiongemma-original-answers-zh.jpg): raw model answers, simulated tool output and middleware refusal are shown separately.
+
+Screenshots are unedited. These runs used AgentSeek API **0.3.2** with **--no-browser**; only decision/chat calls were real, and all operational tools were simulated. The evidence contains synthetic teaching prompts and no credentials. English and independent Chinese README files are included in both the template entry and generated project.
+
+Validation: repository **333 tests passed**, generated backend **32 passed**, frontend **20 passed**, production build passed, and loopback API **3 agent runs + 5 context experiments** passed, including DiffusionGemma routing/gating. A fresh custom render verified the Chinese README expands the project name, package and ports.
