@@ -81,3 +81,21 @@ Render the tested template, fill the generated server-side `.env` as documented,
 The captures are individual live observations, not a model benchmark or a security guarantee. Independent live probes found SemIf reversed both expected outcomes in the Chinese restart pair (authorized 0.9797/blocked; diagnosis-only 0.0076/allowed). Kev-4B matched that pair, but separately blocked an ordinary English status read at 0.6894, causing its strict gate smoke test to fail. DiffusionGemma returned one HTTP 503 and later blocked a diagnosis-only restart at 1.0. Official Jev matched the restart pair at 0.04/allowed and 0.98/blocked. No model fallback, outcome substitution, or probability inversion is used.
 
 Verification at the tested code commit: repository `make check` (333 passed), generated backend tests (31 passed), generated frontend tests (14 passed), production frontend build, and loopback API integration smoke (3 agent runs and 5 context experiments). These deterministic checks do not imply all real-model classifications matched policy.
+
+
+## Two-model Arena (PR #36)
+
+Captured on **2026-09-26** from code commit [`6cb67043f202769e79caf2428b00dbbef5681eea`](https://github.com/agentseek-ai/agentseek-templates/commit/6cb67043f202769e79caf2428b00dbbef5681eea) for [PR #36](https://github.com/agentseek-ai/agentseek-templates/pull/36). Runtime remains **AgentSeek API 0.3.2**. The backend was restarted with `--no-browser`. These are unedited browser captures of real SiliconFlow calls; all operational tools are simulated.
+
+| Image | What it demonstrates |
+| --- | --- |
+| [Model selection and shared input](arena-model-selection-zh.jpg) | Arena selects two different models, defaults to SemIf / Kev-4B, and submits one diagnosis-only request with an identical fixed staging-restart proposal. |
+| [Live side-by-side result](arena-live-comparison-zh.jpg) | Fixed A/B columns show SemIf allowed at 0.0086 risk (displayed 1%) while Kev-4B blocked at 0.9789 (98%). The disagreement is explicit. Total runtime was 2.2 / 3.7 seconds, including routing, tool checks, and chat explanations. |
+| [Original answers, Chinese](arena-original-answers-zh.jpg) | The same raw Noul answers are visible alongside the simulated execution output and the block message. |
+| [Original answers, English](arena-original-answers-en.jpg) | English labels preserve the same real decisions and raw values when switching UI language. |
+
+A local API read-back confirmed two distinct persisted conversation IDs, identical initial input and proposal ID, the selected responding model on each side, and exact equality between raw Noul values and displayed audit values. This run intentionally demonstrates a policy mismatch on SemIf; lower risk is not a quality score or an automatic win. These isolated observations are not a model benchmark.
+
+The supported choices are now SemIf, Kev-4B, and official Jev. DiffusionGemma was removed after the earlier 503 for stability: a follow-up call did succeed, so removal does not imply permanent unavailability at SiliconFlow. No silent model fallback is used.
+
+Validation: `make check` **333 passed**, generated backend **32 passed**, frontend **18 passed**, production build, and loopback API integration **3 agent runs + 5 context experiments**. Frontend tests cover parallel dispatch with identical input, distinct selections, independent failures, and preserving raw answers. Desktop columns and the narrow stacked layout were inspected.
