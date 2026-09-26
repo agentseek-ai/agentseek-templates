@@ -10,7 +10,6 @@ from langchain_typesafe import TypeSafeClassifier
 MODELS = {
     "semif": ("siliconflow", "semif", "SemIf"),
     "kev-4b": ("siliconflow", "kev-4b", "Kev-4B"),
-    "diffusiongemma": ("siliconflow", "diffusiongemma", "DiffusionGemma"),
     "jev": ("typesafe", "jev-latest", "Jev"),
 }
 
@@ -18,7 +17,7 @@ MODELS = {
 def selection(config=None):
     value = ensure_config(config).get("configurable", {}).get("decision_model", "semif")
     if not isinstance(value, str) or value not in MODELS:
-        raise ValueError("Unknown decision model. Choose semif, kev-4b, diffusiongemma, or jev.")
+        raise ValueError("Unknown decision model. Choose semif, kev-4b, or jev.")
     return value
 
 

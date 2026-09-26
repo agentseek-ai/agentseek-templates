@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import App from "./App";
 
@@ -110,7 +110,7 @@ test("shows provider failures and disables duplicate submissions", () => {
   expect((screen.getByRole("button", { name: "Start new task" }) as HTMLButtonElement).disabled).toBe(true);
 });
 
-test("offers a fresh task at the point of completion and focuses the editable request", () => {
+test("offers a fresh task at the point of completion and focuses the editable request", async () => {
   const view = render(<App />);
   fireEvent.change(screen.getByLabelText("Your request"), { target: { value: "My completed task" } });
   fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
@@ -118,7 +118,7 @@ test("offers a fresh task at the point of completion and focuses the editable re
   view.rerender(<App />);
   expect(screen.getAllByRole("button", { name: "Start new task" })).toHaveLength(1);
   fixture.state.isLoading = false;
-  view.rerender(<App />);
+  await act(async () => view.rerender(<App />));
   const buttons = screen.getAllByRole("button", { name: "Start new task" });
   expect(buttons).toHaveLength(2);
   fireEvent.click(buttons[1]);

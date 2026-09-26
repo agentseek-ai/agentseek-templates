@@ -94,7 +94,7 @@ tech = "vite"
 links = { docs = "https://vite.dev/guide/" }
 
 [processes.backend]
-command = ["uv", "run", "agentseek-api", "dev", "--port", "{{ cookiecutter.langgraph_port }}"]
+command = ["uv", "run", "agentseek-api", "dev", "--no-browser", "--port", "{{ cookiecutter.langgraph_port }}"]
 
 [processes.frontend]
 command = ["npm", "run", "dev"]

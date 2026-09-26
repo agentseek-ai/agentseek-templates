@@ -12,9 +12,13 @@ blocked calls. Noul does not return a separate confidence value.
 The default runtime is `agentseek-api[embedded]==0.3.2`. The console supports
 Chinese and English, with a persisted language switch and localized scenarios.
 
-The default decision model is **SiliconFlow SemIf**, with **Kev-4B**,
-**DiffusionGemma**, and official **Jev** selectable per run. Both routing and
+The default decision model is **SiliconFlow SemIf**, with **Kev-4B**
+and official **Jev** selectable per run. Both routing and
 tool checks use that selection; results identify the actual responding model.
+Arena compares two different decision models concurrently with a shared initial
+context and isolated conversations. Results stay in fixed A/B columns; failures
+remain independent. DiffusionGemma is omitted after an observed availability issue.
+The backend lifecycle starts with `--no-browser`.
 
 The template adapts the constructors of `ModelRouterMiddleware` and `AutoModeMiddleware`
 from `langchain-typesafe[experimental]==0.0.1a2`, with `langchain==1.3.15` and

@@ -24,7 +24,7 @@ npm install --prefix frontend
 Open `.env` locally. The default decision model is **SiliconFlow SemIf**.
 Fill **only `OPENAI_API_KEY`** with your SiliconFlow China key to use both
 System One decisions and the default DeepSeek V4 Flash/Pro chat models.
-The console also offers **Kev-4B**, **DiffusionGemma**, and official **Jev**.
+The console also offers **Kev-4B** and official **Jev**.
 
 | Setting | What you supply or change / 需要填写或修改的内容 |
 | --- | --- |
@@ -38,7 +38,7 @@ The console also offers **Kev-4B**, **DiffusionGemma**, and official **Jev**.
 | `CHAT_MODEL_EXTRA_BODY` | `'{"enable_thinking":false}'` for this SiliconFlow demo; use `'{}'` if another provider does not support it. / 不支持思考开关时填 `'{}'`。 |
 
 中文：默认由 **SemIf 做决策**，两个候选对话模型负责生成解释。在界面的「决策模型」
-选择 SemIf、Kev-4B、DiffusionGemma 或官方 Jev；每次运行的路由和工具检查共用该选择。
+选择 SemIf、Kev-4B 或官方 Jev；每次运行的路由和工具检查共用该选择。
 开始新任务后可更换模型，所选模型保留，方便对比不同上下文。结果中的「决策来源」
 记录服务商及实际响应模型名，概率直接来自该模型，不把其他模型的回答标为 Jev。
 
@@ -95,7 +95,7 @@ The AgentSeek API is at http://127.0.0.1:{{ cookiecutter.langgraph_port }}.
 Without the CLI, run these in two terminals from this project:
 
 ```bash
-uv run agentseek-api dev --port {{ cookiecutter.langgraph_port }}
+uv run agentseek-api dev --no-browser --port {{ cookiecutter.langgraph_port }}
 ```
 
 ```bash
@@ -160,7 +160,7 @@ Only after saving your keys:
 agentseek task live-smoke
 # Equivalent:
 uv run python -m {{ cookiecutter.project_slug }}.live_smoke --decision-model semif
-# Other choices: kev-4b, diffusiongemma, jev
+# Other choices: kev-4b, jev
 ```
 
 This sends real decision-model/chat requests and can incur provider charges. It exercises two complete agent runs,
@@ -217,3 +217,40 @@ The API is marked Alpha; availability and pricing can change.
 [confidence](https://docs.typesafe.ai/confidence).
 For chat-provider configuration, see the [SiliconFlow Chat Completions API](https://docs.siliconflow.cn/docs/api/chat-completions-post)
 and [model release notes](https://docs.siliconflow.cn/docs/release-notes/overview).
+
+## Arena: compare two decision models / 双模型 PK
+
+Choose **Arena · compare two models** (中文：**Arena · 双模型 PK**). Select two
+different models; defaults are **A: SemIf** and **B: Kev-4B**, both on SiliconFlow.
+You can use official Jev on either side when `TYPESAFE_API_KEY` is configured.
+Both sides receive the same edited initial request, policy, and fixed proposal
+sequence, and run concurrently in separate conversations. A remains on the left
+and B on the right. A provider failure does not cancel or hide the other result.
+
+The comparison shows routing, raw risk answers, actual allowed/blocked decisions,
+and total runtime. Runtime includes routing, tool checks, and the chat explanation;
+it is not isolated classifier latency. Lower risk and higher confidence are not
+quality scores or an automatic win. If gates diverge, later steps in a multi-tool
+experiment can see different tool results. Two runs incur two sets of provider usage.
+
+中文：选择场景、编辑一份共用任务，点击「开始双模型 PK」。左右固定展示两个模型
+的真实结果，并提示工具判定是否一致。原始概率不做反转或修正；总耗时包含对话解释，
+不能当作纯决策模型性能对比。点击「开始新任务」可重新选择场景和模型。
+
+### Available models
+
+DiffusionGemma is removed from this template's selectable models after an observed
+HTTP 503. A follow-up real call on 2026-09-26 succeeded, so this is a conservative
+stability choice, not a claim that SiliconFlow permanently lacks the model.
+SemIf and Kev-4B both completed the same follow-up case; their classification
+limitations above still apply. Unsupported or retired selections fail before
+any provider request, with no silent fallback.
+
+### Start without opening a browser
+
+The lifecycle starts its backend with `agentseek-api dev --no-browser`; no browser
+is opened automatically. Run `agentseek dev` normally: the AgentSeek core CLI
+itself does not expose this flag. Open the frontend URL manually.
+
+中文：后端启动命令已配置 `--no-browser`。使用 `agentseek dev` 启动后，请手动打开
+前端地址；不要把此参数直接传给不支持它的 AgentSeek core 命令。

@@ -283,7 +283,6 @@ def test_decision_selection_reaches_both_gates_with_separate_credentials(monkeyp
     for selection, expected_model, provider, key in (
         (None, "semif", "siliconflow", "offline-siliconflow-key"),
         ("kev-4b", "kev-4b", "siliconflow", "offline-siliconflow-key"),
-        ("diffusiongemma", "diffusiongemma", "siliconflow", "offline-siliconflow-key"),
         ("jev", "jev-latest", "typesafe", "offline-test-key"),
     ):
         config = {"configurable": {"thread_id": f"provider-{selection}"}}
@@ -314,11 +313,12 @@ async def test_concurrent_runs_keep_provider_choice_local(monkeypatch):
     assert await asyncio.gather(run("semif"), run("jev")) == ["semif", "jev"]
 
 
-def test_unknown_selection_fails_before_any_provider_or_tool(monkeypatch):
+@pytest.mark.parametrize("selection", ["https://untrusted.example", "diffusiongemma"])
+def test_unknown_selection_fails_before_any_provider_or_tool(monkeypatch, selection):
     graph, models, requests = setup_harness(monkeypatch)
     with pytest.raises(ValueError, match="Unknown decision model"):
         graph.invoke({"messages": [{"role": "user", "content": "Read status."}]},
-                     {"configurable": {"thread_id": "invalid-provider", "decision_model": "https://untrusted.example"}})
+                     {"configurable": {"thread_id": "invalid-provider", "decision_model": selection}})
     assert requests == []
     assert models["fast"].calls == models["powerful"].calls == 0
 
