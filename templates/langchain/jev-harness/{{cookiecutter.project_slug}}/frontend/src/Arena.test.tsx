@@ -88,3 +88,16 @@ test("compares actual gate decisions without naming a lower risk score as the wi
   expect(screen.getAllByLabelText("Original risk answer").map(x => x.textContent)).toEqual(['{\n  "type": "noul",\n  "noul": 0.01\n}', '{\n  "type": "noul",\n  "noul": 0.98\n}']);
   expect(screen.getByText(/Total runtime includes routing, tool checks/)).toBeTruthy();
 });
+
+
+test.each(["single", "arena"])("submits DiffusionGemma from the %s selector without replacing its model ID", async mode => {
+  render(<App />);
+  if (mode === "arena") fireEvent.click(screen.getByRole("button", { name: "Arena · compare two models" }));
+  const selector = screen.getByRole("combobox", { name: mode === "arena" ? "Model B" : "Decision model" });
+  expect(within(selector).getByRole("option", { name: "DiffusionGemma" })).toBeTruthy();
+  fireEvent.change(selector, { target: { value: "diffusiongemma" } });
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: mode === "arena" ? "Start comparison" : "Run harness" })));
+  expect(fixture.sides[mode === "arena" ? 1 : 0].submit).toHaveBeenCalledWith(expect.any(Object), {
+    config: { recursion_limit: 24, configurable: { decision_model: "diffusiongemma" } },
+  });
+});

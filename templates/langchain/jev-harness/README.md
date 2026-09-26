@@ -1,5 +1,7 @@
 # langchain/jev-harness
 
+English | [简体中文](README.zh.md)
+
 A LangChain `create_agent` lab for the two harness decisions in
 [Building a Harness with Jev](https://www.langchain.com/blog/building-a-harness-with-jev):
 select a chat model before the run, and evaluate proposed tools before execution.
@@ -12,12 +14,14 @@ blocked calls. Noul does not return a separate confidence value.
 The default runtime is `agentseek-api[embedded]==0.3.2`. The console supports
 Chinese and English, with a persisted language switch and localized scenarios.
 
-The default decision model is **SiliconFlow SemIf**, with **Kev-4B**
+The default decision model is **SiliconFlow SemIf**, with **Kev-4B**, **DiffusionGemma**,
 and official **Jev** selectable per run. Both routing and
 tool checks use that selection; results identify the actual responding model.
 Arena compares two different decision models concurrently with a shared initial
 context and isolated conversations. Results stay in fixed A/B columns; failures
-remain independent. DiffusionGemma is omitted after an observed availability issue.
+remain independent. DiffusionGemma is restored after 36/36 real classification
+requests succeeded in a repeated English/Chinese recheck, including concurrency.
+The generated README records the earlier HTTP 503 and the limits of this sample.
 The backend lifecycle starts with `--no-browser`.
 
 The template adapts the constructors of `ModelRouterMiddleware` and `AutoModeMiddleware`

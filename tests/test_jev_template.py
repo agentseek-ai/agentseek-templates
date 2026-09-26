@@ -49,3 +49,12 @@ def test_jev_harness_renders_with_explicit_live_credentials(tmp_path: Path) -> N
     assert "http://127.0.0.1:5199" in graph["http"]["cors"]["allow_origins"]
     assert (generated / "tests/test_harness.py").is_file()
     assert (generated / "frontend/src/App.test.tsx").is_file()
+    for name in ("README.md", "README.zh.md"):
+        readme = (generated / name).read_text()
+        assert readme.startswith("# Custom Harness\n")
+        assert "{{" not in readme
+        assert "http://127.0.0.1:5199" in readme
+        assert "http://127.0.0.1:2099" in readme
+        assert "custom_harness.live_smoke" in readme
+        sibling = "README.zh.md" if name == "README.md" else "README.md"
+        assert f"]({sibling})" in readme

@@ -3,7 +3,7 @@ import { Translate, TranslationKey, useLanguage } from "./i18n";
 import { RunEvidence } from "./RunEvidence";
 import { HarnessRun, useHarnessRun } from "./useHarnessRun";
 
-const decisionModels = [{ id: "semif", label: "SemIf" }, { id: "kev-4b", label: "Kev-4B" }, { id: "jev", label: "Jev" }];
+const decisionModels = [{ id: "semif", label: "SemIf" }, { id: "kev-4b", label: "Kev-4B" }, { id: "diffusiongemma", label: "DiffusionGemma" }, { id: "jev", label: "Jev" }];
 const modelLabel = (id: string) => decisionModels.find(model => model.id === id)?.label ?? id;
 type Mode = "single" | "arena";
 const experiments: { id: string; title: TranslationKey; prompt: TranslationKey; proposal: string }[] = [
@@ -27,7 +27,7 @@ function ModelPicker({ id, label, value, onChange, disabled, t }: {
   return <div className="model-picker">
     <label htmlFor={id}>{label}</label>
     <select id={id} value={value} onChange={event => onChange(event.target.value)} disabled={disabled} aria-describedby={`${id}-help`}>
-      <optgroup label="SiliconFlow"><option value="semif">SemIf · {t("defaultModel")}</option><option value="kev-4b">Kev-4B</option></optgroup>
+      <optgroup label="SiliconFlow"><option value="semif">SemIf · {t("defaultModel")}</option><option value="kev-4b">Kev-4B</option><option value="diffusiongemma">DiffusionGemma</option></optgroup>
       <optgroup label="TypeSafe"><option value="jev">Jev · {t("officialModel")}</option></optgroup>
     </select>
     <p id={`${id}-help`} className="decision-key-help">{t(value === "jev" ? "jevKeyHelp" : "siliconflowKeyHelp")}</p>
