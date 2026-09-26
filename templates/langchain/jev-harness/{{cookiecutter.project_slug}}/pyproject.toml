@@ -1,7 +1,7 @@
 [project]
 name = "{{ cookiecutter.project_slug }}"
 version = "0.1.0"
-description = "{{ cookiecutter.project_name }}: inspect Jev routing and Auto Mode decisions."
+description = "{{ cookiecutter.project_name }}: inspect System One routing and Auto Mode decisions."
 authors = [{ name = "{{ cookiecutter.author }}" }]
 requires-python = ">=3.12,<3.14"
 dependencies = [

@@ -1,7 +1,7 @@
 version = 2
 template = "langchain/jev-harness"
 name = "{{ cookiecutter.project_name }}"
-description = "Jev model routing and Auto Mode tool decisions with a simulated operations lab."
+description = "Selectable System One model routing and Auto Mode tool decisions with a simulated operations lab."
 env_file = ".env"
 guide = "README.md"
 
@@ -26,9 +26,23 @@ required = ["uv", "node", "npm"]
 [paths]
 required = ["pyproject.toml", "langgraph.json", "frontend/package.json", "frontend/node_modules"]
 
+[env.SILICONFLOW_API_KEY]
+required = false
+description = "Decision-model key; defaults to the chat key only with a SiliconFlow China chat endpoint. / 对话服务为硅基流动时可留空复用密钥。"
+
+[env.SILICONFLOW_BASE_URL]
+required = false
+default = "https://api.siliconflow.cn"
+description = "Root URL for System One; /v1/systemone is appended automatically. / 只填根地址。"
+
 [env.TYPESAFE_API_KEY]
-required = true
-description = "Jev classifier API key. Fill .env before live tests."
+required = false
+description = "Required only when selecting official Jev. / 仅选择官方 Jev 时需要。"
+
+[env.TYPESAFE_MODEL]
+required = false
+default = "jev-latest"
+description = "Official Jev model ID. / 官方 Jev 模型 ID。"
 
 [env.TYPESAFE_BASE_URL]
 required = false
@@ -37,7 +51,7 @@ description = "TypeSafe API root URL."
 
 [env.OPENAI_API_KEY]
 required = true
-description = "SiliconFlow key shared by Flash and Pro; separate from Jev. / 硅基流动密钥，与 Jev 密钥不同。"
+description = "SiliconFlow key for chat and, by default, System One decisions. / 默认由对话和决策模型共用的硅基流动密钥。"
 
 [env.OPENAI_API_BASE]
 required = false
@@ -80,7 +94,7 @@ tech = "vite"
 links = { docs = "https://vite.dev/guide/" }
 
 [processes.backend]
-command = ["uv", "run", "agentseek-api", "dev", "--port", "{{ cookiecutter.langgraph_port }}"]
+command = ["uv", "run", "agentseek-api", "dev", "--no-browser", "--port", "{{ cookiecutter.langgraph_port }}"]
 
 [processes.frontend]
 command = ["npm", "run", "dev"]
@@ -121,5 +135,5 @@ description = "Type-check and build the decision console."
 command = ["npm", "run", "build", "--prefix", "frontend"]
 
 [tasks.live-smoke]
-description = "Call real Jev and chat providers; configure .env first."
+description = "Call the selected real decision and chat providers; configure .env first."
 command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.live_smoke"]
