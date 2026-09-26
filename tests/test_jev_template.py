@@ -25,7 +25,9 @@ def test_jev_harness_renders_with_explicit_live_credentials(tmp_path: Path) -> N
     )
     lifecycle = tomllib.loads((generated / ".agentseek/lifecycle.toml").read_text())
     assert lifecycle["version"] == 2
-    assert lifecycle["env"]["TYPESAFE_API_KEY"]["required"] is True
+    assert lifecycle["env"]["TYPESAFE_API_KEY"]["required"] is False
+    assert lifecycle["env"]["SILICONFLOW_API_KEY"]["required"] is False
+    assert lifecycle["env"]["SILICONFLOW_BASE_URL"]["default"] == "https://api.siliconflow.cn"
     assert lifecycle["env"]["OPENAI_API_KEY"]["required"] is True
     assert lifecycle["tasks"]["test"]["command"] == ["uv", "run", "--group", "test", "pytest"]
     assert lifecycle["tasks"]["live-smoke"]["command"][-1] == "custom_harness.live_smoke"

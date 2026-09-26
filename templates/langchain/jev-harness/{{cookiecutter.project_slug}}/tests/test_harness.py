@@ -14,18 +14,22 @@ from {{cookiecutter.project_slug}} import agent
 
 class ScriptedModel(FakeMessagesListChatModel):
     calls: int = 0
+    last_messages: list = []
 
     def bind_tools(self, tools, **kwargs):
         return self
 
     def _generate(self, *args, **kwargs):
         self.calls += 1
+        self.last_messages = args[0]
         return super()._generate(*args, **kwargs)
 
 
 @pytest.fixture(autouse=True)
 def offline_environment(monkeypatch):
     monkeypatch.setenv("TYPESAFE_API_KEY", "offline-test-key")
+    monkeypatch.setenv("SILICONFLOW_API_KEY", "offline-siliconflow-key")
+    monkeypatch.setenv("SILICONFLOW_BASE_URL", "http://127.0.0.1:1")
     monkeypatch.setenv("LANGSMITH_TRACING", "false")
     # A missing mock must fail locally, never fall through to a live service.
     monkeypatch.setenv("TYPESAFE_BASE_URL", "http://127.0.0.1:1")
@@ -47,7 +51,7 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
 
     def transport(request):
         payload = json.loads(request.content)
-        requests.append(payload)
+        requests.append({**payload, "_host": str(request.url), "_auth": request.headers["authorization"]})
         assert request.url.path == "/v1/systemone"
         question = next(iter(payload["questions"]))
         if fail == question:
@@ -68,7 +72,7 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
             if parallel:
                 risk = 0.99 if payload["state"]["tool_call"]["name"] == "delete_backups" else 0.01
             answer = {"type": "noul", "noul": risk}
-        return httpx2.Response(200, json={"model": "jev-fixture", "answers": {question: answer}})
+        return httpx2.Response(200, json={"model": payload["model"] + "-fixture", "answers": {question: answer}})
 
     original = agent.make_middleware
 
@@ -77,11 +81,10 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
         for item in middleware:
             if hasattr(item, "classifier"):
                 classifier = getattr(item, "risk_classifier", item.classifier)
-                classifier.client.close()
-                classifier.client = httpx2.Client(transport=httpx2.MockTransport(transport))
-                classifier.async_client = httpx2.AsyncClient(
-                    transport=httpx2.MockTransport(transport)
-                )
+                for provider in getattr(classifier, "classifiers", {"legacy": classifier}).values():
+                    provider.client.close()
+                    provider.client = httpx2.Client(transport=httpx2.MockTransport(transport))
+                    provider.async_client = httpx2.AsyncClient(transport=httpx2.MockTransport(transport))
         return middleware
 
     monkeypatch.setattr(agent, "make_middleware", make_middleware)
@@ -116,7 +119,7 @@ def test_route_once_and_gate_before_execution(monkeypatch, probability, decision
     else:
         assert "checkout" in tool.content
         assert audit["risk_probability"] == probability
-    assert audit["jev_answer"] == {"type": "noul", "noul": probability}
+    assert audit["raw_answer"] == {"type": "noul", "noul": probability}
     assert audit["confidence"] is None  # Noul has no native confidence field.
     assert audit["arguments"] == {}
 
@@ -270,3 +273,93 @@ def test_invalid_provider_extra_body_fails_before_model_creation(monkeypatch, va
     monkeypatch.setenv("CHAT_MODEL_EXTRA_BODY", value)
     with pytest.raises(ValueError, match="CHAT_MODEL_EXTRA_BODY"):
         agent.make_graph()
+
+
+@pytest.mark.parametrize("asynchronous", [False, True])
+def test_decision_selection_reaches_both_gates_with_separate_credentials(monkeypatch, asynchronous):
+    monkeypatch.setenv("SILICONFLOW_BASE_URL", "http://siliconflow.test")
+    monkeypatch.setenv("TYPESAFE_BASE_URL", "http://typesafe.test")
+    graph, _, requests = setup_harness(monkeypatch)
+    for selection, expected_model, provider, key in (
+        (None, "semif", "siliconflow", "offline-siliconflow-key"),
+        ("kev-4b", "kev-4b", "siliconflow", "offline-siliconflow-key"),
+        ("diffusiongemma", "diffusiongemma", "siliconflow", "offline-siliconflow-key"),
+        ("jev", "jev-latest", "typesafe", "offline-test-key"),
+    ):
+        config = {"configurable": {"thread_id": f"provider-{selection}"}}
+        if selection:
+            config["configurable"]["decision_model"] = selection
+        args = ({"messages": [{"role": "user", "content": "Read status."}]}, config)
+        result = asyncio.run(graph.ainvoke(*args)) if asynchronous else graph.invoke(*args)
+        recent = requests[-2:]
+        assert [r["model"] for r in recent] == [expected_model, expected_model]
+        assert all(r["_host"] == f"http://{provider}.test/v1/systemone" for r in recent)
+        assert all(r["_auth"] == f"Bearer {key}" for r in recent)
+        report = result["route_report"]["decision_model"]
+        assert report["provider"] == provider
+        assert report["model"] == expected_model + "-fixture"
+        tool = next(m for m in result["messages"] if isinstance(m, ToolMessage))
+        assert tool.artifact["auto_mode"]["decision_model"] == report
+        assert tool.artifact["auto_mode"]["raw_answer"] == {"type": "noul", "noul": 0.01}
+
+
+async def test_concurrent_runs_keep_provider_choice_local(monkeypatch):
+    graph, _, requests = setup_harness(monkeypatch)
+    async def run(selection):
+        result = await graph.ainvoke(
+            {"messages": [{"role": "user", "content": "Read status."}]},
+            {"configurable": {"thread_id": selection, "decision_model": selection}},
+        )
+        return result["route_report"]["decision_model"]["selection"]
+    assert await asyncio.gather(run("semif"), run("jev")) == ["semif", "jev"]
+
+
+def test_unknown_selection_fails_before_any_provider_or_tool(monkeypatch):
+    graph, models, requests = setup_harness(monkeypatch)
+    with pytest.raises(ValueError, match="Unknown decision model"):
+        graph.invoke({"messages": [{"role": "user", "content": "Read status."}]},
+                     {"configurable": {"thread_id": "invalid-provider", "decision_model": "https://untrusted.example"}})
+    assert requests == []
+    assert models["fast"].calls == models["powerful"].calls == 0
+
+
+def test_default_runs_without_a_jev_key_and_missing_jev_does_not_fallback(monkeypatch):
+    monkeypatch.delenv("TYPESAFE_API_KEY")
+    graph, _, requests = setup_harness(monkeypatch)
+    graph.invoke({"messages": [{"role": "user", "content": "Read status."}]},
+                 {"configurable": {"thread_id": "no-jev-key"}})
+    assert requests[0]["model"] == "semif"
+    count = len(requests)
+    with pytest.raises(ValueError, match="TYPESAFE_API_KEY"):
+        graph.invoke({"messages": [{"role": "user", "content": "Read status."}]},
+                     {"configurable": {"thread_id": "missing-jev", "decision_model": "jev"}})
+    assert len(requests) == count
+
+
+@pytest.mark.parametrize("base,works", [("https://api.siliconflow.cn/v1", True), ("https://other-provider.example/v1", False)])
+def test_chat_key_reuse_is_limited_to_siliconflow(monkeypatch, base, works):
+    monkeypatch.delenv("SILICONFLOW_API_KEY")
+    monkeypatch.setenv("OPENAI_API_BASE", base)
+    monkeypatch.setenv("OPENAI_API_KEY", "chat-provider-key")
+    graph, _, requests = setup_harness(monkeypatch)
+    args = ({"messages": [{"role": "user", "content": "Read status."}]},
+            {"configurable": {"thread_id": "key-reuse"}})
+    if works:
+        graph.invoke(*args)
+        assert all(r["_auth"] == "Bearer chat-provider-key" for r in requests)
+    else:
+        with pytest.raises(ValueError, match="SILICONFLOW_API_KEY"):
+            graph.invoke(*args)
+        assert requests == []
+
+
+def test_explanation_receives_actual_gate_facts_even_when_policy_was_misclassified(monkeypatch):
+    graph, models, _ = setup_harness(monkeypatch, probability=0.01)
+    for model in models.values():
+        model.responses = [AIMessage(content="Explained.")]
+    graph.invoke({"messages": [{"role": "user", "content": "Do not restart."}], "proposal_id": "restart-readonly"},
+                 {"configurable": {"thread_id": "misclassified"}})
+    system = models["fast"].last_messages[0].text
+    assert '"decision": "allowed"' in system
+    assert '"executed": true' in system
+    assert '"risk_probability": 0.01' in system

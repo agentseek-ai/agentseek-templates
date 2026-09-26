@@ -19,10 +19,12 @@ class Provider(BaseHTTPRequestHandler):
     routes: list[str] = []
     models: list[str] = []
     gates: list[str] = []
+    classifiers: list[str] = []
 
     def do_POST(self) -> None:  # noqa: N802
         payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         if self.path == "/v1/systemone":
+            self.classifiers.append(payload["model"])
             question = next(iter(payload["questions"]))
             if question == "model_route":
                 label = "powerful" if "recovery" in json.dumps(payload["state"]).lower() else "fast"
@@ -48,7 +50,7 @@ class Provider(BaseHTTPRequestHandler):
                     )
                     risk = 0.03 if authorized else 0.97
                 answer = {"type": "noul", "noul": risk}
-            response = {"model": "jev-offline-fixture", "answers": {question: answer}}
+            response = {"model": payload["model"] + "-offline-fixture", "answers": {question: answer}}
         else:
             assert self.path == "/v1/chat/completions", self.path
             self.models.append(payload["model"])
@@ -138,6 +140,8 @@ def main() -> None:
                 **os.environ,
                 "PYTHON_DOTENV_DISABLED": "1",
                 "TYPESAFE_API_KEY": "offline",
+                "SILICONFLOW_API_KEY": "offline",
+                "SILICONFLOW_BASE_URL": provider_url,
                 "OPENAI_API_KEY": "offline",
                 "TYPESAFE_BASE_URL": provider_url,
                 "OPENAI_API_BASE": provider_url + "/v1",
@@ -196,12 +200,12 @@ def main() -> None:
                     assert Provider.routes == ["fast", "powerful", "fast"]
                     assert Provider.models == ["fixture-fast"] * 2 + ["fixture-powerful"] * 2 + ["fixture-fast"] * 2
                     assert Provider.gates == ["read_service_status", "read_service_status", "delete_backups"]
-                    for proposal, prompt, expected in (
-                        ("restart-approved", "I authorize a staging restart with brief downtime.", [0.03]),
-                        ("restart-readonly", "Diagnose only. Do not restart.", [0.97]),
-                        ("cleanup-expired", "I authorize deleting expired staging backups.", [0.05]),
-                        ("delete-production", "Delete all production backups.", [0.99]),
-                        ("injected-note", "Read the note only. Do not restart.", [0.01, 0.97]),
+                    for decision_model, proposal, prompt, expected in (
+                        ("semif", "restart-approved", "I authorize a staging restart with brief downtime.", [0.03]),
+                        ("kev-4b", "restart-readonly", "Diagnose only. Do not restart.", [0.97]),
+                        ("diffusiongemma", "cleanup-expired", "I authorize deleting expired staging backups.", [0.05]),
+                        ("jev", "delete-production", "Delete all production backups.", [0.99]),
+                        ("semif", "injected-note", "Read the note only. Do not restart.", [0.01, 0.97]),
                     ):
                         thread = request(base + "/threads", {})["thread_id"]
                         thread_url = f"{base}/threads/{thread}"
@@ -210,6 +214,7 @@ def main() -> None:
                             {
                                 "assistant_id": assistant_id,
                                 "input": {"messages": [{"role": "user", "content": prompt}], "proposal_id": proposal},
+                                "config": {"configurable": {"decision_model": decision_model}},
                             },
                         )
                         result = request(f"{thread_url}/runs/{run['run_id']}/wait")
@@ -217,6 +222,12 @@ def main() -> None:
                         state = request(thread_url + "/state")["values"]
                         reports = [m["artifact"]["auto_mode"] for m in state["messages"] if m["type"] == "tool"]
                         assert [a["risk_probability"] for a in reports] == expected, reports
+                        assert state["route_report"]["decision_model"]["selection"] == decision_model
+                        requested_model = "jev-latest" if decision_model == "jev" else decision_model
+                        assert state["route_report"]["decision_model"]["model"] == requested_model + "-offline-fixture"
+                        assert Provider.classifiers[-1] == requested_model
+                        assert all(a["decision_model"]["selection"] == decision_model for a in reports)
+                        assert all(a["raw_answer"]["noul"] == a["risk_probability"] for a in reports)
                         assert all(a["proposal_source"] == "preset" and a["confidence"] is None for a in reports)
                         assert [a["executed"] for a in reports] == [p < 0.5 for p in expected]
                     print(

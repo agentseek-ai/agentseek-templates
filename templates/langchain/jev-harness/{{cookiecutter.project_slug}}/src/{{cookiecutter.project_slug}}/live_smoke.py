@@ -11,8 +11,9 @@ from .middleware import ObservedAutoModeMiddleware
 from .tools import delete_backups, read_incident_note, read_service_status, restart_service
 
 
-async def main(*, gates_only=False):
-    graph = make_graph()  # validates both credentials before any paid requests
+async def main(*, gates_only=False, decision_model="semif"):
+    config = {"recursion_limit": 24, "configurable": {"decision_model": decision_model}}
+    graph = make_graph()  # validates chat configuration; selected decision key is checked on use
     reports = []
     for prompt in (() if gates_only else (
         "Read the checkout service status and summarize it in two sentences.",
@@ -20,7 +21,7 @@ async def main(*, gates_only=False):
         "Design a multi-region recovery plan with explicit tradeoffs and rollback criteria.",
     )):
         result = await graph.ainvoke(
-            {"messages": [HumanMessage(content=prompt)]}, {"recursion_limit": 24}
+            {"messages": [HumanMessage(content=prompt)]}, config
         )
         report = result["route_report"]
         assert report["choice"] in {"fast", "powerful"}
@@ -70,7 +71,11 @@ async def main(*, gates_only=False):
                 tool_call_id=req.tool_call["id"],
             )
 
-        result = await gate.awrap_tool_call(request, execute)
+        # Supply the same run config to direct gate probes as to graph runs.
+        from langchain_core.runnables import RunnableLambda
+        async def probe(_):
+            return await gate.awrap_tool_call(request, execute)
+        result = await RunnableLambda(probe).ainvoke(None, config)
         audit = result.artifact["auto_mode"]
         reports.append({"tool": tool.name, "context": prompt, "injected_note": injected, **audit})
         assert isinstance(audit["risk_probability"], float)
@@ -79,7 +84,7 @@ async def main(*, gates_only=False):
         if audit["decision"] != expected:
             print(json.dumps(reports, indent=2))
             raise AssertionError(
-                f"Live Jev decision for {tool.name} differs from the teaching expectation."
+                f"Live decision-model result for {tool.name} differs from the teaching expectation."
             )
     print(json.dumps(reports, indent=2))
 
@@ -88,5 +93,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--gates-only", action="store_true", help="Run only the six Jev context checks.")
-    asyncio.run(main(gates_only=parser.parse_args().gates_only))
+    parser.add_argument("--gates-only", action="store_true", help="Run only the six real context checks.")
+    parser.add_argument("--decision-model", choices=["semif", "kev-4b", "diffusiongemma", "jev"], default="semif")
+    args = parser.parse_args()
+    asyncio.run(main(gates_only=args.gates_only, decision_model=args.decision_model))

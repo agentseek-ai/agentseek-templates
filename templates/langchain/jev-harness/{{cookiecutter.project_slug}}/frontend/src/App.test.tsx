@@ -46,13 +46,13 @@ test("language changes preserve a manually edited task", () => {
 
 test("only exposes context experiments and submits the chosen fixed proposal", () => {
   render(<App />);
-  expect(screen.getByText(/TYPESAFE_API_KEY/)).toBeTruthy();
+  expect(screen.getByText(/Default setup: fill OPENAI_API_KEY/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Agent chooses tools" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Cleanup: expired test backups" }));
   fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
   expect(fixture.submit).toHaveBeenCalledWith(
     expect.objectContaining({ proposal_id: "cleanup-expired" }),
-    expect.objectContaining({ config: { recursion_limit: 24 } }),
+    expect.objectContaining({ config: { recursion_limit: 24, configurable: { decision_model: "semif" } } }),
   );
 });
 
@@ -163,7 +163,36 @@ test("shows the original Jev answer separately from an unchanged allowed tool pa
       jev_answer: { type: "noul", noul: 0.052 } } } }];
   render(<App />);
   fireEvent.click(screen.getByText("Inspect decision and execution"));
-  expect(screen.getByLabelText("Original Jev risk answer").textContent).toContain('"noul": 0.052');
+  expect(screen.getByLabelText("Original risk answer").textContent).toContain('"noul": 0.052');
   expect(screen.getByLabelText("Simulated tool output").textContent).toBe(content);
   expect(screen.getByText("5%")).toBeTruthy();
+});
+
+
+test("selects a decision model for the run and retains it for a new comparison", () => {
+  render(<App />);
+  const select = screen.getByRole("combobox", { name: "Decision model" }) as HTMLSelectElement;
+  expect(select.value).toBe("semif");
+  fireEvent.change(select, { target: { value: "jev" } });
+  fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
+  expect(fixture.submit).toHaveBeenCalledWith(expect.anything(), {
+    config: { recursion_limit: 24, configurable: { decision_model: "jev" } },
+  });
+  expect(select.disabled).toBe(true);
+  fireEvent.click(screen.getAllByRole("button", { name: "Start new task" })[0]);
+  expect((screen.getByRole("combobox", { name: "Decision model" }) as HTMLSelectElement).value).toBe("jev");
+});
+
+test("attributes SemIf decisions to the returned provider without calling them Jev answers", () => {
+  fixture.state.values = { route_report: { choice: "fast", model: "chat-fast", confidence: 0.8,
+    probabilities: { fast: 0.9, powerful: 0.1 },
+    decision_model: { selection: "semif", provider: "siliconflow", model: "semif", label: "SemIf" } } };
+  fixture.state.messages = [{ type: "tool", name: "restart_service", content: "Simulated restart.",
+    artifact: { auto_mode: { decision: "allowed", executed: true, risk_probability: 0.04,
+      decision_model: { selection: "semif", provider: "siliconflow", model: "semif", label: "SemIf" },
+      raw_answer: { type: "noul", noul: 0.04 } } } }];
+  render(<App />);
+  expect(screen.getByLabelText("Original risk answer").textContent).toContain('"noul": 0.04');
+  expect(screen.getAllByText("SiliconFlow / semif").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Original Jev risk answer")).toBeNull();
 });

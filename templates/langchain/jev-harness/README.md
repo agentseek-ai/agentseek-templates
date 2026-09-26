@@ -12,10 +12,14 @@ blocked calls. Noul does not return a separate confidence value.
 The default runtime is `agentseek-api[embedded]==0.3.2`. The console supports
 Chinese and English, with a persisted language switch and localized scenarios.
 
-The template uses the official `ModelRouterMiddleware` and `AutoModeMiddleware`
+The default decision model is **SiliconFlow SemIf**, with **Kev-4B**,
+**DiffusionGemma**, and official **Jev** selectable per run. Both routing and
+tool checks use that selection; results identify the actual responding model.
+
+The template adapts the constructors of `ModelRouterMiddleware` and `AutoModeMiddleware`
 from `langchain-typesafe[experimental]==0.0.1a2`, with `langchain==1.3.15` and
 `langgraph==1.2.11`. The middleware is experimental. Revalidate the generated
-tests and live behavior when upgrading. Jev is a classifier; a separate
+tests and live behavior when upgrading. These decision models are classifiers; a separate
 OpenAI-compatible chat model generates the answer. Defaults are SiliconFlow's
 DeepSeek V4 Flash and Pro, with thinking disabled for this tool-calling demo.
 
@@ -29,8 +33,9 @@ uv sync --group test
 npm install --prefix frontend
 ```
 
-Fill `TYPESAFE_API_KEY` and the chat-provider settings in `.env` before any live
-test. Follow the generated README for lifecycle commands, offline validation,
+For the default setup, fill `OPENAI_API_KEY` with a SiliconFlow China key.
+Official Jev additionally requires `TYPESAFE_API_KEY`; if chat uses another
+provider, supply `SILICONFLOW_API_KEY` separately. Configure `.env` before live tests. Follow the generated README for lifecycle commands, offline validation,
 the explicit live smoke test, and the context experiments. Never put
 provider credentials in the frontend environment.
 
@@ -55,6 +60,9 @@ including the key, endpoint, model IDs, and provider-specific JSON options to
 change when using your own provider.
 
 ## Reviewed sources and boundaries
+
+- [SiliconFlow System One API](https://api-docs.siliconflow.cn/docs/api/systemone-post)
+  documents the compatible Alpha endpoint and hosted decision models.
 
 - [LangChain article](https://www.langchain.com/blog/building-a-harness-with-jev)
   motivates the two decision points; the implementation follows the package API.
