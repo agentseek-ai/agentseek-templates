@@ -39,7 +39,7 @@ test("starts two independent runs with identical edited context and different se
   fireEvent.change(screen.getByLabelText("Your request"), { target: { value: "Do not restart. Inspect only." } });
   fireEvent.click(screen.getByRole("button", { name: "Start comparison" }));
   const input = { messages: [{ type: "human", content: "Do not restart. Inspect only." }], proposal_id: "restart-readonly" };
-  expect(fixture.sides[0].submit).toHaveBeenCalledWith(input, { config: { recursion_limit: 24, configurable: { decision_model: "semif" } } });
+  expect(fixture.sides[0].submit).toHaveBeenCalledWith(input, { config: { recursion_limit: 24, configurable: { decision_model: "jev" } } });
   expect(fixture.sides[1].submit).toHaveBeenCalledWith(input, { config: { recursion_limit: 24, configurable: { decision_model: "kev-4b" } } });
   expect((screen.getByRole("button", { name: "Start new task" }) as HTMLButtonElement).disabled).toBe(true);
   await act(async () => left.resolve());
@@ -50,14 +50,14 @@ test("starts two independent runs with identical edited context and different se
 
 test("requires different models and preserves both selections for a fresh comparison", async () => {
   openArena();
-  fireEvent.change(screen.getByRole("combobox", { name: "Model B" }), { target: { value: "semif" } });
+  fireEvent.change(screen.getByRole("combobox", { name: "Model B" }), { target: { value: "jev" } });
   expect((screen.getByRole("button", { name: "Start comparison" }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByText("Choose two different decision models.")).toBeTruthy();
-  fireEvent.change(screen.getByRole("combobox", { name: "Model B" }), { target: { value: "jev" } });
+  fireEvent.change(screen.getByRole("combobox", { name: "Model B" }), { target: { value: "semif" } });
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start comparison" })));
   fireEvent.click(screen.getAllByRole("button", { name: "Start new task" })[0]);
-  expect((screen.getByRole("combobox", { name: "Model A" }) as HTMLSelectElement).value).toBe("semif");
-  expect((screen.getByRole("combobox", { name: "Model B" }) as HTMLSelectElement).value).toBe("jev");
+  expect((screen.getByRole("combobox", { name: "Model A" }) as HTMLSelectElement).value).toBe("jev");
+  expect((screen.getByRole("combobox", { name: "Model B" }) as HTMLSelectElement).value).toBe("semif");
 });
 
 test("keeps a successful side visible when the other model request rejects", async () => {
@@ -66,7 +66,7 @@ test("keeps a successful side visible when the other model request rejects", asy
   fixture.sides[1].submit.mockReturnValue(right.promise);
   openArena();
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Start comparison" })));
-  expect(within(screen.getByRole("region", { name: "Model A: SemIf" })).getByRole("alert").textContent).toContain("Provider unavailable");
+  expect(within(screen.getByRole("region", { name: "Model A: Jev" })).getByRole("alert").textContent).toContain("Provider unavailable");
   fixture.sides[1].messages = [{ type: "tool", name: "restart_service", content: "Blocked", artifact: { auto_mode: { decision: "blocked", executed: false, risk_probability: 0.98, arguments: { environment: "staging" } } } }];
   await act(async () => right.resolve());
   expect(within(screen.getByRole("region", { name: "Model B: Kev-4B" })).getByText("98%")).toBeTruthy();

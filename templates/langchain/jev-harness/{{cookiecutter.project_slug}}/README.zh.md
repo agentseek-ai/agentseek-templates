@@ -20,15 +20,17 @@ uv sync --group test
 npm install --prefix frontend
 ```
 
-在本地编辑 `.env`。默认使用 **SiliconFlow SemIf** 做决策、DeepSeek V4 Flash / Pro
-生成回答。可选决策模型包括 SemIf、Kev-4B、DiffusionGemma 和官方 Jev。保持默认配置时，只需将硅基流动中国站密钥填入 `OPENAI_API_KEY`。
+在本地编辑 `.env`。默认使用 **TypeSafe 官方 Jev** 做决策、DeepSeek V4 Flash / Pro
+生成回答。将 TypeSafe 密钥填入 `TYPESAFE_API_KEY`，硅基流动中国站对话密钥填入 `OPENAI_API_KEY`。
+另可选择 SiliconFlow SemIf、Kev-4B 和 DiffusionGemma，这些替代模型不需要 TypeSafe 密钥。
+默认 Jev 缺少密钥时会明确报错，不会静默切换模型。
 
 | 配置项 | 如何填写 |
 | --- | --- |
-| `OPENAI_API_KEY` | 对话模型密钥。仅当对话接口域名为 `api.siliconflow.cn` 时，决策模型才会复用它。 |
-| `SILICONFLOW_API_KEY` | 可选的独立决策密钥；对话模型改用其他服务商时，需要单独填写。 |
+| `OPENAI_API_KEY` | 对话模型密钥。仅当对话接口域名为 `api.siliconflow.cn` 时，硅基流动决策模型才会复用它。 |
+| `SILICONFLOW_API_KEY` | 可选的独立硅基流动决策密钥；选择硅基流动决策模型且对话使用其他服务商时，需要单独填写。 |
 | `SILICONFLOW_BASE_URL` | 默认 `https://api.siliconflow.cn`。只填根地址，集成会追加 `/v1/systemone`，不要再加 `/v1`。 |
-| `TYPESAFE_API_KEY` | 仅使用官方 Jev 时需要，从 [TypeSafe 控制台](https://console.typesafe.ai) 获取。不能与硅基流动密钥混用。 |
+| `TYPESAFE_API_KEY` | 默认的官方 Jev 需要此密钥，从 [TypeSafe 控制台](https://console.typesafe.ai) 获取。改选硅基流动决策模型时可不填；不能与硅基流动密钥混用。 |
 | `TYPESAFE_BASE_URL`、`TYPESAFE_MODEL` | 官方 Jev 默认接口为 `https://api.typesafe.ai`，模型为 `jev-latest`。 |
 | `OPENAI_API_BASE` | 默认 `{{ cookiecutter.chat_api_base }}`；切换服务商时填其 OpenAI 兼容对话接口。 |
 | `JEV_FAST_MODEL`、`JEV_POWERFUL_MODEL` | 默认 `{{ cookiecutter.fast_model }}` / `{{ cookiecutter.powerful_model }}`，可换成服务商支持的其他候选对话模型，路由能力不限于这两个型号。 |
@@ -112,8 +114,8 @@ Auto Mode 返回 **Noul**，表示当前调用具有风险或缺少授权的概�
 
 ## Arena：双模型 PK
 
-选择「Arena · 双模型 PK」，为 A、B 选择两个不同决策模型，默认是 SemIf 和 Kev-4B。
-配置 `TYPESAFE_API_KEY` 后也可使用官方 Jev。两侧并发运行，使用相同的初始任务、策略和
+选择「Arena · 双模型 PK」，为 A、B 选择两个不同决策模型，默认是 A：Jev（TypeSafe）和 B：Kev-4B（SiliconFlow）。
+此组合需要配置两家服务商的密钥，也可在任意一侧改选其他可用模型。两侧并发运行，使用相同的初始任务、策略和
 固定提案序列，但各有独立会话；A 固定在左，B 固定在右。一侧报错不会取消或隐藏另一侧。
 
 两侧都按「模型路由 → Auto Mode → 回复」的顺序展示，与单模型一致。
@@ -140,8 +142,8 @@ npm run build --prefix frontend
 ```bash
 agentseek task live-smoke
 # 或：
-uv run python -m {{ cookiecutter.project_slug }}.live_smoke --decision-model semif
-# 其他选择：kev-4b、diffusiongemma、jev
+uv run python -m {{ cookiecutter.project_slug }}.live_smoke --decision-model jev
+# 其他选择：semif、kev-4b、diffusiongemma
 ```
 
 此命令会产生服务商用量：执行两次完整 agent 运行，再通过真实 Auto Mode 检查六个固定提案。
@@ -159,7 +161,7 @@ DiffusionGemma 曾出现一次 HTTP 503，现已通过 2026-09-26 的重复验�
 选项：**36/36 次真实分类请求成功**，未重试或回退，包含 18 次 Choice 路由和 18 次 Noul 风险检查。
 六种上下文覆盖只读、授权与未授权重启、过期测试备份清理、生产备份删除和伪造授权；
 前两轮分别顺序验证英文、中文，第三轮用两个并发任务验证英文。18 次风险判定均符合本实验策略。
-这轮样本支持恢复选项，不代表长期可用性或普遍判断质量。默认仍为 SemIf。
+这轮样本支持恢复选项，不代表长期可用性或普遍判断质量。模板默认决策模型为官方 Jev。
 
 这些是特定上下文中的观察，不是基准排名。原始概率和 confidence 不保证经过校准。
 Auto Mode 是工具拒绝机制，不提供人工审批，也不是安全沙箱；用于真实变更前需要另设人工控制。

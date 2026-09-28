@@ -26,7 +26,7 @@ test("switches the entire console to Chinese and persists the selection", () => 
   expect(screen.getByRole("heading", { name: "模型路由" })).toBeTruthy();
   expect(screen.getByRole("button", { name: "运行 Harness" })).toBeTruthy();
   expect(screen.getByLabelText("任务内容").textContent).toContain("授权");
-  expect(screen.getByText(/OPENAI_API_KEY 填写硅基流动密钥/)).toBeTruthy();
+  expect(screen.getByText(/默认使用 Jev.*TYPESAFE_API_KEY/)).toBeTruthy();
   expect(screen.getByText("使用自己的模型服务")).toBeTruthy();
   expect(window.localStorage.getItem("jev-harness-language")).toBe("zh");
   expect(document.documentElement.lang).toBe("zh-CN");
@@ -46,13 +46,13 @@ test("language changes preserve a manually edited task", () => {
 
 test("only exposes context experiments and submits the chosen fixed proposal", () => {
   render(<App />);
-  expect(screen.getByText(/Default setup: fill OPENAI_API_KEY/)).toBeTruthy();
+  expect(screen.getByText(/Default Jev setup: fill TYPESAFE_API_KEY/)).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Agent chooses tools" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Cleanup: expired test backups" }));
   fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
   expect(fixture.submit).toHaveBeenCalledWith(
     expect.objectContaining({ proposal_id: "cleanup-expired" }),
-    expect.objectContaining({ config: { recursion_limit: 24, configurable: { decision_model: "semif" } } }),
+    expect.objectContaining({ config: { recursion_limit: 24, configurable: { decision_model: "jev" } } }),
   );
 });
 
@@ -172,15 +172,16 @@ test("shows the original Jev answer separately from an unchanged allowed tool pa
 test("selects a decision model for the run and retains it for a new comparison", () => {
   render(<App />);
   const select = screen.getByRole("combobox", { name: "Decision model" }) as HTMLSelectElement;
-  expect(select.value).toBe("semif");
-  fireEvent.change(select, { target: { value: "jev" } });
+  expect(select.value).toBe("jev");
+  expect(select.selectedOptions[0].textContent).toContain("Default");
+  fireEvent.change(select, { target: { value: "semif" } });
   fireEvent.click(screen.getByRole("button", { name: "Run harness" }));
   expect(fixture.submit).toHaveBeenCalledWith(expect.anything(), {
-    config: { recursion_limit: 24, configurable: { decision_model: "jev" } },
+    config: { recursion_limit: 24, configurable: { decision_model: "semif" } },
   });
   expect(select.disabled).toBe(true);
   fireEvent.click(screen.getAllByRole("button", { name: "Start new task" })[0]);
-  expect((screen.getByRole("combobox", { name: "Decision model" }) as HTMLSelectElement).value).toBe("jev");
+  expect((screen.getByRole("combobox", { name: "Decision model" }) as HTMLSelectElement).value).toBe("semif");
 });
 
 test("attributes SemIf decisions to the returned provider without calling them Jev answers", () => {

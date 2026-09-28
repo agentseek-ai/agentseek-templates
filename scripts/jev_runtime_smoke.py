@@ -194,7 +194,11 @@ def main() -> None:
                         state = request(thread_url + "/state")["values"]
                         assert state["route_report"]["choice"] == route, state
                         assert state["route_report"]["model"] == f"fixture-{route}", state
+                        source = state["route_report"]["decision_model"]
+                        assert source["selection"] == "jev" and source["provider"] == "typesafe", source
+                        assert source["model"] == "jev-latest-offline-fixture", source
                         tool = next(m for m in state["messages"] if m["type"] == "tool")
+                        assert tool["artifact"]["auto_mode"]["decision_model"] == source, tool
                         assert tool["artifact"]["auto_mode"]["decision"] == decision, tool
                         assert tool["artifact"]["auto_mode"]["executed"] is (decision == "allowed")
                         assert tool["artifact"]["auto_mode"]["risk_probability"] == (
@@ -202,6 +206,7 @@ def main() -> None:
                         )
                         assert tool["artifact"]["auto_mode"]["confidence"] is None
                     assert Provider.routes == ["fast", "powerful", "fast"]
+                    assert Provider.classifiers == ["jev-latest"] * 6
                     assert Provider.models == ["fixture-fast"] * 2 + ["fixture-powerful"] * 2 + ["fixture-fast"] * 2
                     assert Provider.gates == ["read_service_status", "read_service_status", "delete_backups"]
                     for decision_model, proposal, prompt, expected in (

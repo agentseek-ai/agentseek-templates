@@ -11,7 +11,7 @@ from .middleware import ObservedAutoModeMiddleware
 from .tools import delete_backups, read_incident_note, read_service_status, restart_service
 
 
-async def main(*, gates_only=False, decision_model="semif"):
+async def main(*, gates_only=False, decision_model="jev"):
     config = {"recursion_limit": 24, "configurable": {"decision_model": decision_model}}
     graph = make_graph()  # validates chat configuration; selected decision key is checked on use
     reports = []
@@ -94,6 +94,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--gates-only", action="store_true", help="Run only the six real context checks.")
-    parser.add_argument("--decision-model", choices=["semif", "kev-4b", "diffusiongemma", "jev"], default="semif")
+    parser.add_argument("--decision-model", choices=["jev", "semif", "kev-4b", "diffusiongemma"], default="jev")
     args = parser.parse_args()
     asyncio.run(main(gates_only=args.gates_only, decision_model=args.decision_model))

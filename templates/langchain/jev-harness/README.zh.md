@@ -8,7 +8,7 @@
 前端展示实际选择、候选概率、路由 confidence、工具判断及最终解释。
 
 默认运行时为 **`agentseek-api[embedded]==0.3.2`**，前端支持中文和英文。
-默认决策模型为 **SiliconFlow SemIf**，另可选择 Kev-4B、DiffusionGemma 和官方 Jev；同一次运行的路由与工具检查使用同一个所选决策模型。
+默认决策模型为 **TypeSafe 官方 Jev**，另可选择 SiliconFlow SemIf、Kev-4B 和 DiffusionGemma；同一次运行的路由与工具检查使用同一个所选决策模型。
 候选对话模型默认是 DeepSeek V4 Flash / Pro，也可替换成其他 OpenAI 兼容模型。
 
 「上下文对照实验」在不同授权上下文中使用固定的重启、备份清理等提案，实际判定由上游
@@ -33,8 +33,8 @@ npm install --prefix frontend
 ```
 
 需要 Python 3.12 或 3.13、Node.js 24 及以上、npm 11 及以上。
-默认配置只需在 `.env` 中填写硅基流动中国站的 `OPENAI_API_KEY`。
-使用官方 Jev 时另填 `TYPESAFE_API_KEY`；对话使用其他服务商时，硅基流动决策密钥需要单独填入
+默认配置需在 `.env` 中填写 `TYPESAFE_API_KEY`（TypeSafe 密钥，用于 Jev 决策）
+和 `OPENAI_API_KEY`（硅基流动中国站密钥，用于对话）。改选硅基流动决策模型且对话使用其他服务商时，决策密钥需要单独填入
 `SILICONFLOW_API_KEY`。不要把密钥放入前端环境文件。
 
 生成项目的 [中文版使用说明]({{cookiecutter.project_slug}}/README.zh.md) 包含完整配置、

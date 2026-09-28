@@ -37,7 +37,7 @@ description = "Root URL for System One; /v1/systemone is appended automatically.
 
 [env.TYPESAFE_API_KEY]
 required = false
-description = "Required only when selecting official Jev. / 仅选择官方 Jev 时需要。"
+description = "Required for official Jev (the default); optional when choosing a SiliconFlow decision model. / 默认的官方 Jev 需要此密钥；改选硅基流动决策模型时可不填。"
 
 [env.TYPESAFE_MODEL]
 required = false
@@ -51,7 +51,7 @@ description = "TypeSafe API root URL."
 
 [env.OPENAI_API_KEY]
 required = true
-description = "SiliconFlow key for chat and, by default, System One decisions. / 默认由对话和决策模型共用的硅基流动密钥。"
+description = "Chat key; also reused when selecting SiliconFlow decisions with a SiliconFlow China chat endpoint. / 对话密钥；选择硅基流动决策模型且对话接口为中国站时可复用。"
 
 [env.OPENAI_API_BASE]
 required = false

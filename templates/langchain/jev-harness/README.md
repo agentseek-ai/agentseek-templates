@@ -14,8 +14,8 @@ blocked calls. Noul does not return a separate confidence value.
 The default runtime is `agentseek-api[embedded]==0.3.2`. The console supports
 Chinese and English, with a persisted language switch and localized scenarios.
 
-The default decision model is **SiliconFlow SemIf**, with **Kev-4B**, **DiffusionGemma**,
-and official **Jev** selectable per run. Both routing and
+The default decision model is official **Jev** from TypeSafe, with SiliconFlow
+**SemIf**, **Kev-4B**, and **DiffusionGemma** selectable per run. Both routing and
 tool checks use that selection; results identify the actual responding model.
 Arena compares two different decision models concurrently with a shared initial
 context and isolated conversations. Results stay in fixed A/B columns; failures
@@ -41,9 +41,10 @@ uv sync --group test
 npm install --prefix frontend
 ```
 
-For the default setup, fill `OPENAI_API_KEY` with a SiliconFlow China key.
-Official Jev additionally requires `TYPESAFE_API_KEY`; if chat uses another
-provider, supply `SILICONFLOW_API_KEY` separately. Configure `.env` before live tests. Follow the generated README for lifecycle commands, offline validation,
+For the default setup, fill `TYPESAFE_API_KEY` with a TypeSafe key for Jev and
+`OPENAI_API_KEY` with a SiliconFlow China key for chat. When selecting SiliconFlow
+decision models with another chat provider, supply `SILICONFLOW_API_KEY` separately.
+Configure `.env` before live tests. Follow the generated README for lifecycle commands, offline validation,
 the explicit live smoke test, and the context experiments. Never put
 provider credentials in the frontend environment.
 

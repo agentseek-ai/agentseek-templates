@@ -281,7 +281,8 @@ def test_decision_selection_reaches_both_gates_with_separate_credentials(monkeyp
     monkeypatch.setenv("TYPESAFE_BASE_URL", "http://typesafe.test")
     graph, _, requests = setup_harness(monkeypatch)
     for selection, expected_model, provider, key in (
-        (None, "semif", "siliconflow", "offline-siliconflow-key"),
+        (None, "jev-latest", "typesafe", "offline-test-key"),
+        ("semif", "semif", "siliconflow", "offline-siliconflow-key"),
         ("kev-4b", "kev-4b", "siliconflow", "offline-siliconflow-key"),
         ("diffusiongemma", "diffusiongemma", "siliconflow", "offline-siliconflow-key"),
         ("jev", "jev-latest", "typesafe", "offline-test-key"),
@@ -324,11 +325,16 @@ def test_unknown_selection_fails_before_any_provider_or_tool(monkeypatch, select
     assert models["fast"].calls == models["powerful"].calls == 0
 
 
-def test_default_runs_without_a_jev_key_and_missing_jev_does_not_fallback(monkeypatch):
+def test_missing_default_jev_key_does_not_fallback_but_explicit_siliconflow_works(monkeypatch):
     monkeypatch.delenv("TYPESAFE_API_KEY")
-    graph, _, requests = setup_harness(monkeypatch)
+    graph, models, requests = setup_harness(monkeypatch)
+    with pytest.raises(ValueError, match="TYPESAFE_API_KEY"):
+        graph.invoke({"messages": [{"role": "user", "content": "Read status."}]},
+                     {"configurable": {"thread_id": "no-jev-key"}})
+    assert requests == []
+    assert models["fast"].calls == models["powerful"].calls == 0
     graph.invoke({"messages": [{"role": "user", "content": "Read status."}]},
-                 {"configurable": {"thread_id": "no-jev-key"}})
+                 {"configurable": {"thread_id": "explicit-siliconflow", "decision_model": "semif"}})
     assert requests[0]["model"] == "semif"
     count = len(requests)
     with pytest.raises(ValueError, match="TYPESAFE_API_KEY"):
@@ -344,7 +350,7 @@ def test_chat_key_reuse_is_limited_to_siliconflow(monkeypatch, base, works):
     monkeypatch.setenv("OPENAI_API_KEY", "chat-provider-key")
     graph, _, requests = setup_harness(monkeypatch)
     args = ({"messages": [{"role": "user", "content": "Read status."}]},
-            {"configurable": {"thread_id": "key-reuse"}})
+            {"configurable": {"thread_id": "key-reuse", "decision_model": "semif"}})
     if works:
         graph.invoke(*args)
         assert all(r["_auth"] == "Bearer chat-provider-key" for r in requests)

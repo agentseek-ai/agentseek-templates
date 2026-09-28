@@ -23,17 +23,19 @@ uv sync --group test
 npm install --prefix frontend
 ```
 
-Open `.env` locally. The default decision model is **SiliconFlow SemIf**.
-Fill **only `OPENAI_API_KEY`** with your SiliconFlow China key to use both
-System One decisions and the default DeepSeek V4 Flash/Pro chat models.
-The console also offers **Kev-4B**, **DiffusionGemma**, and official **Jev**.
+Open `.env` locally. The default decision model is official **Jev** from TypeSafe.
+Fill **`TYPESAFE_API_KEY`** with your TypeSafe key for decisions and
+**`OPENAI_API_KEY`** with your SiliconFlow China key for the default DeepSeek V4 Flash/Pro chat models.
+The console also offers SiliconFlow **SemIf**, **Kev-4B**, and **DiffusionGemma**.
+Those alternatives do not require a TypeSafe key. Missing Jev credentials cause
+an explicit error; the application does not silently switch models.
 
 | Setting | What you supply or change |
 | --- | --- |
-| `OPENAI_API_KEY` | Your SiliconFlow China key for chat; reused for decisions only when the chat host is `api.siliconflow.cn`. |
-| `SILICONFLOW_API_KEY` | Optional separate decision key. Required when chat uses another provider. |
+| `OPENAI_API_KEY` | Your SiliconFlow China key for chat; reused for SiliconFlow decisions only when the chat host is `api.siliconflow.cn`. |
+| `SILICONFLOW_API_KEY` | Optional separate SiliconFlow decision key. Required when selecting a SiliconFlow decision model with another chat provider. |
 | `SILICONFLOW_BASE_URL` | Root URL `https://api.siliconflow.cn`; the integration appends `/v1/systemone`. Do not append `/v1` yourself. |
-| `TYPESAFE_API_KEY` | Required only when choosing official Jev; get it from the [TypeSafe console](https://console.typesafe.ai). |
+| `TYPESAFE_API_KEY` | Required for official Jev (the default); get it from the [TypeSafe console](https://console.typesafe.ai). Optional when choosing a SiliconFlow decision model. |
 | `TYPESAFE_BASE_URL`, `TYPESAFE_MODEL` | Official Jev endpoint and model: `https://api.typesafe.ai`, `jev-latest`. |
 | `OPENAI_API_BASE` | `{{ cookiecutter.chat_api_base }}`; replace with your chat provider's OpenAI-compatible base URL. |
 | `JEV_FAST_MODEL`, `JEV_POWERFUL_MODEL` | `{{ cookiecutter.fast_model }}` / `{{ cookiecutter.powerful_model }}`. Replace with supported chat-model IDs; routing is not limited to these models. |
@@ -158,8 +160,8 @@ Only after saving your keys:
 ```bash
 agentseek task live-smoke
 # Equivalent:
-uv run python -m {{ cookiecutter.project_slug }}.live_smoke --decision-model semif
-# Other choices: kev-4b, diffusiongemma, jev
+uv run python -m {{ cookiecutter.project_slug }}.live_smoke --decision-model jev
+# Other choices: semif, kev-4b, diffusiongemma
 ```
 
 This sends real decision-model/chat requests and can incur provider charges. It exercises two complete agent runs,
@@ -218,8 +220,8 @@ and [model release notes](https://docs.siliconflow.cn/docs/release-notes/overvie
 ## Arena: compare two decision models
 
 Choose **Arena · compare two models**. Select two
-different models; defaults are **A: SemIf** and **B: Kev-4B**, both on SiliconFlow.
-You can use official Jev on either side when `TYPESAFE_API_KEY` is configured.
+different models; defaults are **A: Jev** (TypeSafe) and **B: Kev-4B** (SiliconFlow).
+Configure both provider keys for this pairing; either side can use another available model.
 Both sides receive the same edited initial request, policy, and fixed proposal
 sequence, and run concurrently in separate conversations. A remains on the left
 and B on the right. A provider failure does not cancel or hide the other result.
@@ -233,7 +235,7 @@ experiment can see different tool results. Two runs incur two sets of provider u
 
 ### Available models
 
-SemIf remains the default. Kev-4B, DiffusionGemma, and official Jev are selectable
+Official Jev is the default. SiliconFlow SemIf, Kev-4B, and DiffusionGemma are selectable
 in both single-model and Arena runs. DiffusionGemma was restored after a
 2026-09-26 recheck: **36/36 real classification requests succeeded** without retries
 or fallback (18 Choice routing responses and 18 Noul risk checks). Six contexts
