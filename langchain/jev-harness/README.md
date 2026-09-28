@@ -113,3 +113,18 @@ Verified on **2026-09-26** at code commit [`8b1e95a2181a55d6863973b423ee07d376ea
 Screenshots are unedited. These runs used AgentSeek API **0.3.2** with **--no-browser**; only decision/chat calls were real, and all operational tools were simulated. The evidence contains synthetic teaching prompts and no credentials. English and independent Chinese README files are included in both the template entry and generated project.
 
 Validation: repository **333 tests passed**, generated backend **32 passed**, frontend **20 passed**, production build passed, and loopback API **3 agent runs + 5 context experiments** passed, including DiffusionGemma routing/gating. A fresh custom render verified the Chinese README expands the project name, package and ports.
+
+
+## Arena result order and retained experiment input
+
+Captured on **2026-09-28** from code commit [`36fe0a8331c1a7880c578412f2f451298be10a60`](https://github.com/agentseek-ai/agentseek-templates/commit/36fe0a8331c1a7880c578412f2f451298be10a60), updating [PR #36](https://github.com/agentseek-ai/agentseek-templates/pull/36). These unedited captures supersede the tool-first Arena ordering in the earlier screenshots.
+
+| Evidence | What it demonstrates |
+| --- | --- |
+| [Routing before Auto Mode](arena-routing-first-zh.jpg) | Both Arena participants show model routing above Auto Mode, matching single-model order. Browser geometry confirmed routing, tools, and answer sections occur in that order in both columns. |
+| [Preserved scenario and edited request](arena-preserved-draft-zh.jpg) | After completing an Arena run and clicking Start new task, the diagnosis-only scenario, custom two-line request, and SemIf / DiffusionGemma selections remain. Results are cleared and the request is focused for editing. |
+| [Fresh conversations with retained input](arena-retained-input-api-proof.json) | Two actual Arena submissions create four distinct conversations. Every conversation contains exactly one user message with the same edited text, the same restart-readonly proposal, and the intended responding model. This verifies retained input without carrying over conversation history. |
+
+The browser used real SiliconFlow decision/chat calls with simulated operational tools. The first captured run returned SemIf risk 0.0076 (allowed, contradicting the policy) and DiffusionGemma 1.0 (blocked); values remain unmodified. The UI continues to distinguish risk probability from routing confidence.
+
+Validation: **24 frontend tests passed** and production build passed. Regression cases cover completed and unsubmitted experiments in both modes, both new-task buttons, edited multiline input, language switching, explicit scenario changes, and repeat submission. English and Chinese README/help text describe the preserved inputs.
