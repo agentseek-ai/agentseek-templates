@@ -1,4 +1,4 @@
-"""Jev chooses the model; Auto Mode decides whether each tool may run."""
+"""A selectable System One model routes chat; Auto Mode decides whether each tool may run."""
 
 import json
 import os
@@ -8,9 +8,9 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain_openai import ChatOpenAI
 from langchain_typesafe import NoulCriteria
-from langchain_typesafe.experimental.middleware import ModelChoice, ModelRouterMiddleware
+from langchain_typesafe.experimental.middleware import ModelChoice
 
-from .middleware import ObservedAutoModeMiddleware, RouteReportMiddleware
+from .middleware import ObservedAutoModeMiddleware, RouteReportMiddleware, SelectableModelRouterMiddleware
 from .proposals import FixedProposalMiddleware
 from .tools import TOOLS
 
@@ -43,7 +43,7 @@ SYSTEM_PROMPT = (
 
 
 def make_middleware(models):
-    router = ModelRouterMiddleware(
+    router = SelectableModelRouterMiddleware(
         choices={
             "fast": ModelChoice(
                 model=models["fast"],
@@ -81,7 +81,7 @@ def make_graph():
     """AgentSeek API factory. Importing the module performs no provider calls."""
     load_dotenv()
     missing = [
-        name for name in ("TYPESAFE_API_KEY", "OPENAI_API_KEY") if not os.getenv(name, "").strip()
+        name for name in ("OPENAI_API_KEY",) if not os.getenv(name, "").strip()
     ]
     if missing:
         raise ValueError(

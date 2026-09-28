@@ -1,17 +1,11 @@
-import { FormEvent, useEffect, useState } from "react";
-import { useStream } from "@langchain/react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Translate, TranslationKey, useLanguage } from "./i18n";
+import { RunEvidence } from "./RunEvidence";
+import { HarnessRun, useHarnessRun } from "./useHarnessRun";
 
-type Audit = { decision: "allowed" | "blocked"; executed: boolean; risk_probability: number | null;
-  jev_answer?: { type: "noul"; noul: number };
-  execution_status?: "completed" | "failed" | "blocked";
-  confidence?: null; arguments?: Record<string, unknown>; proposal_source?: "preset" | "agent" };
-type Message = { id?: string; type: string; content: unknown; name?: string; tool_call_id?: string;
-  artifact?: { auto_mode?: Audit } };
-type Route = { choice: string; model: string; confidence: number; probabilities: Record<string, number>; models?: Record<string, string> };
-type HarnessState = { messages: Message[]; route_report?: Route; proposal_id?: string | null };
+const decisionModels = [{ id: "jev", label: "Jev" }, { id: "semif", label: "SemIf" }, { id: "kev-4b", label: "Kev-4B" }, { id: "diffusiongemma", label: "DiffusionGemma" }];
+const modelLabel = (id: string) => decisionModels.find(model => model.id === id)?.label ?? id;
+type Mode = "single" | "arena";
 const experiments: { id: string; title: TranslationKey; prompt: TranslationKey; proposal: string }[] = [
   { id: "restart-approved", title: "restartApproved", prompt: "restartApprovedPrompt", proposal: 'restart_service(environment="staging")' },
   { id: "restart-readonly", title: "restartReadonly", prompt: "restartReadonlyPrompt", proposal: 'restart_service(environment="staging")' },
@@ -20,13 +14,11 @@ const experiments: { id: string; title: TranslationKey; prompt: TranslationKey; 
   { id: "injected-note", title: "injectedNote", prompt: "injectedNotePrompt", proposal: 'read_incident_note() → restart_service(environment="staging")' },
 ];
 
-const percent = (value: number) => `${Math.round(value * 100)}%`;
-
-function messageText(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) return content.map(part => typeof part === "string" ? part : part?.text ?? "").join("");
-  return "";
-}
+type ExperimentDraft = {
+  experiment: typeof experiments[number];
+  scenario: TranslationKey | null;
+  customInput: string;
+};
 
 function NewTaskButton({ onClick, disabled, t }: { onClick: () => void; disabled: boolean; t: Translate }) {
   return <button type="button" className="new-run" disabled={disabled} onClick={onClick}>
@@ -35,128 +27,122 @@ function NewTaskButton({ onClick, disabled, t }: { onClick: () => void; disabled
   </button>;
 }
 
-function HarnessRun({ onLoadingChange, onNewRun, focusTask, t }: {
-  onLoadingChange: (loading: boolean) => void; onNewRun: () => void; focusTask: boolean; t: Translate;
+function ModelPicker({ id, label, value, onChange, disabled, t }: {
+  id: string; label: string; value: string; onChange: (value: string) => void; disabled: boolean; t: Translate;
 }) {
-  const [experiment, setExperiment] = useState(experiments[0]);
-  const [scenario, setScenario] = useState<TranslationKey | null>(experiments[0].prompt);
-  const [customInput, setCustomInput] = useState("");
-  const input = scenario === null ? customInput : t(scenario);
-  const [submitted, setSubmitted] = useState(false);
-  const stream = useStream<HarnessState>({
-    apiUrl: import.meta.env.VITE_LANGGRAPH_API_URL ?? "http://127.0.0.1:{{ cookiecutter.langgraph_port }}",
-    assistantId: "agent",
-  });
-  const route = stream.values.route_report;
-  useEffect(() => onLoadingChange(stream.isLoading), [stream.isLoading, onLoadingChange]);
-  const messages = stream.messages as Message[];
-  const tools = messages.filter(message => message.type === "tool");
-  const answers = messages.filter(message => message.type === "ai" && messageText(message.content));
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!input.trim() || stream.isLoading || submitted) return;
-    setCustomInput(input);
-    setScenario(null);
-    setSubmitted(true);
-    void stream.submit({ messages: [{ type: "human", content: input.trim() }], proposal_id: experiment.id }, { config: { recursion_limit: 24 } });
-  }
-
-  return <div className="workspace">
-    <section className="request-panel" aria-labelledby="request-heading">
-      <h2 id="request-heading">{t("experimentHeading")}</h2>
-      <p className="muted">{t("experimentHelp")}</p>
-      <div className="scenarios">{experiments.map(item =>
-        <button key={item.id} type="button" aria-pressed={experiment.id === item.id} onClick={() => { setExperiment(item); setScenario(item.prompt); }} disabled={submitted}>{t(item.title)}</button>)}</div>
-      <div className="proposal-preview"><span>{t("proposedAction")}</span><code>{experiment.proposal}</code><p>{t("editContext")}</p></div>
-      <form onSubmit={submit}>
-        <label htmlFor="task">{t("request")}</label>
-        <textarea id="task" value={input} onChange={event => { setScenario(null); setCustomInput(event.target.value); }} disabled={submitted} maxLength={4000} rows={7} autoFocus={focusTask} />
-        {submitted && !stream.isLoading ? <div className="next-task">
-          <NewTaskButton onClick={onNewRun} disabled={false} t={t} />
-          <p className="muted small">{t("newRunHelp")}</p>
-        </div> : <button className="run-button" disabled={stream.isLoading || !input.trim()}>
-          {stream.isLoading ? t("runningButton") : t("run")}
-        </button>}
-      </form>
-      <p className="setup">{t("setup")}</p>
-      <details className="small"><summary>{t("providerHelp")}</summary><p className="muted">{t("providerSettings")}</p></details>
-      <p className="muted small">{t("dataBoundary")}</p>
-    </section>
-
-    <section className="evidence-panel" aria-label={t("decisions")}>
-      <div className="route-section">
-        <div className="section-heading"><h2>{t("routing")}</h2><span className="badge">{t("once")}</span></div>
-        <div className="route-models">{(["fast", "powerful"] as const).map(key => {
-          const probability = route?.probabilities[key];
-          const selected = route?.choice === key;
-          const model = route?.models?.[key] ?? (selected ? route.model : null);
-          return <article key={key} className={`route-model${selected ? " selected" : ""}`} aria-label={t(key)}>
-            <div className="model-heading"><h3>{t(key)}</h3><span className="model-status">{selected ? t("selectedModel") : route ? t("notSelectedModel") : t("awaitingRoute")}</span></div>
-            <p className="model-id">{model ?? t("configuredModel")}</p>
-            <div className="model-probability"><span>{t("routeProbability")}</span><strong>{typeof probability === "number" ? percent(probability) : "—"}</strong></div>
-            {typeof probability === "number" && <meter min={0} max={1} value={probability} aria-label={`${key} ${t("probability")}`} />}
-          </article>;
-        })}</div>
-        {route ? <p className="route-confidence muted">{t("confidence")} <strong>{percent(route.confidence)}</strong>. {t("confidenceHelp")}</p> : <p className="empty">{t("routeEmpty")}</p>}
-      </div>
-
-      <div className="tools-section">
-        <div className="section-heading"><h2>{t("autoMode")}</h2><span className="badge">{t("eachTool")}</span></div>
-        <p className="muted">{t("gatePolicy")}</p>
-        <details className="gate-explanation"><summary>{t("policyHeading")}</summary><p>{t("contextPolicy")}</p></details>
-        <p className="score-note">{t("noulConfidence")}</p>
-        {tools.length === 0 && <p className="empty">{t("toolEmpty")}</p>}
-        <ol className="tool-list">{tools.map((message, index) => {
-          const audit = message.artifact?.auto_mode;
-          return <li key={message.id ?? message.tool_call_id ?? index} className={audit?.decision ?? "unknown"}>
-            <div className="tool-heading"><code>{message.name ?? t("tool")}</code><strong>{audit ? audit.decision === "blocked" ? t("blocked") : t("allowed") : t("result")}</strong></div>
-            {audit && <>
-              <div className="audit-source"><span>{t(audit.proposal_source === "preset" ? "fixedProposal" : "modelProposal")}</span><span>{t(audit.execution_status === "failed" ? "toolFailed" : audit.executed ? "toolRan" : "toolDidNotRun")}</span></div>
-              {audit.arguments && <pre className="tool-arguments" aria-label={t("toolArguments")}>{JSON.stringify(audit.arguments, null, 2)}</pre>}
-              {typeof audit.risk_probability === "number" ? <div className="risk-score"><span>{t("riskProbability")}</span><meter min={0} max={1} value={audit.risk_probability} aria-label={t("riskProbability")} /><strong>{percent(audit.risk_probability)}</strong></div> : <p>{t("scoreUnavailable")}</p>}
-            </>}
-            <details className="decision-details"><summary>{t("inspectResult")}</summary>
-              {audit && <div className="decision-record"><h3>{t("jevAnswer")}</h3><p>{t("jevAnswerHelp")}</p>
-                {audit.jev_answer ? <pre aria-label={t("jevAnswer")}>{JSON.stringify(audit.jev_answer, null, 2)}</pre> : <p>{t("rawAnswerUnavailable")}</p>}
-              </div>}
-              <h3>{t(audit?.decision === "blocked" ? "blockMessage" : "toolOutput")}</h3>
-              <p>{t(audit?.decision === "blocked" ? "blockMessageHelp" : "toolOutputHelp")}</p>
-              <pre aria-label={t(audit?.decision === "blocked" ? "blockMessage" : "toolOutput")}>{messageText(message.content)}</pre>
-            </details>
-          </li>;
-        })}</ol>
-      </div>
-
-      <div className="answer-section" aria-live="polite">
-        <h2>{t("response")}</h2>
-        {answers.map((message, index) => <div key={message.id ?? index} className="answer"><ReactMarkdown remarkPlugins={[remarkGfm]}>{messageText(message.content)}</ReactMarkdown></div>)}
-        {!answers.length && <p className="empty">{t("responseEmpty")}</p>}
-        {stream.isLoading && <p className="running" role="status">{t("running")}</p>}
-        {stream.error ? <p className="error" role="alert">{String(stream.error)}. {t("failureHelp")}</p> : null}
-      </div>
-    </section>
+  return <div className="model-picker">
+    <label htmlFor={id}>{label}</label>
+    <select id={id} value={value} onChange={event => onChange(event.target.value)} disabled={disabled} aria-describedby={`${id}-help`}>
+      <optgroup label="TypeSafe"><option value="jev">Jev · {t("officialModel")} · {t("defaultModel")}</option></optgroup>
+      <optgroup label="SiliconFlow"><option value="semif">SemIf</option><option value="kev-4b">Kev-4B</option><option value="diffusiongemma">DiffusionGemma</option></optgroup>
+    </select>
+    <p id={`${id}-help`} className="decision-key-help">{t(value === "jev" ? "jevKeyHelp" : "siliconflowKeyHelp")}</p>
   </div>;
 }
 
+function Comparison({ left, right, t, submitted }: { left: HarnessRun; right: HarnessRun; t: Translate; submitted: boolean }) {
+  const finished = submitted && !left.isLoading && !right.isLoading && left.elapsed !== null && right.elapsed !== null;
+  // Missing audits are unknown, never interpreted as an allowed or matching call.
+  const comparable = left.tools.length > 0 && left.tools.length === right.tools.length && left.tools.every((tool, i) => {
+    const a = tool.artifact?.auto_mode, b = right.tools[i].artifact?.auto_mode;
+    return a && b && tool.name === right.tools[i].name && JSON.stringify(a.arguments) === JSON.stringify(b.arguments);
+  });
+  const same = comparable && left.tools.every((tool, i) => tool.artifact!.auto_mode!.decision === right.tools[i].artifact!.auto_mode!.decision);
+  return <section className="comparison-summary" aria-label={t("comparisonSummary")} aria-live="polite">
+    <div><h2>{t("arenaTitle")}</h2><p>{t("arenaHelp")}</p></div>
+    <div className={`comparison-verdict ${finished && comparable && !same ? "different" : ""}`}>
+      <strong>{t(!submitted ? "comparisonReady" : !finished ? "comparisonRunning" : left.error || right.error ? "comparisonFailed" : !comparable ? "comparisonUnknown" : same ? "decisionsAgree" : "decisionsDiffer")}</strong>
+      {finished && left.route && right.route && <span>{t(left.route.choice === right.route.choice ? "routesAgree" : "routesDiffer")}</span>}
+    </div>
+    <p className="comparison-footnote">{t("comparisonCaveat")}</p>
+  </section>;
+}
+
+function HarnessLab({ draft, onDraftChange, mode, onModeChange, models, onModelChange, onLoadingChange, onNewRun, focusTask, t }: {
+  draft: ExperimentDraft; onDraftChange: (draft: ExperimentDraft) => void;
+  mode: Mode; onModeChange: (mode: Mode) => void; models: [string, string]; onModelChange: (side: number, value: string) => void;
+  onLoadingChange: (loading: boolean) => void; onNewRun: () => void; focusTask: boolean; t: Translate;
+}) {
+  const { experiment, scenario, customInput } = draft;
+  const input = scenario === null ? customInput : t(scenario);
+  const [submitted, setSubmitted] = useState(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const left = useHarnessRun(), right = useHarnessRun();
+  const arena = mode === "arena";
+  const isLoading = left.isLoading || (arena && right.isLoading);
+  const duplicate = arena && models[0] === models[1];
+  useEffect(() => onLoadingChange(isLoading), [isLoading, onLoadingChange]);
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!input.trim() || isLoading || submitted || duplicate) return;
+    const content = input.trim();
+    onDraftChange({ ...draft, customInput: input, scenario: null });
+    setSubmitted(true);
+    void left.start(content, experiment.id, models[0]);
+    if (arena) {
+      void right.start(content, experiment.id, models[1]);
+      resultsRef.current?.scrollIntoView?.({ block: "start", behavior: "auto" });
+    }
+  }
+
+  return <>
+    <div className="mode-switch" role="group" aria-label={t("experimentMode")}>
+      <button type="button" aria-pressed={!arena} onClick={() => onModeChange("single")} disabled={submitted || isLoading}>{t("singleMode")}</button>
+      <button type="button" aria-pressed={arena} onClick={() => onModeChange("arena")} disabled={submitted || isLoading}>{t("arenaMode")}</button>
+    </div>
+    <div className={`workspace${arena ? " arena-workspace" : ""}`}>
+      <section className="request-panel" aria-labelledby="request-heading">
+        <div className={`decision-picker${arena ? " arena-pickers" : ""}`}>
+          <ModelPicker id="decision-model-a" label={t(arena ? "modelA" : "decisionModel")} value={models[0]} onChange={value => onModelChange(0, value)} disabled={submitted || isLoading} t={t} />
+          {arena && <ModelPicker id="decision-model-b" label={t("modelB")} value={models[1]} onChange={value => onModelChange(1, value)} disabled={submitted || isLoading} t={t} />}
+          <p className="picker-help">{t(arena ? "arenaModelHelp" : "decisionModelHelp")}</p>
+          {duplicate && <p className="picker-help error" role="alert">{t("differentModels")}</p>}
+        </div>
+        <div className="experiment-context">
+          <h2 id="request-heading">{t(arena ? "sharedContext" : "experimentHeading")}</h2>
+          <p className="muted">{t(arena ? "sharedContextHelp" : "experimentHelp")}</p>
+          <div className="scenarios">{experiments.map(item => <button key={item.id} type="button" aria-pressed={experiment.id === item.id} onClick={() => onDraftChange({ experiment: item, scenario: item.prompt, customInput: "" })} disabled={submitted || isLoading}>{t(item.title)}</button>)}</div>
+          <div className="proposal-preview"><span>{t("proposedAction")}</span><code>{experiment.proposal}</code><p>{t("editContext")}</p></div>
+        </div>
+        <form className="request-form" onSubmit={submit}>
+          <label htmlFor="task">{t("request")}</label>
+          <textarea id="task" value={input} onChange={event => onDraftChange({ ...draft, scenario: null, customInput: event.target.value })} disabled={submitted || isLoading} maxLength={4000} rows={7} autoFocus={focusTask} />
+          {submitted && !isLoading ? <div className="next-task"><NewTaskButton onClick={onNewRun} disabled={false} t={t} /><p className="muted small">{t("newRunHelp")}</p></div> : <button className="run-button" disabled={isLoading || !input.trim() || duplicate}>{isLoading ? t("runningButton") : t(arena ? "startComparison" : "run")}</button>}
+          {arena && <p className="score-note">{t("arenaRequests")}</p>}
+        </form>
+        <div className="setup-notes"><p className="setup">{t("setup")}</p><details className="small"><summary>{t("providerHelp")}</summary><p className="muted">{t("providerSettings")}</p></details><p className="muted small">{t("dataBoundary")}</p></div>
+      </section>
+      {arena ? <div className="arena-results" ref={resultsRef}>
+        <Comparison left={left} right={right} t={t} submitted={submitted} />
+        <div className="arena-columns">
+          <RunEvidence run={left} t={t} side="A" modelLabel={modelLabel(models[0])} label={`${t("modelA")}: ${modelLabel(models[0])}`} />
+          <RunEvidence run={right} t={t} side="B" modelLabel={modelLabel(models[1])} label={`${t("modelB")}: ${modelLabel(models[1])}`} />
+        </div>
+      </div> : <RunEvidence run={left} t={t} />}
+    </div>
+  </>;
+}
+
 export default function App() {
+  // Keep the experiment draft outside the keyed run so a fresh conversation
+  // clears evidence without discarding the user's scenario or edited request.
+  const [draft, setDraft] = useState<ExperimentDraft>({ experiment: experiments[0], scenario: experiments[0].prompt, customInput: "" });
+  const [models, setModels] = useState<[string, string]>(["jev", "kev-4b"]);
+  const [mode, setMode] = useState<Mode>("single");
   const [runId, setRunId] = useState(0);
   const { language, setLanguage, t } = useLanguage();
   const [isRunning, setIsRunning] = useState(false);
   const startNewRun = () => setRunId(id => id + 1);
   return <main>
-    <header className="masthead"><div><p className="brand">LangChain / Jev</p><h1>{t("title")}</h1><p>{t("subtitle")}</p></div>
-      <div className="header-actions"><div className="language-switch" role="group" aria-label={t("language")}><button type="button" aria-pressed={language === "zh"} onClick={() => setLanguage("zh")}>中文</button><button type="button" aria-pressed={language === "en"} onClick={() => setLanguage("en")}>English</button></div>
-        <div className="new-task-action"><NewTaskButton onClick={startNewRun} disabled={isRunning} t={t} /><p>{t(isRunning ? "newRunWaiting" : "newRunHelp")}</p></div>
-      </div></header>
+    <header className="masthead"><div><p className="brand">LangChain / System One</p><h1>{t("title")}</h1><p>{t("subtitle")}</p></div>
+      <div className="header-actions"><div className="language-switch" role="group" aria-label={t("language")}><button type="button" aria-pressed={language === "zh"} onClick={() => setLanguage("zh")}>中文</button><button type="button" aria-pressed={language === "en"} onClick={() => setLanguage("en")}>English</button></div><div className="new-task-action"><NewTaskButton onClick={startNewRun} disabled={isRunning} t={t} /><p>{t(isRunning ? "newRunWaiting" : "newRunHelp")}</p></div></div>
+    </header>
     <section className="harness-guide" aria-labelledby="guide-heading">
       <div className="guide-heading"><h2 id="guide-heading">{t("guideHeading")}</h2><p>{t("guideIntro")}</p></div>
-      <ol className="guide-steps">
-        {([["routeStep", "routeExplanation"], ["gateStep", "gateExplanation"], ["answerStep", "answerExplanation"]] as [TranslationKey, TranslationKey][]).map(([heading, description], index) =>
-          <li key={heading}><span className="step-number" aria-hidden="true">{index + 1}</span><div><h3>{t(heading)}</h3><p>{t(description)}</p></div></li>)}
-      </ol>
+      <ol className="guide-steps">{([["routeStep", "routeExplanation"], ["gateStep", "gateExplanation"], ["answerStep", "answerExplanation"]] as [TranslationKey, TranslationKey][]).map(([heading, description], index) => <li key={heading}><span className="step-number" aria-hidden="true">{index + 1}</span><div><h3>{t(heading)}</h3><p>{t(description)}</p></div></li>)}</ol>
     </section>
-    <HarnessRun key={runId} onLoadingChange={setIsRunning} onNewRun={startNewRun} focusTask={runId > 0} t={t} />
+    <HarnessLab key={runId} draft={draft} onDraftChange={setDraft} mode={mode} onModeChange={setMode} models={models} onModelChange={(side, value) => setModels(current => side === 0 ? [value, current[1]] : [current[0], value])} onLoadingChange={setIsRunning} onNewRun={startNewRun} focusTask={runId > 0} t={t} />
     <footer>{t("footer")} · <a href="https://www.langchain.com/blog/building-a-harness-with-jev">{t("source")}</a></footer>
   </main>;
 }

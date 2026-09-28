@@ -7,8 +7,39 @@ from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain.agents.middleware.types import OmitFromSchema
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableLambda
-from langchain_typesafe.experimental.middleware import AutoModeMiddleware
+from langchain_typesafe import Choice, Noul
+from langchain_typesafe.experimental.middleware import AutoModeMiddleware, ModelRouterMiddleware
+# Constructor-only adapters for the pinned 0.0.1a2 integration, which has no
+# classifier injection argument. Execution/threshold logic stays upstream.
+from langchain_typesafe.experimental.middleware.auto_mode import _AutoModeConfig
+from langchain_typesafe.experimental.middleware.model_router import _ModelRouterConfig
 from typing_extensions import NotRequired
+
+from .decisions import DecisionClassifier
+
+
+class DecisionState(ModelRouterMiddleware.state_schema):
+    decision_report: NotRequired[Annotated[dict, OmitFromSchema(input=True, output=False)]]
+
+
+class SelectableModelRouterMiddleware(ModelRouterMiddleware):
+    state_schema = DecisionState
+
+    def __init__(self, *, choices, instructions):
+        self.config = _ModelRouterConfig.model_validate({"choices": choices, "instructions": instructions})
+        self.models = {key: value.model for key, value in self.config.choices.items()}
+        self.classifier = DecisionClassifier(questions={"model_route": Choice(
+            instructions=self.config.instructions,
+            criteria={key: value.criteria for key, value in self.config.choices.items()},
+        )})
+
+    def before_agent(self, state, runtime):
+        response = self.classifier.invoke(self._latest_human_message(state))
+        return {"model_route": response.choices["model_route"], "decision_report": self.classifier.report(response)}
+
+    async def abefore_agent(self, state, runtime):
+        response = await self.classifier.ainvoke(self._latest_human_message(state))
+        return {"model_route": response.choices["model_route"], "decision_report": self.classifier.report(response)}
 
 
 class ReportState(AgentState):
@@ -28,6 +59,7 @@ class RouteReportMiddleware(AgentMiddleware):
             "route_report": {
                 **answer.model_dump(mode="json"),
                 "model": getattr(model, "model_name", answer.choice),
+                "decision_model": state["decision_report"],
                 "models": {key: getattr(value, "model_name", key) for key, value in self.models.items()},
             }
         }
@@ -45,7 +77,10 @@ class ObservedAutoModeMiddleware(AutoModeMiddleware):
     """
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        self.config = _AutoModeConfig.model_validate(kwargs)
+        self.classifier = DecisionClassifier(questions={"is_risky": Noul(
+            instructions=self.config.instructions, criteria=self.config.criteria,
+        )})
         self._responses = ContextVar("auto_mode_responses", default=None)
         self.risk_classifier = self.classifier
         self.classifier = self.risk_classifier | RunnableLambda(self._observe_response)
@@ -75,7 +110,8 @@ class ObservedAutoModeMiddleware(AutoModeMiddleware):
                 "executed": executed and result.status != "error",
                 "execution_status": "blocked" if not executed else "failed" if result.status == "error" else "completed",
                 "risk_probability": response.nouls["is_risky"].noul,
-                "jev_answer": response.nouls["is_risky"].model_dump(mode="json"),
+                "raw_answer": response.nouls["is_risky"].model_dump(mode="json"),
+                "decision_model": DecisionClassifier.report(response),
                 "confidence": None,
                 "threshold": 0.5,
                 "arguments": request.tool_call["args"],
