@@ -128,3 +128,17 @@ Captured on **2026-09-28** from code commit [`36fe0a8331c1a7880c578412f2f451298b
 The browser used real SiliconFlow decision/chat calls with simulated operational tools. The first captured run returned SemIf risk 0.0076 (allowed, contradicting the policy) and DiffusionGemma 1.0 (blocked); values remain unmodified. The UI continues to distinguish risk probability from routing confidence.
 
 Validation: **24 frontend tests passed** and production build passed. Regression cases cover completed and unsubmitted experiments in both modes, both new-task buttons, edited multiline input, language switching, explicit scenario changes, and repeat submission. English and Chinese README/help text describe the preserved inputs.
+
+
+## Official Jev default (PR #36)
+
+Captured on **2026-09-28** from the generated template at code commit `38e2b3a40c59fba8edb1435f20e9d1a5b219cfcb`, using AgentSeek API **0.3.2**. Official TypeSafe Jev is now the default for the single-model selector, Arena A, omitted API selection, and the live-smoke command. Arena B remains Kev-4B on SiliconFlow.
+
+| Image | What it demonstrates |
+| --- | --- |
+| [Single model, Chinese](jev-default-single-zh.jpg) | Jev is visibly marked Official / Default. A real authorized-restart run reports TypeSafe / jev-1.13.0, Flash route probability 92%, and route confidence 84%. The persisted gate answer is 0.04 / allowed. |
+| [Arena defaults, English](jev-default-arena-en.jpg) | A starts as Jev; B starts as Kev-4B. The separate provider-key requirements appear below the selectors. This capture is the ready state. |
+
+[Persisted API evidence](jev-default-api-proof.json) records the single-model run and a real default-pair Arena run. Both Arena conversations received the same diagnosis-only request and fixed staging-restart proposal. Jev returned risk 0.98; Kev-4B returned 0.9789. Both blocked execution. Raw Noul answers equal the displayed audit probabilities; provider attribution is preserved. All operational tools are simulated. These observations are walkthrough evidence, not a benchmark.
+
+Reproduce by configuring `TYPESAFE_API_KEY` for Jev and `OPENAI_API_KEY` for the default SiliconFlow chat endpoint, then starting the lifecycle with `--no-browser`. Open the console manually. Leave the single-model choice unchanged and run the authorized preset; start a new task, switch to Arena, and select diagnosis-only without changing the default model pair.
