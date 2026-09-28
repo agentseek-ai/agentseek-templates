@@ -124,7 +124,7 @@ test("offers a fresh task at the point of completion and focuses the editable re
   fireEvent.click(buttons[1]);
   const input = screen.getByLabelText("Your request") as HTMLTextAreaElement;
   expect(input.disabled).toBe(false);
-  expect(input.value).not.toBe("My completed task");
+  expect(input.value).toBe("My completed task");
   expect(document.activeElement).toBe(input);
   expect((screen.getByRole("button", { name: "Run harness" }) as HTMLButtonElement).disabled).toBe(false);
 });

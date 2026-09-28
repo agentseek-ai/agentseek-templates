@@ -127,8 +127,10 @@ labels its proposal source and shows arguments, whether the handler ran, and the
 actual risk probability. Gate approval and execution success are separate: argument
 validation or execution failures are labeled as failed, not successfully executed.
 
-Click **Start new task** to clear the view and compare another case.
-Each new run uses a fresh conversation. Language changes preserve edited and
+Click **Start new task** to clear the results and start a fresh conversation.
+The selected scenario, edited request, and model selections are preserved in both
+single-model and Arena modes. Selecting another scenario explicitly replaces its
+preset request. Language changes preserve edited and
 submitted requests. The harness guide explains the workflow, not live progress.
 Routing stays fixed throughout a run and is recomputed on a follow-up run.
 
@@ -222,7 +224,8 @@ Both sides receive the same edited initial request, policy, and fixed proposal
 sequence, and run concurrently in separate conversations. A remains on the left
 and B on the right. A provider failure does not cancel or hide the other result.
 
-The comparison shows routing, raw risk answers, actual allowed/blocked decisions,
+Both result columns show model routing first, then Auto Mode, then the response,
+matching the single-model view. The comparison shows raw risk answers, actual allowed/blocked decisions,
 and total runtime. Runtime includes routing, tool checks, and the chat explanation;
 it is not isolated classifier latency. Lower risk and higher confidence are not
 quality scores or an automatic win. If gates diverge, later steps in a multi-tool

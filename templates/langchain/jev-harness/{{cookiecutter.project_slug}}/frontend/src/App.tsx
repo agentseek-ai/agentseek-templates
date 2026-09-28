@@ -14,6 +14,12 @@ const experiments: { id: string; title: TranslationKey; prompt: TranslationKey; 
   { id: "injected-note", title: "injectedNote", prompt: "injectedNotePrompt", proposal: 'read_incident_note() → restart_service(environment="staging")' },
 ];
 
+type ExperimentDraft = {
+  experiment: typeof experiments[number];
+  scenario: TranslationKey | null;
+  customInput: string;
+};
+
 function NewTaskButton({ onClick, disabled, t }: { onClick: () => void; disabled: boolean; t: Translate }) {
   return <button type="button" className="new-run" disabled={disabled} onClick={onClick}>
     <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -52,13 +58,12 @@ function Comparison({ left, right, t, submitted }: { left: HarnessRun; right: Ha
   </section>;
 }
 
-function HarnessLab({ mode, onModeChange, models, onModelChange, onLoadingChange, onNewRun, focusTask, t }: {
+function HarnessLab({ draft, onDraftChange, mode, onModeChange, models, onModelChange, onLoadingChange, onNewRun, focusTask, t }: {
+  draft: ExperimentDraft; onDraftChange: (draft: ExperimentDraft) => void;
   mode: Mode; onModeChange: (mode: Mode) => void; models: [string, string]; onModelChange: (side: number, value: string) => void;
   onLoadingChange: (loading: boolean) => void; onNewRun: () => void; focusTask: boolean; t: Translate;
 }) {
-  const [experiment, setExperiment] = useState(experiments[0]);
-  const [scenario, setScenario] = useState<TranslationKey | null>(experiments[0].prompt);
-  const [customInput, setCustomInput] = useState("");
+  const { experiment, scenario, customInput } = draft;
   const input = scenario === null ? customInput : t(scenario);
   const [submitted, setSubmitted] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
@@ -72,8 +77,7 @@ function HarnessLab({ mode, onModeChange, models, onModelChange, onLoadingChange
     event.preventDefault();
     if (!input.trim() || isLoading || submitted || duplicate) return;
     const content = input.trim();
-    setCustomInput(input);
-    setScenario(null);
+    onDraftChange({ ...draft, customInput: input, scenario: null });
     setSubmitted(true);
     void left.start(content, experiment.id, models[0]);
     if (arena) {
@@ -98,12 +102,12 @@ function HarnessLab({ mode, onModeChange, models, onModelChange, onLoadingChange
         <div className="experiment-context">
           <h2 id="request-heading">{t(arena ? "sharedContext" : "experimentHeading")}</h2>
           <p className="muted">{t(arena ? "sharedContextHelp" : "experimentHelp")}</p>
-          <div className="scenarios">{experiments.map(item => <button key={item.id} type="button" aria-pressed={experiment.id === item.id} onClick={() => { setExperiment(item); setScenario(item.prompt); }} disabled={submitted || isLoading}>{t(item.title)}</button>)}</div>
+          <div className="scenarios">{experiments.map(item => <button key={item.id} type="button" aria-pressed={experiment.id === item.id} onClick={() => onDraftChange({ experiment: item, scenario: item.prompt, customInput: "" })} disabled={submitted || isLoading}>{t(item.title)}</button>)}</div>
           <div className="proposal-preview"><span>{t("proposedAction")}</span><code>{experiment.proposal}</code><p>{t("editContext")}</p></div>
         </div>
         <form className="request-form" onSubmit={submit}>
           <label htmlFor="task">{t("request")}</label>
-          <textarea id="task" value={input} onChange={event => { setScenario(null); setCustomInput(event.target.value); }} disabled={submitted || isLoading} maxLength={4000} rows={7} autoFocus={focusTask} />
+          <textarea id="task" value={input} onChange={event => onDraftChange({ ...draft, scenario: null, customInput: event.target.value })} disabled={submitted || isLoading} maxLength={4000} rows={7} autoFocus={focusTask} />
           {submitted && !isLoading ? <div className="next-task"><NewTaskButton onClick={onNewRun} disabled={false} t={t} /><p className="muted small">{t("newRunHelp")}</p></div> : <button className="run-button" disabled={isLoading || !input.trim() || duplicate}>{isLoading ? t("runningButton") : t(arena ? "startComparison" : "run")}</button>}
           {arena && <p className="score-note">{t("arenaRequests")}</p>}
         </form>
@@ -121,6 +125,9 @@ function HarnessLab({ mode, onModeChange, models, onModelChange, onLoadingChange
 }
 
 export default function App() {
+  // Keep the experiment draft outside the keyed run so a fresh conversation
+  // clears evidence without discarding the user's scenario or edited request.
+  const [draft, setDraft] = useState<ExperimentDraft>({ experiment: experiments[0], scenario: experiments[0].prompt, customInput: "" });
   const [models, setModels] = useState<[string, string]>(["semif", "kev-4b"]);
   const [mode, setMode] = useState<Mode>("single");
   const [runId, setRunId] = useState(0);
@@ -135,7 +142,7 @@ export default function App() {
       <div className="guide-heading"><h2 id="guide-heading">{t("guideHeading")}</h2><p>{t("guideIntro")}</p></div>
       <ol className="guide-steps">{([["routeStep", "routeExplanation"], ["gateStep", "gateExplanation"], ["answerStep", "answerExplanation"]] as [TranslationKey, TranslationKey][]).map(([heading, description], index) => <li key={heading}><span className="step-number" aria-hidden="true">{index + 1}</span><div><h3>{t(heading)}</h3><p>{t(description)}</p></div></li>)}</ol>
     </section>
-    <HarnessLab key={runId} mode={mode} onModeChange={setMode} models={models} onModelChange={(side, value) => setModels(current => side === 0 ? [value, current[1]] : [current[0], value])} onLoadingChange={setIsRunning} onNewRun={startNewRun} focusTask={runId > 0} t={t} />
+    <HarnessLab key={runId} draft={draft} onDraftChange={setDraft} mode={mode} onModeChange={setMode} models={models} onModelChange={(side, value) => setModels(current => side === 0 ? [value, current[1]] : [current[0], value])} onLoadingChange={setIsRunning} onNewRun={startNewRun} focusTask={runId > 0} t={t} />
     <footer>{t("footer")} · <a href="https://www.langchain.com/blog/building-a-harness-with-jev">{t("source")}</a></footer>
   </main>;
 }

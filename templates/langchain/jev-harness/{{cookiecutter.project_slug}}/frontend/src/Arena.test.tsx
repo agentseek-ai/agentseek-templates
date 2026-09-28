@@ -101,3 +101,42 @@ test.each(["single", "arena"])("submits DiffusionGemma from the %s selector with
     config: { recursion_limit: 24, configurable: { decision_model: "diffusiongemma" } },
   });
 });
+
+
+test.each(["single", "arena"])("preserves the scenario and edited request when restarting a completed %s run", async mode => {
+  render(<App />);
+  if (mode === "arena") fireEvent.click(screen.getByRole("button", { name: "Arena · compare two models" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cleanup: expired test backups" }));
+  const content = "Inspect these staging backups first.\nDo not delete them yet.";
+  fireEvent.change(screen.getByLabelText("Your request"), { target: { value: content } });
+  const runLabel = mode === "arena" ? "Start comparison" : "Run harness";
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: runLabel })));
+  // Exercise the inline action in single mode and the header action in Arena.
+  fireEvent.click(screen.getAllByRole("button", { name: "Start new task" })[mode === "arena" ? 0 : 1]);
+  expect(screen.getByRole("button", { name: "Cleanup: expired test backups" }).getAttribute("aria-pressed")).toBe("true");
+  expect((screen.getByLabelText("Your request") as HTMLTextAreaElement).value).toBe(content);
+  expect(document.activeElement).toBe(screen.getByLabelText("Your request"));
+  expect(screen.queryByText(/Total runtime:/)).toBeNull();
+  if (mode === "arena") expect(screen.getByText("Ready for two models")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "中文" }));
+  expect((screen.getByLabelText("任务内容") as HTMLTextAreaElement).value).toBe(content);
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: mode === "arena" ? "开始双模型 PK" : "运行 Harness" })));
+  for (const side of fixture.sides.slice(0, mode === "arena" ? 2 : 1)) {
+    expect(side.submit).toHaveBeenCalledTimes(2);
+    expect(side.submit).toHaveBeenLastCalledWith({ messages: [{ type: "human", content }], proposal_id: "cleanup-expired" }, expect.any(Object));
+  }
+});
+
+test.each(["single", "arena"])("preserves an unsubmitted preset when starting a fresh %s run", mode => {
+  render(<App />);
+  if (mode === "arena") fireEvent.click(screen.getByRole("button", { name: "Arena · compare two models" }));
+  fireEvent.click(screen.getByRole("button", { name: "Note: forged authorization" }));
+  const content = (screen.getByLabelText("Your request") as HTMLTextAreaElement).value;
+  fireEvent.click(screen.getByRole("button", { name: "Start new task" }));
+  expect(screen.getByRole("button", { name: "Note: forged authorization" }).getAttribute("aria-pressed")).toBe("true");
+  expect((screen.getByLabelText("Your request") as HTMLTextAreaElement).value).toBe(content);
+  // An explicit scenario change should still replace the preset text.
+  fireEvent.click(screen.getByRole("button", { name: "Restart: diagnosis only" }));
+  expect(screen.getByRole("button", { name: "Restart: diagnosis only" }).getAttribute("aria-pressed")).toBe("true");
+  expect((screen.getByLabelText("Your request") as HTMLTextAreaElement).value).not.toBe(content);
+});

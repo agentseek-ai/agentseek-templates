@@ -156,8 +156,3 @@ a { color: #176d83; }
 .evidence-panel > .error { margin: 16px; }
 @media (max-width: 900px) { .arena-workspace .request-panel { padding: 20px; gap: 0 20px; } .arena-columns { gap: 16px; } .arena-columns .route-section, .arena-columns .tools-section, .arena-columns .answer-section { padding: 16px; } .arena-columns .section-heading { flex-wrap: wrap; gap: 4px; } }
 @media (max-width: 680px) { .arena-workspace .request-panel, .arena-columns, .comparison-summary { grid-template-columns: 1fr; } .arena-pickers { gap: 0 14px; } .arena-workspace .request-form { margin-top: 22px; } .comparison-verdict { min-width: 0; } .mode-switch button { flex: 1; text-align: center; padding: 12px; } }
-/* Arena leads with tool decisions; the routing breakdown follows below. */
-.arena-columns .evidence-panel { display: flex; flex-direction: column; }
-.arena-columns .tools-section { order: 1; }
-.arena-columns .route-section { order: 2; }
-.arena-columns .answer-section { order: 3; border-top: 1px solid #e0e8ed; }
