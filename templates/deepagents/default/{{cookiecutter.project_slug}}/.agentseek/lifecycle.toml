@@ -57,4 +57,8 @@ attempts = 3
 
 [tasks.sync]
 description = "Install Python dependencies."
+{% if cookiecutter._agentseek_source_path_posix %}
 command = ["uv", "sync"]
+{% else %}
+command = ["uv", "sync", "--frozen"]
+{% endif %}

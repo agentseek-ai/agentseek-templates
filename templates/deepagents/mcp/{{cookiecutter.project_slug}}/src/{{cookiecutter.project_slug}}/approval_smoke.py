@@ -1,4 +1,4 @@
-"""Model-free MCP + local publication approval experiment on Deep Agents 0.6.12."""
+"""Model-free MCP + local publication approval experiment on Deep Agents 0.7.8."""
 from __future__ import annotations
 
 import asyncio

@@ -24,7 +24,7 @@ description = "Embedded AgentSeek API database name."
 required = ["uv", "node", "npm"]
 
 [paths]
-required = ["pyproject.toml", "langgraph.json", ".mcp.json", "frontend/package.json", "frontend/node_modules"]
+required = ["pyproject.toml", "uv.lock", "langgraph.json", ".mcp.json", "frontend/package.json", "frontend/node_modules"]
 
 [env.AGENTSEEK_MODEL_PROVIDER]
 required = true
@@ -80,14 +80,14 @@ tech = "mcp"
 links = { docs = "https://modelcontextprotocol.io/docs/learn/server-concepts" }
 
 [processes.langgraph]
-command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.langgraph_dev"]
+command = ["uv", "run", "--frozen", "python", "-m", "{{ cookiecutter.project_slug }}.langgraph_dev"]
 
 [processes.frontend]
 command = ["npm", "run", "dev"]
 cwd = "frontend"
 
 [processes.calculator-http]
-command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.calculator_http_server", "--host", "127.0.0.1", "--port", "{{ cookiecutter.calculator_http_port }}"]
+command = ["uv", "run", "--frozen", "python", "-m", "{{ cookiecutter.project_slug }}.calculator_http_server", "--host", "127.0.0.1", "--port", "{{ cookiecutter.calculator_http_port }}"]
 
 [checks.langgraph]
 type = "http"
@@ -111,8 +111,8 @@ timeout = 2
 attempts = 10
 
 [tasks.sync]
-description = "Install Python dependencies with uv."
-command = ["uv", "sync"]
+description = "Install the reviewed Python dependencies from uv.lock."
+command = ["uv", "sync", "--frozen"]
 
 [tasks.frontend]
 description = "Install frontend dependencies."
@@ -120,8 +120,12 @@ command = ["npm", "install", "--prefix", "frontend"]
 
 [tasks.mcp-smoke]
 description = "Verify real stdio and Streamable HTTP MCP discovery and invocation without a model key."
-command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.mcp_smoke"]
+command = ["uv", "run", "--frozen", "python", "-m", "{{ cookiecutter.project_slug }}.mcp_smoke"]
 
 [tasks.mcp-approval-smoke]
-description = "Verify real MCP calls and local approve/reject side effects on 0.6.12."
-command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.approval_smoke"]
+description = "Verify real MCP calls and local approve/reject side effects on 0.7.8."
+command = ["uv", "run", "--frozen", "python", "-m", "{{ cookiecutter.project_slug }}.approval_smoke"]
+
+[tasks.test]
+description = "Verify todo planning, tool-name collisions, real MCP calls, and approval side effects."
+command = ["uv", "run", "--frozen", "pytest", "-q"]

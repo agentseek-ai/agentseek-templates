@@ -14,6 +14,7 @@ import warnings
 
 from deepagents import create_deep_agent
 from dotenv import load_dotenv
+from langchain.agents.middleware import TodoListMiddleware
 from langchain.chat_models import init_chat_model
 
 from {{ cookiecutter.project_slug }}.prompts import SYSTEM_PROMPT
@@ -134,4 +135,5 @@ graph = create_deep_agent(
     model=model,
     system_prompt=SYSTEM_PROMPT,
     backend=backend,
+    middleware=[TodoListMiddleware()],
 )

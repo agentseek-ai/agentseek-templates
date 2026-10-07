@@ -8,7 +8,7 @@ tools over both transports, a model-free smoke check, and a streamed React UI.
 
 ### Prerequisites
 
-- Python 3.12 or newer with `uv`.
+- Python 3.12 or 3.13 with `uv`.
 - `uvx`, included with `uv`, for isolated AgentSeek CLI commands.
 - Node.js `^20.19.0 || ^22.13.0 || >=24.0.0` with `npm`.
 - A model name and credential for OpenAI, Anthropic, or Google when you send chat.
@@ -31,6 +31,8 @@ as described below. Then continue in this exact order:
 uvx agentseek task sync
 uvx agentseek task frontend
 uvx agentseek task mcp-smoke
+uvx agentseek task mcp-approval-smoke
+uvx agentseek task test
 uvx agentseek info
 uvx agentseek doctor
 uvx agentseek dev --dry-run
@@ -45,27 +47,14 @@ model, and it stops the HTTP server when it started that process itself.
 `agentseek info`, `agentseek doctor`, and the dry run inspect the lifecycle before
 the last command starts the calculator HTTP server, LangGraph, and Vite.
 
-### Verified workflow
+### Local verification
 
-This exact sequence was last verified on 2026-07-30 against a fresh render. The
-run produced these checkpoints:
-
-- `task sync` created `.venv` and installed the generated Python package.
-- `task frontend` installed the React UI dependencies with no reported
-  vulnerabilities.
-- `task mcp-smoke` discovered both MCP connections, returned `95` over stdio,
-  and returned `2146` over Streamable HTTP.
-- `info` identified `deepagents/mcp`, all three services, and all three tasks.
-- `doctor` reported every required tool, path, environment value, and process
-  working directory as `ok`.
-- `dev --dry-run` printed the three process commands and their loopback URLs.
-- `dev` started LangGraph, Vite, and the calculator HTTP server. LangGraph
-  `/docs`, the Vite root, and calculator `/health` returned HTTP `200`; `Ctrl-C`
-  stopped all three processes.
-
-The verification used a placeholder model credential because this sequence does
-not send a chat message. It proves setup, lifecycle startup, and both real MCP
-transports; it does not prove that a hosted model accepts your credential.
+`task sync` installs the generated package and test dependencies from the
+frozen lock. The two smoke tasks discover and invoke actual calculators;
+`task test` also verifies todo state, registered tool-name collision safety,
+and publication approval. These checks need no hosted-model credential.
+`info`, `doctor`, and the dry run inspect the lifecycle before starting the
+three development processes.
 
 Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}` after all three
 processes start. Sending a message invokes your configured hosted model. The
@@ -134,15 +123,18 @@ The lifecycle starts `calculator_http_server` on loopback and checks its public
 service instead, replace `calculator_http` and use environment references for
 its URL or headers, such as `${BILLING_MCP_URL}` and `${BILLING_MCP_TOKEN}`.
 
-Final names must be unique and cannot replace the enabled DeepAgents built-ins:
-`write_todos`, `ls`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`, or
-`execute`. The `task` tool is disabled by this template's harness profile and
-is not reserved.
+Final names must be unique and cannot replace registered DeepAgents built-ins:
+`write_todos`, `delete`, `ls`, `read_file`, `write_file`, `edit_file`, `glob`,
+`grep`, or `execute`. The default StateBackend hides `execute` from the model
+but still registers it in ToolNode, so its name remains reserved. The `task`
+tool is disabled by this template's HarnessProfile and is not reserved.
 
-This template pins DeepAgents to `0.6.12` because the enabled built-in tool set
-and harness profile APIs are characterized for that exact runtime. Before
-upgrading DeepAgents, rerun and update the real built-in collision
-characterization, reserved-name set, and profile regressions together.
+This template pins DeepAgents to `0.7.8` and includes `uv.lock`. Python 3.12
+and 3.13 use the same reviewed dependency resolution. The lifecycle uses
+`uv sync --frozen` and `uv run --frozen` to preserve it. TodoListMiddleware is
+explicit because 0.7 no longer installs todo planning automatically. The
+generated runtime tests characterize the real ToolNode, collision guard,
+todo state, and disabled general-purpose subagent profile together.
 
 Restart the AgentSeek development processes after changing `.mcp.json`, model
 settings, or server credentials. MCP tool calls are stateless and do not retain
@@ -256,12 +248,12 @@ This v1 template exposes MCP Tools only. It does not expose MCP Resources or
 Prompts, persistent MCP client sessions, interceptors, OAuth helpers, or a
 browser-based MCP configuration editor.
 
-## Course version boundary and approval experiment
+## Locked runtime and approval experiment
 
-This original MCP template stays on **Deep Agents 0.6.12**. It is not the
-0.7 course baseline. The main UI graph does not enable interrupt_on and the
-frontend has no approve/reject controls. Use content-builder or research
-for the locked 0.7.8 planning exercises.
+The application and SDK experiments use **Deep Agents 0.7.8** with explicit
+todo planning. The main UI graph does not enable `interrupt_on`, and the
+frontend has no approve/reject controls. The SDK experiment below demonstrates
+approval and resume with actual MCP tools and a local publication log.
 
 Run `agentseek task mcp-smoke` to discover and call the bundled stdio and
 Streamable HTTP calculators. Run `agentseek task mcp-approval-smoke` for the
@@ -274,8 +266,8 @@ writes nothing. The temporary logs are inspected before cleanup; the printed
 counts show the result. The SDK checkpoint lasts for this process only;
 the application server owns its own configured checkpoint backend.
 
-A future 0.7 MCP upgrade must review the reserved built-in tool names
-(including delete and opt-in write_todos), disabled general-purpose subagent
-Harness Profile behavior, tool discovery/calls on both transports, and
-approval/resume regression together. This change preserves the reviewed
-0.6.12 reserved-name list and profile.
+Run `agentseek task test` for the full generated Python suite. It writes
+todo state through the actual graph, checks all nine registered built-in
+names, rejects an external `delete` collision, calls both MCP transports,
+and verifies the approve/reject publication log deltas. These checks do not
+call a hosted model or require a chat-provider credential.

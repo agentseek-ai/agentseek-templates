@@ -54,9 +54,9 @@ cp .env.example .env
 cp frontend/.env.example frontend/.env
 $EDITOR .env
 
-uv sync
+uv sync --frozen
 npm install --prefix frontend
-uv run langgraph dev --port 2024 --no-browser
+uv run --frozen langgraph dev --port 2024 --no-browser
 # In another terminal:
 npm run dev --prefix frontend
 ```
@@ -97,10 +97,12 @@ not treat `completed` as success for tools until `error` is also checked.
 
 ## Version boundary
 
-The generated project pins `deepagents==0.6.12`, the first DeepAgents release
-used by the sibling MCP template for the v3-era runtime surface. Do not copy
-the raw event adapter into unrelated components; if the protocol changes,
-update the adapter and its tests first.
+The generated project pins `deepagents==0.7.8` and ships a frozen dependency lock
+for Python 3.12/3.13. The coordinator and researcher explicitly enable todo planning
+to preserve their former default tools and state. The generated suite exercises the
+real graph's planning, researcher tool calls, and all six v3 projections offline.
+The v3 protocol remains experimental; update the adapter and its tests together
+when its contract changes.
 
 ## Lifecycle
 

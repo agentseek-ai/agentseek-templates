@@ -1,5 +1,8 @@
 # {{ cookiecutter.project_name }}
 
+The reviewed `uv.lock` pins the existing DeepAgents 0.7.8 runtime for Python
+3.12 and 3.13. The Python sync task installs it with `--frozen`.
+
 This lab turns the six official Dynamic Subagents patterns into six independent,
 runnable assistants. Choose a scenario in the browser, run its natural
 `workflow` request, and inspect evidence that the interpreter actually

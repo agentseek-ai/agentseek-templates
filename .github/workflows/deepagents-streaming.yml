@@ -48,8 +48,8 @@ jobs:
         working-directory: ${{ runner.temp }}/streaming-render/deepagents_streaming
         run: |
           cp .env.example .env
-          uv sync --extra dev
-          uv run python -m pytest -q
+          uv sync --frozen --extra dev
+          uv run --frozen python -m pytest -q
       - name: Test and build the rendered frontend
         working-directory: ${{ runner.temp }}/streaming-render/deepagents_streaming/frontend
         run: |

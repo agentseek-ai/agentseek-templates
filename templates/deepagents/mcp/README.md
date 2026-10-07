@@ -65,10 +65,11 @@ Configuration and discovery are all-or-nothing. Every configured server must
 connect and expose at least one tool. If any server fails or returns no tools,
 graph creation fails without a partial tool set. `tool_name_prefix=True`
 exposes tools as `<server>_<tool>`, such as `calculator_add`,
-`calculator_http_multiply`, or `billing_charge_card`. Final names must be unique and cannot replace the
-enabled DeepAgents built-ins: `write_todos`, `ls`, `read_file`, `write_file`,
-`edit_file`, `glob`, `grep`, or `execute`. The `task` tool is disabled by this
-template's harness profile and is not reserved.
+`calculator_http_multiply`, or `billing_charge_card`. Final names must be unique and cannot replace registered DeepAgents built-ins:
+`write_todos`, `delete`, `ls`, `read_file`, `write_file`, `edit_file`, `glob`,
+`grep`, or `execute`. The default StateBackend hides `execute` from the model
+but still registers it in ToolNode, so its name remains reserved. The `task`
+tool is disabled by this template's HarnessProfile and is not reserved.
 
 The graph is cached after the first successful build. Restart the AgentSeek
 development processes after changing `.mcp.json`, model settings, or server
@@ -77,10 +78,12 @@ client sessions between calls.
 
 ## Adapt the template
 
-This template pins DeepAgents to `0.6.12` because the enabled built-in tool set
-and harness profile APIs are characterized for that exact runtime. Before
-upgrading DeepAgents, rerun and update the real built-in collision
-characterization, reserved-name set, and profile regressions together.
+This template pins DeepAgents to `0.7.8` and includes `uv.lock`. Python 3.12
+and 3.13 use the same reviewed dependency resolution. The lifecycle uses
+`uv sync --frozen` and `uv run --frozen` to preserve it. TodoListMiddleware is
+explicit because 0.7 no longer installs todo planning automatically. The
+generated runtime tests characterize the real ToolNode, collision guard,
+todo state, and disabled general-purpose subagent profile together.
 
 The smoke task starts or reuses the local HTTP server, checks the complete
 discovered tool-name tuple, and performs a real calculator invocation through
@@ -159,12 +162,12 @@ interrupt_on={
 This example does not enable automatic HITL. An application contributor must add
 and test the policy when assembling the graph.
 
-## Course version boundary and approval experiment
+## Locked runtime and approval experiment
 
-This original MCP template stays on **Deep Agents 0.6.12**. It is not the
-0.7 course baseline. The main UI graph does not enable interrupt_on and the
-frontend has no approve/reject controls. Use content-builder or research
-for the locked 0.7.8 planning exercises.
+The application and SDK experiments use **Deep Agents 0.7.8** with explicit
+todo planning. The main UI graph does not enable `interrupt_on`, and the
+frontend has no approve/reject controls. The SDK experiment below demonstrates
+approval and resume with actual MCP tools and a local publication log.
 
 Run `agentseek task mcp-smoke` to discover and call the bundled stdio and
 Streamable HTTP calculators. Run `agentseek task mcp-approval-smoke` for the
@@ -177,8 +180,8 @@ writes nothing. The temporary logs are inspected before cleanup; the printed
 counts show the result. The SDK checkpoint lasts for this process only;
 the application server owns its own configured checkpoint backend.
 
-A future 0.7 MCP upgrade must review the reserved built-in tool names
-(including delete and opt-in write_todos), disabled general-purpose subagent
-Harness Profile behavior, tool discovery/calls on both transports, and
-approval/resume regression together. This change preserves the reviewed
-0.6.12 reserved-name list and profile.
+Run `agentseek task test` for the full generated Python suite. It writes
+todo state through the actual graph, checks all nine registered built-in
+names, rejects an external `delete` collision, calls both MCP transports,
+and verifies the approve/reject publication log deltas. These checks do not
+call a hosted model or require a chat-provider credential.

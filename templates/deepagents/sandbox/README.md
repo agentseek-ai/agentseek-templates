@@ -23,7 +23,7 @@ The generated project includes:
 
 ## Prerequisites
 
-This template requires **Python 3.12+** and uses [uv](https://docs.astral.sh/uv/)
+This template requires **Python 3.12 or 3.13** and uses [uv](https://docs.astral.sh/uv/)
 for dependency management. Install uv first:
 
 ```bash

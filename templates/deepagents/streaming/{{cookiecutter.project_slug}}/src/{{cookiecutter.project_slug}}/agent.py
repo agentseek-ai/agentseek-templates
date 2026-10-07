@@ -7,12 +7,15 @@ import warnings
 
 from deepagents import create_deep_agent
 from dotenv import load_dotenv
+from langchain.agents.middleware import TodoListMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.state import CompiledStateGraph
+
+from .openai_compat import OpenAICompatibleChatModel
 
 load_dotenv()
 
@@ -85,7 +88,11 @@ elif MODEL_PROVIDER == "google_genai":
     if _nonempty_env("GOOGLE_API_BASE"):
         MODEL_INIT_KWARGS["base_url"] = _nonempty_env("GOOGLE_API_BASE")
 
-model = init_chat_model(**MODEL_INIT_KWARGS)
+model = (
+    OpenAICompatibleChatModel(**{key: value for key, value in MODEL_INIT_KWARGS.items() if key != "model_provider"})
+    if MODEL_PROVIDER == "openai"
+    else init_chat_model(**MODEL_INIT_KWARGS)
+)
 
 researcher = {
     "name": "researcher",
@@ -96,6 +103,7 @@ researcher = {
         "a concise note for the coordinator."
     ),
     "tools": [inspect_streaming_topic],
+    "middleware": [TodoListMiddleware()],
 }
 
 
@@ -115,6 +123,7 @@ def _build_graph(
             "that the UI can observe messages, tool calls, values, subagents, and output."
         ),
         subagents=[researcher],
+        middleware=[TodoListMiddleware()],
         checkpointer=checkpointer,
     )
 

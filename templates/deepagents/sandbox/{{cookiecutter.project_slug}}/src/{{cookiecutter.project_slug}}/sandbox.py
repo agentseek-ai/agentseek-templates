@@ -13,6 +13,18 @@ from typing import Any
 SUPPORTED_SANDBOX_PROVIDERS = {"daytona", "langsmith"}
 
 
+def _quote_inline_python(command: str) -> str:
+    """Quote the upstream 0.7.8 glob-grep script as one shell argument."""
+    prefix = 'python3 -c "\nimport glob, os, base64, sys\n\n'
+    suffix = '\n" 2>/dev/null'
+    if command.startswith(prefix) and command.endswith(suffix):
+        # Double quotes inside the upstream script's comments otherwise close
+        # its shell argument early. Keep user commands outside this shape intact.
+        script = command[len('python3 -c "') : -len(suffix)]
+        return f"python3 -c {shlex.quote(script)} 2>/dev/null"
+    return command
+
+
 def _workspace_path(workspace: str, path: str) -> str:
     """Map a DeepAgents logical path into a sandbox's writable workspace."""
     if not path:
@@ -71,6 +83,7 @@ def _daytona_backend_with_workspace(sandbox: Any, workspace: str) -> Any:
             return result
 
         def execute(self, command: str, *, timeout: int | None = None) -> Any:
+            command = _quote_inline_python(command)
             command_in_workspace = f"cd {shlex.quote(self.workspace)} && {command}"
             if timeout is None:
                 return super().execute(command_in_workspace)
@@ -140,6 +153,16 @@ def _daytona_backend_with_workspace(sandbox: Any, workspace: str) -> Any:
             result.path = self._logical_path(result.path)
             return result
 
+        def delete(self, file_path: str) -> Any:
+            result = super().delete(self._resolve_path(file_path))
+            result.path = self._logical_path(result.path)
+            return result
+
+        async def adelete(self, file_path: str) -> Any:
+            result = await super().adelete(self._resolve_path(file_path))
+            result.path = self._logical_path(result.path)
+            return result
+
         def glob(self, pattern: str, path: str | None = None) -> Any:
             base_path = self._resolve_path(path or "/")
             result = super().glob(pattern, base_path)
@@ -155,11 +178,14 @@ def _daytona_backend_with_workspace(sandbox: Any, workspace: str) -> Any:
             pattern: str,
             path: str | None = None,
             glob: str | None = None,
+            *,
+            max_count: int | None = None,
         ) -> Any:
             result = super().grep(
                 pattern,
                 self._resolve_path(path or "/"),
                 glob,
+                max_count=max_count,
             )
             return self._logicalize_result_paths(result, "matches")
 
@@ -168,15 +194,32 @@ def _daytona_backend_with_workspace(sandbox: Any, workspace: str) -> Any:
             pattern: str,
             path: str | None = None,
             glob: str | None = None,
+            *,
+            max_count: int | None = None,
         ) -> Any:
             result = await super().agrep(
                 pattern,
                 self._resolve_path(path or "/"),
                 glob,
+                max_count=max_count,
             )
             return self._logicalize_result_paths(result, "matches")
 
     return WorkspaceDaytonaSandbox(sandbox=sandbox, workspace=workspace)
+
+
+def _langsmith_backend(sandbox: Any) -> Any:
+    """Apply the same upstream inline-script fix to LangSmith's native I/O."""
+    from deepagents.backends import LangSmithSandbox
+
+    class QuotedLangSmithSandbox(LangSmithSandbox):
+        def execute(self, command: str, *, timeout: int | None = None) -> Any:
+            return super().execute(_quote_inline_python(command), timeout=timeout)
+
+        async def aexecute(self, command: str, *, timeout: int | None = None) -> Any:
+            return await super().aexecute(_quote_inline_python(command), timeout=timeout)
+
+    return QuotedLangSmithSandbox(sandbox=sandbox)
 
 
 def _nonempty_env(name: str) -> str | None:
@@ -257,7 +300,6 @@ def create_sandbox_backend(provider: str | None = None) -> tuple[Any, Callable[[
 
     if not _nonempty_env("LANGSMITH_API_KEY"):
         raise RuntimeError("LANGSMITH_API_KEY is required when AGENTSEEK_SANDBOX_PROVIDER=langsmith.")
-    from deepagents.backends import LangSmithSandbox
     from langsmith.sandbox import SandboxClient
 
     client = SandboxClient()
@@ -268,7 +310,7 @@ def create_sandbox_backend(provider: str | None = None) -> tuple[Any, Callable[[
         sandbox_id=_sandbox_identifier(sandbox, "name"),
     )
     try:
-        backend = LangSmithSandbox(sandbox=sandbox)
+        backend = _langsmith_backend(sandbox)
     except Exception:
         cleanup()
         raise

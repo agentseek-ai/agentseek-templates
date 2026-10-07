@@ -10,7 +10,7 @@ for the upstream integration overview.
 
 ## Configure Daytona
 
-Requires **Python 3.12+**, [uv](https://docs.astral.sh/uv/), Node.js, and npm.
+Requires **Python 3.12 or 3.13**, [uv](https://docs.astral.sh/uv/), Node.js, and npm.
 
 Create a Daytona API key in the [Daytona dashboard](https://app.daytona.io/).
 Daytona currently advertises free compute for new accounts. Check
@@ -44,6 +44,13 @@ uvx agentseek dev
 Use `uvx agentseek task --list` to see setup tasks. After the dev stack is
 running, use `uvx agentseek doctor --live` to run the HTTP checks declared in
 `.agentseek/lifecycle.toml`.
+
+The Python sync task installs the reviewed `uv.lock` with `--frozen`.
+DeepAgents is pinned to 0.7.8; explicit `TodoListMiddleware` preserves planning
+state alongside the sandbox file and execution tools.
+
+Run `uv run --frozen python -m pytest` to check planning and workspace path
+behavior locally. These tests use temporary files and require no sandbox API key.
 
 ## Architecture
 

@@ -14,6 +14,7 @@ from deepagents import (
     create_deep_agent,
     register_harness_profile,
 )
+from langchain.agents.middleware import TodoListMiddleware
 from langgraph.graph.state import CompiledStateGraph
 
 from {{ cookiecutter.project_slug }}.config import load_mcp_config
@@ -35,7 +36,7 @@ _runtime_lock = threading.Lock()
 
 
 def build_graph(model_binding, loaded, *, checkpointer=None, extra_tools=(), interrupt_on=None):
-    """Use the reviewed 0.6.12 profile for app and SDK approval experiments."""
+    """Use the reviewed 0.7.8 profile for app and SDK approval experiments."""
     profile = HarnessProfile(
         general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
     )
@@ -43,6 +44,7 @@ def build_graph(model_binding, loaded, *, checkpointer=None, extra_tools=(), int
     graph = create_deep_agent(
         model=model_binding.model,
         tools=[*loaded.tools, *extra_tools],
+        middleware=[TodoListMiddleware()],
         checkpointer=checkpointer,
         interrupt_on=interrupt_on,
         subagents=[],
