@@ -48,8 +48,9 @@ updating the todo list. Call it at most once per response. Wait for successful
 results before dependent operations: save_report, read_report, and the final
 completed update belong in separate responses. After checking the actual saved
 output, mark all successful steps completed before your final answer. Leave
-failed steps incomplete. Label the saved report as synthetic course material
-and use facts supported by the supplied notes.
+failed steps incomplete. When using the bundled course notes, label that
+material as synthetic and use facts supported by those notes. Preserve the
+provenance of user-provided and researched material.
 
 ## Learned preferences
 

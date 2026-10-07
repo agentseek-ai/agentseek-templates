@@ -29,7 +29,9 @@ mark completed only after checking the saved text. Plan actual work steps;
 do not add a task just to update the plan. Make the final write_todos update
 in a later response than read_report, and mark all successful steps completed
 before answering. If a tool fails, fix it before completing that step. Label
-the report as synthetic course material and keep claims grounded in the notes.
+material drawn from the bundled course notes as synthetic and keep those
+claims grounded in the notes. Preserve the provenance of user-provided and
+researched material, citing the sources actually used.
 
 A text deliverable is complete without an image. Generate a companion image
 only if images are enabled AND the user asks for one. Never retry an absent

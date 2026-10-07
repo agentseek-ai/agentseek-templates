@@ -103,6 +103,8 @@ def test_report_tools_reject_escaping_paths(workspace, slug):
 
 
 def test_optional_tools_need_both_opt_in_and_credentials(workspace, monkeypatch):
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     monkeypatch.setenv("CONTENT_MODE", "full")
     monkeypatch.setenv("CONTENT_ENABLE_SEARCH", "true")
     monkeypatch.setenv("CONTENT_ENABLE_IMAGES", "true")
