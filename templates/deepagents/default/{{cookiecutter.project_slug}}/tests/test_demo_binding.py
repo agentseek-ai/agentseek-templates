@@ -77,6 +77,17 @@ def test_build_agent_uses_chat_completions_with_real_deepagents(monkeypatch) -> 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
+        for name in (
+            "AGENTSEEK_MODEL",
+            "AGENTSEEK_API_KEY",
+            "AGENTSEEK_API_BASE",
+            "OPENAI_API_KEY",
+            "OPENAI_API_BASE",
+            "OPENAI_BASE_URL",
+        ):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "")
+        monkeypatch.setenv("OPENAI_API_BASE", "")
         monkeypatch.setenv("BUB_MODEL", "openai:test-model")
         monkeypatch.setenv("BUB_API_KEY", "dummy-key")
         monkeypatch.setenv("BUB_API_BASE", f"http://127.0.0.1:{server.server_port}/v1")
