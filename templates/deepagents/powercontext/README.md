@@ -56,8 +56,10 @@ The template is a local development app. Backend configuration owns the Server U
 and Scope selection. Shared deployment needs application authentication and authorization. The UI
 shows project Memory and the context supplied to the model, so it belongs within that same access boundary.
 
-The subtree is self-contained and declares lifecycle version 2. It retains Deep Agents `0.6.12` and
-serves the graph through the AgentSeek API runtime. PowerContext project Memory and API checkpoints
+The subtree is self-contained and declares lifecycle version 2. It pins Deep Agents `0.7.8` and
+AgentSeek API `0.3.2`, with a frozen dependency lock for Python 3.12/3.13. Both coordinator and
+researcher explicitly retain todo planning. It serves the graph through the AgentSeek API runtime.
+PowerContext project Memory and API checkpoints
 each use their own embedded seekdb database. OpenAI-compatible streamed tool calls retain their names
 when a gateway sends empty continuation fields. See the generated README for the full tour.
 

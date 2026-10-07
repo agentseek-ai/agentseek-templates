@@ -13,14 +13,17 @@ your question.
 
 ## Run locally
 
-The generated app uses Python 3.12+, Node.js 22.12+ (or a Vite-compatible newer release), and uv.
+The generated app uses Python 3.12/3.13, Node.js 22.12+ (or a Vite-compatible newer release), and uv.
+`uv.lock` fixes DeepAgents `0.7.8`, AgentSeek API `0.3.2`, PowerContext `1.0.0`, and their
+transitive dependencies. The coordinator and researcher explicitly enable `TodoListMiddleware`
+to preserve the planning tool and todo state removed from DeepAgents' defaults in 0.7.
 Embedded seekdb requires supported macOS or Linux. In the generated project:
 
 ```bash
 cp .env.example .env
 cp frontend/.env.example frontend/.env
 # Edit .env: set the selected agent provider's API key and model.
-uv sync
+uv sync --frozen
 npm install --prefix frontend
 ```
 
@@ -46,8 +49,8 @@ Explicit Memory writes and full-text recall need no generation or embedding mode
 the normal entry point; to run the three processes by hand instead:
 
 ```bash
-uv run python scripts/powercontext_server.py
-uv run agentseek-api dev --port {{ cookiecutter.langgraph_port }}
+uv run --frozen python scripts/powercontext_server.py
+uv run --frozen agentseek-api dev --port {{ cookiecutter.langgraph_port }}
 npm run dev --prefix frontend
 ```
 
@@ -137,7 +140,7 @@ Server, configure its own embedded seekdb backend and keep `POWERCONTEXT_URL` al
 
 ## Runtime and verification
 
-The custom route uses Deep Agents `0.6.12` and the AgentSeek API runtime. `uv run agentseek-api dev`
+The custom route uses Deep Agents `0.7.8` and the AgentSeek API runtime. `uv run --frozen agentseek-api dev`
 serves the `streaming` graph, the custom FastAPI routes, and the `/health` endpoint used by the
 lifecycle check. The researcher calls `release_checklist`, a deterministic local checklist that
 contains no saved Phoenix decisions. Both agents have recall middleware.
@@ -170,12 +173,13 @@ messages and choose a new ID for a fresh conversation. The browser manages these
 missing, null, empty, or whitespace-only IDs return HTTP 422 before a run starts.
 
 ```bash
-uv sync --extra dev
-uv run pytest
+uv lock --check
+uv sync --frozen --extra dev
+uv run --frozen pytest
 npm test --prefix frontend
 npm run build --prefix frontend
 # Optional real Server tests; creates isolated test Scopes in this Server:
-POWERCONTEXT_TEST_URL=http://127.0.0.1:8000 uv run pytest tests/test_project_memory_live.py
+POWERCONTEXT_TEST_URL=http://127.0.0.1:8000 uv run --frozen pytest tests/test_project_memory_live.py
 ```
 
 The live tests verify durable writes, fresh recall, project isolation, disabled recall, and byte budgets

@@ -7,6 +7,7 @@ import warnings
 
 from deepagents import create_deep_agent
 from dotenv import load_dotenv
+from langchain.agents.middleware import TodoListMiddleware
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import tool
@@ -102,7 +103,7 @@ researcher = {
         "Current user instructions override historical notes. Return a concise release recommendation."
     ),
     "tools": [release_checklist],
-    "middleware": [powercontext_middleware],
+    "middleware": [TodoListMiddleware(), powercontext_middleware],
 }
 
 
@@ -124,7 +125,7 @@ def _build_graph(
             "Answer in the language used by the user."
         ),
         subagents=[researcher],
-        middleware=[powercontext_middleware],
+        middleware=[TodoListMiddleware(), powercontext_middleware],
         checkpointer=checkpointer,
     )
 

@@ -1,4 +1,4 @@
-name: Deep Agents course
+name: Deep Agents 0.7
 
 on:
   pull_request:
@@ -15,8 +15,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        template: [content-builder, research]
+        template: [content-builder, default, mcp, powercontext, research, subagents-dynamic, streaming, sandbox]
         python: ["3.12", "3.13"]
+    env:
+      OPENAI_API_KEY: offline-test-key
+      AGENTSEEK_MODEL_API_KEY: offline-test-key
+      AGENTSEEK_MODEL_PROVIDER: openai
+      AGENTSEEK_MODEL: course-scripted
+      BUB_MODEL: openai:course-scripted
+      BUB_OPENAI_API_KEY: offline-test-key
+      LANGSMITH_TRACING: "false"
+      POWERCONTEXT_AUTOSTART: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -37,7 +46,7 @@ jobs:
       - name: Install the shipped lock and verify real graph/API behavior
         working-directory: ${{ runner.temp }}/course/course_agent
         run: |
-          uv sync --frozen --dev
+          uv sync --frozen --all-extras --all-groups
           uv lock --check
           uv run --frozen pytest tests -q
 
@@ -55,8 +64,8 @@ jobs:
           enable-cache: true
       - run: uv sync --frozen --dev
       - run: uv run cookiecutter templates/deepagents/mcp --no-input --output-dir "${RUNNER_TEMP}/mcp" project_slug=course_mcp
-      - name: Verify the original 0.6.12 transports and SDK approval
+      - name: Verify the 0.7.8 transports and SDK approval
         working-directory: ${{ runner.temp }}/mcp/course_mcp
         run: |
-          uv sync
-          uv run python -m course_mcp.approval_smoke
+          uv sync --frozen
+          uv run --frozen python -m course_mcp.approval_smoke

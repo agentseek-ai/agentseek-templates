@@ -6,6 +6,7 @@ from typing import Any
 
 from agentseek_langchain import messages_spec
 from deepagents import ProviderProfile, create_deep_agent, register_provider_profile
+from langchain.agents.middleware import TodoListMiddleware
 
 from .settings import get_settings
 
@@ -36,6 +37,7 @@ def build_agent() -> Any:
     return create_deep_agent(
         model=settings.require_model(),
         tools=[outline_answer],
+        middleware=[TodoListMiddleware()],
         system_prompt={{ '"' }}{{ cookiecutter.system_prompt }}{{ '"' }},
     )
 

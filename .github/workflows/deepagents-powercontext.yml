@@ -50,7 +50,7 @@ jobs:
           POWERCONTEXT_SERVER_LOG: powercontext-server.log
         run: |
           cp .env.example .env
-          uv sync --extra dev
+          uv sync --frozen --extra dev
           # Use the generated lifecycle process so the tested Server version and
           # driver constraint cannot drift from the instructions users receive.
           # setsid gives the tree its own process group, so the trap stops the

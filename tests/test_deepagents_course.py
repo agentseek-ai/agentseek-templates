@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tomllib
 from pathlib import Path
@@ -8,11 +9,16 @@ import pytest
 from cookiecutter.main import cookiecutter
 
 ROOT = Path(__file__).resolve().parents[1]
+DEEPAGENTS_TEMPLATES = [
+    name.removeprefix("deepagents/")
+    for name in json.loads((ROOT / "templates/index.json").read_text())
+    if name.startswith("deepagents/")
+]
 
 
-@pytest.mark.parametrize("template", ["content-builder", "research"])
-def test_course_lock_is_valid_for_custom_project_name(tmp_path: Path, template: str) -> None:
-    """A learner must be able to use the reviewed lock with a renamed scaffold."""
+@pytest.mark.parametrize("template", DEEPAGENTS_TEMPLATES)
+def test_deepagents_lock_is_valid_for_custom_project_name(tmp_path: Path, template: str) -> None:
+    """Every published DeepAgents scaffold must resolve the reviewed 0.7 runtime."""
     project = Path(
         cookiecutter(
             str(ROOT / "templates/deepagents" / template),
@@ -23,11 +29,12 @@ def test_course_lock_is_valid_for_custom_project_name(tmp_path: Path, template: 
         )
     )
     lock_path = project / "uv.lock"
-    assert lock_path.is_file(), "The course needs a shipped dependency lock"
+    assert lock_path.is_file(), "A published DeepAgents template needs a reviewed dependency lock"
     lock = tomllib.loads(lock_path.read_text())
     packages = {item["name"]: item for item in lock["package"]}
     assert packages["deepagents"]["version"] == "0.7.8"
-    assert packages["agentseek-api"]["version"] == "0.2.3"
+    if template in {"content-builder", "research"}:
+        assert packages["agentseek-api"]["version"] == "0.2.3"
     assert packages["custom-course-agent"]["source"] == {"editable": "."}
     result = subprocess.run(
         ["uv", "lock", "--check", "--offline", "--project", str(project)],

@@ -29,6 +29,15 @@ The gateway is declared in `.agentseek/lifecycle.toml` and defaults to
 the external lifecycle tool; the generated runtime is the project dependency
 set in `pyproject.toml`.
 
+The runtime uses DeepAgents 0.7.8 with explicit `TodoListMiddleware` so planning
+requests still publish todo state. The reviewed `uv.lock` supports Python 3.12
+and 3.13, and the sync task installs it with `--frozen`.
+
+If the scaffold was created with the advanced `_agentseek_source_path_posix`
+local core override, its sync task intentionally refreshes the lock against
+that checkout instead. After syncing the local sources, subsequent installs
+can use `uv sync --frozen` with the updated project lock.
+
 ## Environment
 
 Copy `.env.example` to `.env` before running lifecycle checks. The generated

@@ -10,11 +10,12 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from .config import MCPConfig
 
-# Exact ToolNode names observed with DeepAgents 0.6.12, the default
-# StateBackend, and this template's disabled general-purpose subagent profile.
-# `task` is intentionally absent; `execute` remains registered by the
-# FilesystemMiddleware even though StateBackend cannot execute commands.
+# Exact ToolNode names observed with DeepAgents 0.7.8, the default
+# StateBackend, explicit TodoListMiddleware, and disabled general-purpose
+# subagent profile. `task` is absent; `execute` remains registered for collision
+# safety even though StateBackend hides it from the model's tool schemas.
 RESERVED_DEEPAGENTS_TOOL_NAMES = frozenset({
+    "delete",
     "edit_file",
     "execute",
     "glob",

@@ -595,11 +595,11 @@ def test_powercontext_template_declares_observable_fail_open_integration(tmp_pat
     middleware = (generated_path / "src" / generated_path.name / "powercontext_middleware.py").read_text(
         encoding="utf-8"
     )
-    assert "middleware=[powercontext_middleware]" in (
+    assert "middleware=[TodoListMiddleware(), powercontext_middleware]" in (
         generated_path / "src" / generated_path.name / "agent.py"
     ).read_text(encoding="utf-8")
     agent = (generated_path / "src" / generated_path.name / "agent.py").read_text(encoding="utf-8")
-    assert '"middleware": [powercontext_middleware]' in agent
+    assert '"middleware": [TodoListMiddleware(), powercontext_middleware]' in agent
     assert "fail-open" in middleware.lower()
     assert "ToolMessage" in middleware
     assert "POWERCONTEXT_RETRIEVAL_TOOL_NAME" in middleware
@@ -968,7 +968,7 @@ def test_migrated_templates_resolve_api_through_uv_without_path_activation(
     ]
     assert len(api_commands) == 1
     if template_key == "deepagents/mcp":
-        assert api_commands[0].startswith("uv run python -m")
+        assert api_commands[0].startswith("uv run --frozen python -m")
     else:
         assert "uv run agentseek-api dev" in api_commands[0]
 
@@ -1036,7 +1036,7 @@ def test_deepagents_mcp_uses_cross_platform_host_wrapper(tmp_path: Path) -> None
     lifecycle = tomllib.loads((generated_path / ".agentseek" / "lifecycle.toml").read_text(encoding="utf-8"))
 
     command = lifecycle["processes"]["langgraph"]["command"]
-    assert command[:5] == ["uv", "run", "python", "-m", f"{generated_path.name}.langgraph_dev"]
+    assert command[:6] == ["uv", "run", "--frozen", "python", "-m", f"{generated_path.name}.langgraph_dev"]
     wrapper = generated_path / "src" / generated_path.name / "langgraph_dev.py"
     wrapper_text = wrapper.read_text(encoding="utf-8")
     assert "LANGGRAPH_HOST" in wrapper_text
@@ -1097,6 +1097,10 @@ def test_deepagents_mcp_graph_factory_is_sync_inside_running_event_loop(
     langgraph_graph = types.ModuleType("langgraph.graph")
     langgraph_state = types.ModuleType("langgraph.graph.state")
     langgraph_state.CompiledStateGraph = FakeCompiledStateGraph
+    langchain = types.ModuleType("langchain")
+    langchain_agents = types.ModuleType("langchain.agents")
+    langchain_middleware = types.ModuleType("langchain.agents.middleware")
+    langchain_middleware.TodoListMiddleware = FakeProfile
 
     project_package = types.ModuleType(project_slug)
     project_package.__path__ = [str(generated_path / "src" / project_slug)]
@@ -1115,6 +1119,9 @@ def test_deepagents_mcp_graph_factory_is_sync_inside_running_event_loop(
         "langgraph": langgraph,
         "langgraph.graph": langgraph_graph,
         "langgraph.graph.state": langgraph_state,
+        "langchain": langchain,
+        "langchain.agents": langchain_agents,
+        "langchain.agents.middleware": langchain_middleware,
         project_slug: project_package,
         f"{project_slug}.config": config_module,
         f"{project_slug}.mcp_tools": mcp_tools_module,
@@ -1162,7 +1169,7 @@ def test_migrated_templates_expose_api_health_and_preserve_graph_config(
     api_process = api_processes[0]
     api_command = " ".join(str(part) for part in api_process["command"])
     if template_key == "deepagents/mcp":
-        assert api_command.startswith("uv run python -m")
+        assert api_command.startswith("uv run --frozen python -m")
     else:
         assert "agentseek-api dev" in api_command
 
@@ -1822,7 +1829,7 @@ def test_deepagents_streaming_template_keeps_langgraph_v3_contract(tmp_path: Pat
     pyproject = tomllib.loads((generated_path / "pyproject.toml").read_text(encoding="utf-8"))
     dependencies = set(pyproject["project"]["dependencies"])
     assert "langgraph-cli[inmem]>=0.4" in dependencies
-    assert "deepagents==0.6.12" in dependencies
+    assert "deepagents==0.7.8" in dependencies
     assert not any(dependency.startswith("agentseek-api") for dependency in dependencies)
 
     graph_config = json.loads((generated_path / "langgraph.json").read_text(encoding="utf-8"))
@@ -1840,7 +1847,7 @@ def test_deepagents_streaming_template_keeps_langgraph_v3_contract(tmp_path: Pat
     generated_readme = (generated_path / "README.md").read_text(encoding="utf-8")
     assert "agentseek-api" not in generated_readme
     assert "agentseek task" not in generated_readme
-    assert "uv run langgraph dev" in generated_readme
+    assert "uv run --frozen langgraph dev" in generated_readme
     for projection in ("subagents", "messages", "tool_calls", "values", "output"):
         assert projection in route_source
     assert 'version="v3"' in route_source
