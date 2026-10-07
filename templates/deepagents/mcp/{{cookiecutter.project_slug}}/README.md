@@ -20,8 +20,12 @@ cp .env.example .env
 cp frontend/.env.example frontend/.env
 ```
 
-Edit `.env`. Set `AGENTSEEK_MODEL_PROVIDER`, `AGENTSEEK_MODEL`, and
-`AGENTSEEK_MODEL_API_KEY`. Then continue in this exact order:
+Edit `.env` and put your SiliconFlow key in `AGENTSEEK_MODEL_API_KEY`.
+The template defaults to `Qwen/Qwen2.5-7B-Instruct`;
+`AGENTSEEK_MODEL_PROVIDER=openai` selects the OpenAI-compatible adapter and
+`OPENAI_API_BASE=https://api.siliconflow.cn/v1` is pre-filled. No credential
+is included. To change providers, update the model, key and endpoint together
+as described below. Then continue in this exact order:
 
 ```bash
 uvx agentseek task sync
@@ -65,9 +69,11 @@ transports; it does not prove that a hosted model accepts your credential.
 
 Open `http://127.0.0.1:{{ cookiecutter.frontend_port }}` after all three
 processes start. Sending a message invokes your configured hosted model. The
-template's local verification covers lifecycle startup, both MCP transports,
-and the calculator; it does not claim a hosted chat was executed without a real
-provider key.
+lifecycle checks above cover setup and both MCP transports. A separate
+real-model verification with `Qwen/Qwen2.5-7B-Instruct` called the stdio and
+HTTP calculator tools and verified local publication approve/reject log
+deltas. This narrow result does not establish accuracy for other tasks, and
+you still need a valid provider key to send chat.
 
 Stop `uvx agentseek dev` with `Ctrl-C`. The command only starts local development
 processes, so no additional cleanup is required.
@@ -146,6 +152,15 @@ persistent MCP client sessions between calls.
 
 ### Model and tracing
 
+The default connection uses `Qwen/Qwen2.5-7B-Instruct` on SiliconFlow's
+OpenAI-compatible endpoint. Fill `AGENTSEEK_MODEL_API_KEY` with your
+SiliconFlow key and keep the pre-filled model and `OPENAI_API_BASE`.
+For official OpenAI, choose an OpenAI model, replace the key and clear the
+pre-filled `OPENAI_API_BASE`. For native Anthropic or Gemini, change
+`AGENTSEEK_MODEL_PROVIDER` and `AGENTSEEK_MODEL`, replace
+`AGENTSEEK_MODEL_API_KEY`, and fill the corresponding base-URL block.
+Blank provider base URLs use official endpoints.
+
 Set `AGENTSEEK_MODEL_PROVIDER` and `AGENTSEEK_MODEL` for the DeepAgents graph.
 `DEEPAGENTS_MODEL` and `BUB_MODEL` are model-name compatibility aliases.
 `AGENTSEEK_MODEL_API_KEY` is required by `agentseek doctor` and is passed
@@ -163,9 +178,9 @@ to the cloud.
 | Variable | Purpose |
 | --- | --- |
 | `AGENTSEEK_MODEL_PROVIDER` | Provider: `openai`, `anthropic`, or `google_genai`; aliases `google` and `gemini` are accepted. |
-| `AGENTSEEK_MODEL` | Required model name. `DEEPAGENTS_MODEL` and `BUB_MODEL` are compatibility fallbacks. |
+| `AGENTSEEK_MODEL` | Default `Qwen/Qwen2.5-7B-Instruct`; choose a model served by the selected endpoint. `DEEPAGENTS_MODEL` and `BUB_MODEL` are compatibility fallbacks. |
 | `AGENTSEEK_MODEL_API_KEY` | Required lifecycle credential; passed to the selected provider adapter. |
-| `OPENAI_API_KEY`, `OPENAI_API_BASE` | OpenAI direct-runtime key fallback and optional endpoint. |
+| `OPENAI_API_KEY`, `OPENAI_API_BASE` | OpenAI-adapter direct-runtime key fallback; base defaults to SiliconFlow in `.env.example`. Clear the base for official OpenAI. |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_API_URL` | Anthropic direct-runtime key fallback and optional endpoint. |
 | `GOOGLE_API_KEY`, `GOOGLE_API_BASE` | Google direct-runtime key fallback and optional endpoint. |
 | `LANGSMITH_TRACING` | Set `true` to enable optional LangSmith tracing. |
@@ -240,3 +255,27 @@ the graph assembly.
 This v1 template exposes MCP Tools only. It does not expose MCP Resources or
 Prompts, persistent MCP client sessions, interceptors, OAuth helpers, or a
 browser-based MCP configuration editor.
+
+## Course version boundary and approval experiment
+
+This original MCP template stays on **Deep Agents 0.6.12**. It is not the
+0.7 course baseline. The main UI graph does not enable interrupt_on and the
+frontend has no approve/reject controls. Use content-builder or research
+for the locked 0.7.8 planning exercises.
+
+Run `agentseek task mcp-smoke` to discover and call the bundled stdio and
+Streamable HTTP calculators. Run `agentseek task mcp-approval-smoke` for the
+model-free SDK approval experiment. No chat-provider credential is needed.
+`approval_smoke.py` uses the same build_graph/Profile as the app, the actual
+MCP discovery, a local publish_calculation tool and InMemorySaver. It checks
+__interrupt__, resumes the same thread with Command(resume=...), and reads
+the actual JSONL side effect: approve writes stdio=95/http=2146 once, reject
+writes nothing. The temporary logs are inspected before cleanup; the printed
+counts show the result. The SDK checkpoint lasts for this process only;
+the application server owns its own configured checkpoint backend.
+
+A future 0.7 MCP upgrade must review the reserved built-in tool names
+(including delete and opt-in write_todos), disabled general-purpose subagent
+Harness Profile behavior, tool discovery/calls on both transports, and
+approval/resume regression together. This change preserves the reviewed
+0.6.12 reserved-name list and profile.

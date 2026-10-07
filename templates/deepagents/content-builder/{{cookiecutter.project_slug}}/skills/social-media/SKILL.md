@@ -1,51 +1,35 @@
 ---
 name: social-media
-description: Drafts engaging social media posts, writes hooks, suggests hashtags, creates thread structures, and generates companion images. Use when the user asks to write a LinkedIn post, tweet, Twitter/X thread, social media caption, social post, or repurpose content for social platforms.
+description: Drafts engaging social media posts, writes hooks, suggests hashtags, creates thread structures, and optionally generates companion images. Use when the user asks to write a LinkedIn post, tweet, Twitter/X thread, social media caption, social post, or repurpose content for social platforms.
 ---
 
 # Social Media Content Skill
 
-## Research First (Required)
+## Mode and sources
 
-**Before writing any social media content, you MUST delegate research:**
+Read the runtime system prompt for content mode and enabled capabilities.
+The default is **pure text**. Read at least three local notes from sources/
+with read_source (planning.md, files.md, memory.md, approval.md). Use the
+provided sources rather than fabricating web citations. Do not invoke
+researcher, web_search or image tools in text mode.
 
-1. Use the `task` tool with `subagent_type: "researcher"`
-2. In the description, specify BOTH the topic AND where to save:
+In full mode, delegate research with task(subagent_type="researcher") only
+when search is enabled. Specify both the topic and a /research/<slug>.md
+output path, then read the findings. Without search, use local material or
+material supplied by the user.
 
-```
-task(
-    subagent_type="researcher",
-    description="Research [TOPIC]. Save findings to research/[slug].md"
-)
-```
+## Output and completion
 
-3. After research completes, read the findings file before writing
+Save text to `linkedin/<slug>/post.md or tweets/<slug>/thread.md`. For a course report/blog, use
+save_report(slug, content), then read_report(slug); built-in write_file and
+read_file can be used for other content paths. Include a title, context,
+findings, practical application and a Sources section with the local
+filenames or enabled research URLs used. Use write_todos for the steps and
+mark completed only after checking the saved text.
 
-## Output Structure (Required)
-
-**Every social media post MUST have both content AND an image:**
-
-**LinkedIn posts:**
-```
-linkedin/
-└── <slug>/
-    ├── post.md        # The post content
-    └── image.png      # REQUIRED: Generated visual
-```
-
-**Twitter/X threads:**
-```
-tweets/
-└── <slug>/
-    ├── thread.md      # The thread content
-    └── image.png      # REQUIRED: Generated visual
-```
-
-**You MUST complete both steps:**
-1. Write the content to the appropriate path
-2. Generate an image using `generate_social_image` and save alongside the post
-
-**A social media post is NOT complete without its image.**
+A text deliverable is complete without an image. Generate a companion image
+only if images are enabled AND the user asks for one. Never retry an absent
+image or search tool. Mention optional visuals only if requested.
 
 ## Platform Guidelines
 
@@ -104,7 +88,7 @@ tweets/
 
 ## Image Generation
 
-Every social media post needs an eye-catching image. Use the `generate_social_image` tool:
+When images are enabled and the user requests a visual, use `generate_social_image`:
 
 ```
 generate_social_image(prompt="A detailed description...", platform="linkedin", slug="your-post-slug")
@@ -162,7 +146,7 @@ Abstract rocket ship made of colorful geometric shapes launching upward with a t
 
 Before finishing:
 - [ ] Post saved to `linkedin/<slug>/post.md` or `tweets/<slug>/thread.md`
-- [ ] Image generated alongside the post
+- [ ] If requested and enabled, image generated alongside the post
 - [ ] First line hooks attention
 - [ ] Content fits platform limits
 - [ ] Tone matches platform norms

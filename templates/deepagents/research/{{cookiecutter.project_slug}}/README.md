@@ -8,6 +8,14 @@ DeepAgents todos, and the final markdown answer. AgentSeek is only used as an
 external template and lifecycle tool; this project declares local behavior in
 `.agentseek/lifecycle.toml`.
 
+## Course
+
+See [COURSE.md](COURSE.md) for the locked 0.7.8 environment and scripted
+planning checks. The DeepSeek default was exercised with real model calls,
+including planning and research artifact readback. Research artifacts required
+source review and manual correction of unsupported claims during rehearsal;
+verify saved output and final state for each run.
+
 ## Quickstart
 
 ```bash
@@ -34,16 +42,21 @@ The frontend defaults to `http://127.0.0.1:{{ cookiecutter.frontend_port }}`.
 
 ## Environment
 
-`agent.py` uses `AGENTSEEK_MODEL_PROVIDER` to choose a native LangChain provider
-integration for OpenAI, Anthropic, or Gemini. Fill only the credential block for
-the selected provider in `.env`. If that provider's base URL is blank, LangChain
-uses the official endpoint.
+The template defaults to `deepseek-ai/DeepSeek-V3.2` through SiliconFlow's
+OpenAI-compatible API. `AGENTSEEK_MODEL_PROVIDER=openai` selects the LangChain
+adapter; `.env.example` pre-fills
+`OPENAI_API_BASE=https://api.siliconflow.cn/v1`. Put your SiliconFlow key in
+`OPENAI_API_KEY`; credentials are left blank in the template.
+`AGENTSEEK_PARALLEL_TOOL_CALLS=false` requests sequential tool calls for the
+course exercise, including subagents. Leave it unset for a parallel-research
+benchmark or an endpoint that does not support the parameter.
 
-If you change `AGENTSEEK_MODEL_PROVIDER`, also change `AGENTSEEK_MODEL` to a
-model served by that provider. The generated app defaults to provider `openai`
-and model `gpt-4.1-mini`, so leaving `OPENAI_API_BASE` blank targets the
-official OpenAI endpoint. `AGENTSEEK_MODEL` can also be supplied through the
-compatibility aliases `DEEPAGENTS_MODEL` or `BUB_MODEL`.
+`agent.py` also supports native Anthropic and Gemini integrations. Change
+`AGENTSEEK_MODEL_PROVIDER` and `AGENTSEEK_MODEL` together, then fill the
+selected provider's key and base-URL block. For official OpenAI, choose an
+OpenAI model, replace the key and clear the pre-filled `OPENAI_API_BASE`.
+Blank provider base URLs use official endpoints. `AGENTSEEK_MODEL` can also
+be supplied through `DEEPAGENTS_MODEL` or `BUB_MODEL`.
 
 `TAVILY_API_KEY` is required for the `tavily_search` tool. The lifecycle spec
 checks that one provider API key exists through `OPENAI_API_KEY` plus the

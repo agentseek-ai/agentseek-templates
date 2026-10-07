@@ -95,4 +95,8 @@ command = ["npm", "install", "--prefix", "frontend"]
 
 [tasks.sync]
 description = "Install Python dependencies with uv."
-command = ["uv", "sync"]
+command = ["uv", "sync", "--frozen"]
+
+[tasks.course-check]
+description = "Run model-free course graph and artifact checks."
+command = ["uv", "run", "--frozen", "pytest", "tests", "-q"]

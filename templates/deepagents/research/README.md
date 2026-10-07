@@ -13,13 +13,32 @@ report.
 | `project_slug` | Python package / directory name (auto-derived). |
 | `author` | Project author. |
 | `default_model_provider` | Default `init_chat_model(..., model_provider=...)` provider. Ships as `openai`. |
-| `default_model` | Default model id for the selected provider. Ships as `gpt-4.1-mini`. |
+| `default_model` | Default model id. Ships as `deepseek-ai/DeepSeek-V3.2` through the `openai` adapter and SiliconFlow endpoint. |
 | `tavily_max_results` | Default `tavily_search` result limit. |
 | `tavily_topic` | Tavily topic filter (`general`, `news`, or `finance`). |
 | `max_concurrent_research_units` | Max sub-agent tasks the orchestrator may queue concurrently. |
 | `max_researcher_iterations` | Max search/reflection loops per research unit. |
 | `langgraph_port` | Default backend port for `agentseek-api dev`. |
 | `frontend_port` | Default Vite dev-server port. |
+
+## Default model connection
+
+The default model is `deepseek-ai/DeepSeek-V3.2`, served by SiliconFlow's
+OpenAI-compatible API. The `openai` provider value selects the LangChain
+adapter; `.env.example` pre-fills `OPENAI_API_BASE=https://api.siliconflow.cn/v1`.
+Copy it to `.env` and put your SiliconFlow key in `OPENAI_API_KEY`. Credentials
+are left blank in the template. `AGENTSEEK_PARALLEL_TOOL_CALLS=false` requests
+sequential tool calls for the course exercise.
+
+To use official OpenAI, choose a model served by OpenAI, replace the key, and
+clear the pre-filled `OPENAI_API_BASE`. For Anthropic or Gemini, change
+`AGENTSEEK_MODEL_PROVIDER` and `AGENTSEEK_MODEL`, then fill the matching key
+and base-URL variables. Blank provider base URLs use official endpoints.
+
+The default was exercised with real model calls. Check actual tool results,
+saved artifacts and final todos for each run; model choice does not guarantee
+correctness. Research artifacts required source review and manual correction
+of unsupported claims during rehearsal.
 
 ## Generated layout
 
@@ -29,6 +48,9 @@ report.
     lifecycle.toml
   README.md
   pyproject.toml
+  uv.lock
+  COURSE.md
+  tests/
   langgraph.json
   .env.example
   .gitignore
@@ -67,12 +89,18 @@ report.
   allowing custom compatible gateways per provider.
 - Lets generated apps override the scaffold-time model via `AGENTSEEK_MODEL`
   (plus `DEEPAGENTS_MODEL` / `BUB_MODEL` compatibility aliases) in `.env`.
-- Defaults to provider `openai` with model `gpt-4.1-mini` so a fresh scaffold
-  works against the official OpenAI endpoint when `OPENAI_API_BASE` is blank.
-- Still supports OpenAI-compatible gateways by pointing `OPENAI_API_BASE` at
-  the compatible endpoint and swapping `AGENTSEEK_MODEL` to a model that
-  gateway actually serves.
+- Defaults to provider `openai` with `deepseek-ai/DeepSeek-V3.2` and the
+  SiliconFlow endpoint pre-filled in `.env.example`.
+- Supports official OpenAI and other compatible gateways by changing the
+  model, credential and `OPENAI_API_BASE` together.
 - Adds a frontend for streamed tool/sub-agent visibility; upstream ships only
   the backend example.
 - Surfaces DeepAgents `todos` state as a first-class progress panel instead of
   leaving planning updates buried in generic tool-call JSON.
+
+## Deep Agents 0.7 course
+
+The main agent explicitly opts into TodoListMiddleware on deepagents==0.7.8.
+Generated projects ship uv.lock, COURSE.md and model-free graph checks.
+Run agentseek task sync (uv sync --frozen), then agentseek task course-check.
+Record the full template commit and use CLI 0.1.2 for the cohort.

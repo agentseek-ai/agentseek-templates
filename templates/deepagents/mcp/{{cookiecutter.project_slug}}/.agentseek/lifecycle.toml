@@ -121,3 +121,7 @@ command = ["npm", "install", "--prefix", "frontend"]
 [tasks.mcp-smoke]
 description = "Verify real stdio and Streamable HTTP MCP discovery and invocation without a model key."
 command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.mcp_smoke"]
+
+[tasks.mcp-approval-smoke]
+description = "Verify real MCP calls and local approve/reject side effects on 0.6.12."
+command = ["uv", "run", "python", "-m", "{{ cookiecutter.project_slug }}.approval_smoke"]
