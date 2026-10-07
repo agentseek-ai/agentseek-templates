@@ -1,0 +1,62 @@
+name: Deep Agents course
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  course:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [content-builder, research]
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - run: uv sync --frozen --dev
+      - name: Render and verify lifecycle v2
+        env:
+          COURSE_TEMPLATE: ${{ matrix.template }}
+        run: |
+          uv run cookiecutter "templates/deepagents/${COURSE_TEMPLATE}" --no-input \
+            --output-dir "${RUNNER_TEMP}/course" project_slug=course_agent default_model=course-scripted
+          uv run python scripts/verify_generated_lifecycle.py "${RUNNER_TEMP}/course/course_agent"
+      - name: Install the shipped lock and verify real graph/API behavior
+        working-directory: ${{ runner.temp }}/course/course_agent
+        run: |
+          uv sync --frozen --dev
+          uv lock --check
+          uv run --frozen pytest tests -q
+
+  mcp-approval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - run: uv sync --frozen --dev
+      - run: uv run cookiecutter templates/deepagents/mcp --no-input --output-dir "${RUNNER_TEMP}/mcp" project_slug=course_mcp
+      - name: Verify the original 0.6.12 transports and SDK approval
+        working-directory: ${{ runner.temp }}/mcp/course_mcp
+        run: |
+          uv sync
+          uv run python -m course_mcp.approval_smoke

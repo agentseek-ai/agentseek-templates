@@ -4,11 +4,20 @@ DeepAgents content builder scaffolded with
 `agentseek create deepagents/content-builder`.
 
 The backend serves a `create_deep_agent(...)` graph through `agentseek-api dev`
-with brand-voice memory, content skills (blog-post, social-media), a
-researcher subagent, and image generation tools. The frontend streams user
+with brand-voice memory, content skills (blog-post, social-media), optional
+research and image generation tools. The default pure text mode uses local
+course sources without search or image services. The frontend streams user
 messages, tool calls, sub-agent delegation, generated images, and the final
 markdown output. AgentSeek is used as the external lifecycle tool for local
 inspection, readiness checks, development, and project tasks.
+
+## Course
+
+See [COURSE.md](COURSE.md) for the locked 0.7.8 environment, planning checks,
+and reproducible learning inputs. The DeepSeek default was exercised with real
+model calls. Inspect each run's saved text, tool trace and final state; the
+default does not remove the need for review. Research artifacts in rehearsal
+required source review and manual correction of unsupported claims.
 
 ## Setup
 
@@ -25,17 +34,25 @@ agentseek doctor
 agentseek dev
 ```
 
-`agent.py` uses `AGENTSEEK_MODEL_PROVIDER` to choose a native LangChain
-provider integration for OpenAI, Anthropic, or Gemini. Fill only that
-provider's env block in `.env`; if its base URL is blank, the generated app
-uses the provider's official default endpoint. You can also override the
-scaffolded model name via `AGENTSEEK_MODEL` (or the compatibility aliases
-`DEEPAGENTS_MODEL` / `BUB_MODEL`) without editing code.
+The template defaults to `deepseek-ai/DeepSeek-V3.2` through SiliconFlow's
+OpenAI-compatible API. The `openai` value in `AGENTSEEK_MODEL_PROVIDER`
+selects the LangChain adapter; `.env.example` pre-fills
+`OPENAI_API_BASE=https://api.siliconflow.cn/v1`. Put your SiliconFlow key in
+`OPENAI_API_KEY`; credentials are left blank in the template.
+`AGENTSEEK_PARALLEL_TOOL_CALLS=false` requests sequential tool calls for this
+course exercise. Check the actual tool trace when rehearsing with your model.
 
-The researcher subagent shares the same provider and base URL as the main
-model. To use a smaller/cheaper model for research, set
-`AGENTSEEK_SUBAGENT_MODEL` to just the model name (e.g. `gpt-4.1-mini`) —
-no provider prefix needed.
+`agent.py` also supports native Anthropic and Gemini integrations. To switch,
+change `AGENTSEEK_MODEL_PROVIDER` and `AGENTSEEK_MODEL`, then fill only the
+matching provider's credential and base-URL block. To use official OpenAI,
+choose an OpenAI model, replace the key and clear the pre-filled
+`OPENAI_API_BASE`. Blank base URLs use the selected provider's official
+endpoint. Model compatibility aliases `DEEPAGENTS_MODEL` / `BUB_MODEL` remain
+available.
+
+The researcher subagent shares the main provider and base URL. To use another
+model for research, set `AGENTSEEK_SUBAGENT_MODEL` to a model name served by
+that endpoint; no provider prefix is needed.
 
 ## Environment
 
@@ -47,15 +64,16 @@ still take precedence when present.
 The frontend has its own `frontend/.env`. It only needs changes when the
 LangGraph URL or frontend port differs from the scaffold defaults.
 
-For the default OpenAI provider, set `AGENTSEEK_MODEL` and `OPENAI_API_KEY`.
-`DEEPAGENTS_MODEL` or `BUB_MODEL` can be used as model aliases, and
-`BUB_OPENAI_API_KEY` can be used as an OpenAI key alias. If you switch
-providers, update `AGENTSEEK_MODEL_PROVIDER`, use a model id for that provider,
-and fill the matching provider key. Leave provider base URLs empty to use the
-official endpoints.
+For the default SiliconFlow connection, keep the generated model and endpoint
+and fill `OPENAI_API_KEY` with your SiliconFlow key. `DEEPAGENTS_MODEL` or
+`BUB_MODEL` can be used as model aliases, and `BUB_OPENAI_API_KEY` can be used
+as an OpenAI-adapter key alias. A provider switch needs a matching model, key
+and endpoint; clear the pre-filled base URL when targeting official OpenAI.
 
-`TAVILY_API_KEY` enables the researcher subagent. `GOOGLE_API_KEY` is required
-for image generation and also for `google_genai` chat models.
+Search requires full mode, CONTENT_ENABLE_SEARCH=true and TAVILY_API_KEY.
+Images require full mode, CONTENT_ENABLE_IMAGES=true and GOOGLE_API_KEY.
+A Google key is also used for google_genai chat models; chat alone does not
+enable image tools.
 
 ## Lifecycle
 
@@ -74,16 +92,16 @@ project tasks are declared in `.agentseek/lifecycle.toml`.
 After `agentseek dev` starts, open the frontend and ask:
 
 ```text
-Write a blog post about how AI agents are transforming software development
+In pure text mode, read planning.md, files.md and memory.md with read_source.
+Plan and write a report citing those files; save_report(slug="course") and
+read_report before completing the todos.
 ```
 
 Expected behavior:
 
 - A live **Content plan** todo panel appears when the agent writes todos.
-- Tool cards appear for `web_search` and, when the model delegates,
-  `task` as a "Sub-agent: researcher" card.
-- Image cards display the generated cover image inline after
-  `generate_cover` completes.
+- Local source, save and read-back cards appear; blogs/course/post.md exists.
+- In full mode, enabled research and requested image tools add their cards.
 - Each tool card expands while running, then collapses after its result
   lands.
 - The final assistant response renders as markdown.

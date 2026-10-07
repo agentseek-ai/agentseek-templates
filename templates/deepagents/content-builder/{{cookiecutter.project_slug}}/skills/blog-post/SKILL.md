@@ -1,42 +1,39 @@
 ---
 name: blog-post
-description: Writes and structures long-form blog posts, creates tutorial outlines, and optimizes content for SEO with cover image generation. Use when the user asks to write a blog post, article, how-to guide, tutorial, technical writeup, thought leadership piece, or long-form content.
+description: Writes and structures long-form blog posts, creates tutorial outlines, and optimizes content for SEO with optional cover images. Use when the user asks to write a blog post, article, how-to guide, tutorial, technical writeup, thought leadership piece, or long-form content.
 ---
 
 # Blog Post Writing Skill
 
-## Research First (Required)
+## Mode and sources
 
-**Before writing any blog post, you MUST delegate research:**
+Read the runtime system prompt for content mode and enabled capabilities.
+The default is **pure text**. Read at least three local notes from sources/
+with read_source (planning.md, files.md, memory.md, approval.md). Use the
+provided sources rather than fabricating web citations. Do not invoke
+researcher, web_search or image tools in text mode.
 
-1. Use the `task` tool with `subagent_type: "researcher"`
-2. In the description, specify BOTH the topic AND where to save:
+In full mode, delegate research with task(subagent_type="researcher") only
+when search is enabled. Specify both the topic and a /research/<slug>.md
+output path, then read the findings. Without search, use local material or
+material supplied by the user.
 
-```
-task(
-    subagent_type="researcher",
-    description="Research [TOPIC]. Save findings to research/[slug].md"
-)
-```
+## Output and completion
 
-3. After research completes, read the findings file before writing
+Save text to `blogs/<slug>/post.md`. For a course report/blog, use
+save_report(slug, content), then read_report(slug); built-in write_file and
+read_file can be used for other content paths. Include a title, context,
+findings, practical application and a Sources section with the local
+filenames or enabled research URLs used. Use write_todos for the steps and
+mark completed only after checking the saved text. Plan actual work steps;
+do not add a task just to update the plan. Make the final write_todos update
+in a later response than read_report, and mark all successful steps completed
+before answering. If a tool fails, fix it before completing that step. Label
+the report as synthetic course material and keep claims grounded in the notes.
 
-## Output Structure (Required)
-
-**Every blog post MUST have both a post AND a cover image:**
-
-```
-blogs/
-└── <slug>/
-    ├── post.md        # The blog post content
-    └── hero.png       # REQUIRED: Generated cover image
-```
-
-**You MUST complete both steps:**
-1. Write the post to `blogs/<slug>/post.md`
-2. Generate a cover image using `generate_cover` and save to `blogs/<slug>/hero.png`
-
-**A blog post is NOT complete without its cover image.**
+A text deliverable is complete without an image. Generate a companion image
+only if images are enabled AND the user asks for one. Never retry an absent
+image or search tool. Mention optional visuals only if requested.
 
 ## Blog Post Structure
 
@@ -70,7 +67,7 @@ Every blog post should follow this structure:
 
 ## Cover Image Generation
 
-After writing the post, generate a cover image using the `generate_cover` tool:
+When images are enabled and the user requested a cover, use `generate_cover`:
 
 ```
 generate_cover(prompt="A detailed description of the image...", slug="your-blog-slug")
@@ -112,7 +109,7 @@ Clean flat illustration of hands typing on a keyboard with abstract code symbols
 
 Before finishing:
 - [ ] Post saved to `blogs/<slug>/post.md`
-- [ ] Hero image generated at `blogs/<slug>/hero.png`
+- [ ] If requested and enabled, hero image generated at `blogs/<slug>/hero.png`
 - [ ] Hook grabs attention in first 2 sentences
 - [ ] Each section has a clear purpose
 - [ ] Conclusion summarizes key points

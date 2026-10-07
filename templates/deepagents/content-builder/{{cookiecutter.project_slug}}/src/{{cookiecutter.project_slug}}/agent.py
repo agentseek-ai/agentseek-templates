@@ -1,8 +1,8 @@
 """DeepAgents content builder graph, served by ``agentseek-api dev``.
 
 This module wires up a ``create_deep_agent`` with brand-voice memory
-(``AGENTS.md``), content skills (``skills/``), a researcher subagent
-(``subagents.yaml``), and image generation tools — mirroring the upstream
+(``AGENTS.md``), content skills (``skills/``), optional research
+(``subagents.yaml``) and image generation tools — mirroring the upstream
 ``langchain-ai/deepagents/examples/content-builder-agent/content_writer.py``
 with provider-first runtime config so the generated app can target OpenAI,
 Anthropic, or Gemini from the same ``.env``.
@@ -17,9 +17,18 @@ from pathlib import Path
 import yaml
 from deepagents import create_deep_agent
 from deepagents.backends import FilesystemBackend
+from deepagents.middleware.memory import MemoryMiddleware
 from dotenv import load_dotenv
+from langchain.agents.middleware import TodoListMiddleware
 from langchain.chat_models import init_chat_model
 
+from {{ cookiecutter.project_slug }}.lesson_tools import (
+    publish_report,
+    read_report,
+    read_source,
+    save_preference,
+    save_report,
+)
 from {{ cookiecutter.project_slug }}.tools import (
     generate_cover,
     generate_social_image,
@@ -129,6 +138,11 @@ if MODEL_PROVIDER == "openai":
     if _nonempty_env("OPENAI_API_BASE"):
         PROVIDER_KWARGS["base_url"] = _nonempty_env("OPENAI_API_BASE")
     PROVIDER_KWARGS["stream_chunk_timeout"] = STREAM_CHUNK_TIMEOUT_S
+    parallel_tool_calls = _nonempty_env("AGENTSEEK_PARALLEL_TOOL_CALLS")
+    if parallel_tool_calls is not None:
+        if parallel_tool_calls.lower() not in {"true", "false"}:
+            raise ValueError("AGENTSEEK_PARALLEL_TOOL_CALLS must be true or false")
+        PROVIDER_KWARGS["model_kwargs"] = {"parallel_tool_calls": parallel_tool_calls.lower() == "true"}
 elif MODEL_PROVIDER == "anthropic":
     if _nonempty_env("ANTHROPIC_API_KEY"):
         PROVIDER_KWARGS["api_key"] = _nonempty_env("ANTHROPIC_API_KEY")
@@ -181,11 +195,74 @@ def _load_subagents(config_path: Path) -> list[dict]:
     return subagents
 
 
-graph = create_deep_agent(
-    model=model,
-    memory=["./AGENTS.md"],
-    skills=["./skills/"],
-    tools=[generate_cover, generate_social_image],
-    subagents=_load_subagents(EXAMPLE_DIR / "subagents.yaml"),
-    backend=FilesystemBackend(root_dir=EXAMPLE_DIR, virtual_mode=False),
-)
+def _enabled(name: str) -> bool:
+    value = os.getenv(name, "false").strip().lower()
+    if value not in {"true", "false"}:
+        raise ValueError(f"{name} must be true or false")
+    return value == "true"
+
+
+def build_graph(chat_model, *, checkpointer=None, approvals: bool = False):
+    """Build the app graph; approvals are enabled only in the SDK experiment."""
+    mode = os.getenv("CONTENT_MODE", "text").strip().lower()
+    if mode not in {"text", "full"}:
+        raise ValueError("CONTENT_MODE must be text or full")
+    search = mode == "full" and _enabled("CONTENT_ENABLE_SEARCH")
+    images = mode == "full" and _enabled("CONTENT_ENABLE_IMAGES")
+    if search and not _nonempty_env("TAVILY_API_KEY"):
+        raise ValueError("Search enabled but TAVILY_API_KEY is missing")
+    if images and not _nonempty_env("GOOGLE_API_KEY"):
+        raise ValueError("Images enabled but GOOGLE_API_KEY is missing")
+    tools = [read_source, save_report, read_report, save_preference]
+    if images:
+        tools += [generate_cover, generate_social_image]
+    if approvals:
+        if checkpointer is None:
+            raise ValueError("The SDK approval experiment requires a checkpointer")
+        tools += [publish_report]
+    backend = FilesystemBackend(root_dir=EXAMPLE_DIR, virtual_mode=True)
+    memory_sources = ["/AGENTS.md", "/memory/preferences.md"]
+    return create_deep_agent(
+        model=chat_model,
+        middleware=[
+            TodoListMiddleware(),
+            MemoryMiddleware(
+                backend=backend,
+                sources=memory_sources,
+                add_cache_control=True,
+                system_prompt=(
+                    "<agent_memory>\n{agent_memory}\n</agent_memory>\n"
+                    "AGENTS.md is fixed project guidance; do not edit it to save preferences. "
+                    "Only save preferences with save_preference when the user explicitly asks "
+                    "to remember language, tone, or format. Do not infer or save other preferences. "
+                    "The returned file contents confirm the write to /memory/preferences.md."
+                ),
+            ),
+        ],
+        memory=memory_sources,
+        skills=["/skills/"],
+        system_prompt=(
+            f"Content mode: {mode}. Search enabled: {search}. Images enabled: {images}. "
+            "In pure text mode, use local sources and produce text only. "
+            "Use write_todos for multistep work. Plan only actual work, never a task to "
+            "update or complete the todo list itself. Call write_todos at most once per "
+            "response. Wait for each dependent tool's successful result before the next "
+            "step; saving, reading back, and marking complete must be separate responses. "
+            "Read sources with read_source, save with save_report and verify with "
+            "read_report. After successful verification, mark ALL todos completed before "
+            "the final answer. If any step fails, keep its todo incomplete. "
+            "Local course notes are synthetic material: label the saved report accordingly, "
+            "cite the source paths, and describe only facts supported by the notes. "
+            "Only delegate to researcher when search is enabled. "
+            "Generate an image only when images are enabled AND the user requests it. "
+            "Save preferences only when the user explicitly asks to remember them."
+        ),
+        tools=tools,
+        subagents=_load_subagents(EXAMPLE_DIR / "subagents.yaml") if search else [],
+        backend=backend,
+        checkpointer=checkpointer,
+        interrupt_on={"publish_report": {"allowed_decisions": ["approve", "reject"]}} if approvals else None,
+    )
+
+
+graph = build_graph(model)

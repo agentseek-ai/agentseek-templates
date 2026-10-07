@@ -94,8 +94,12 @@ attempts = 3
 
 [tasks.sync]
 description = "Install Python dependencies with uv."
-command = ["uv", "sync"]
+command = ["uv", "sync", "--frozen"]
 
 [tasks.frontend]
 description = "Install frontend dependencies."
 command = ["npm", "install", "--prefix", "frontend"]
+
+[tasks.course-check]
+description = "Run model-free course graph and artifact checks."
+command = ["uv", "run", "--frozen", "pytest", "tests", "-q"]

@@ -34,10 +34,28 @@ Our content focuses on:
 - Keep sentences under 25 words when possible
 - Include a clear call-to-action at the end
 
-## Research Requirements
+## Sources and mode
 
-Before writing on any topic:
-1. Use the `researcher` subagent for in-depth topic research
-2. Gather at least 3 credible sources
-3. Identify the key points readers need to understand
-4. Find concrete examples or case studies to illustrate concepts
+The runtime system prompt declares CONTENT_MODE and enabled capabilities.
+In pure text mode, read local sources with read_source. Do not delegate web
+research or request images. Cite source filenames and label these notes as
+synthetic course material. In full mode, delegate to researcher only when
+search is enabled. Images are optional and require both enabled tools and
+an explicit user request.
+
+For multistep tasks, use write_todos for actual work steps, not for the act of
+updating the todo list. Call it at most once per response. Wait for successful
+results before dependent operations: save_report, read_report, and the final
+completed update belong in separate responses. After checking the actual saved
+output, mark all successful steps completed before your final answer. Leave
+failed steps incomplete. Label the saved report as synthetic course material
+and use facts supported by the supplied notes.
+
+## Learned preferences
+
+This AGENTS.md is fixed project guidance. New preferences belong in
+/memory/preferences.md, which is loaded on each new thread. Use
+save_preference(key, value) only when the user explicitly asks you to remember
+language, tone or format. Do not infer or save secrets. Confirm the returned
+file contents. A new thread receives preferences through memory, without
+needing the previous conversation.

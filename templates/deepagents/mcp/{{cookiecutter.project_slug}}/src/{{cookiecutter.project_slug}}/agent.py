@@ -34,17 +34,17 @@ _runtime: RuntimeBundle | None = None
 _runtime_lock = threading.Lock()
 
 
-async def _build_runtime() -> RuntimeBundle:
-    config = load_mcp_config(Path(".mcp.json"))
-    model_binding = resolve_model_binding()
-    loaded = await load_mcp_tools(config)
+def build_graph(model_binding, loaded, *, checkpointer=None, extra_tools=(), interrupt_on=None):
+    """Use the reviewed 0.6.12 profile for app and SDK approval experiments."""
     profile = HarnessProfile(
         general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
     )
     register_harness_profile(model_binding.profile_key, profile)
     graph = create_deep_agent(
         model=model_binding.model,
-        tools=list(loaded.tools),
+        tools=[*loaded.tools, *extra_tools],
+        checkpointer=checkpointer,
+        interrupt_on=interrupt_on,
         subagents=[],
         system_prompt=(
             "You are an assistant connected to external tools through MCP. "
@@ -52,6 +52,14 @@ async def _build_runtime() -> RuntimeBundle:
             "Answer in the same language as the user's question."
         ),
     )
+    return graph
+
+
+async def _build_runtime() -> RuntimeBundle:
+    config = load_mcp_config(Path(".mcp.json"))
+    model_binding = resolve_model_binding()
+    loaded = await load_mcp_tools(config)
+    graph = build_graph(model_binding, loaded)
     return RuntimeBundle(
         client=loaded.client,
         tool_names=loaded.tool_names,

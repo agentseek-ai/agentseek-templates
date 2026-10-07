@@ -3,7 +3,7 @@
   "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_') }}",
   "author": "Your Name",
   "default_model_provider": "openai",
-  "default_model": "",
+  "default_model": "deepseek-ai/DeepSeek-V3.2",
   "google_image_model": "gemini-3.1-flash-image-preview",
   "tavily_max_results": "5",
   "tavily_topic": "general",

@@ -89,6 +89,20 @@ process itself. Adding, removing, or replacing any server changes the complete
 discovered tool-name tuple, so update the calculator smoke contract at the same
 time.
 
+The template defaults to `Qwen/Qwen2.5-7B-Instruct` through SiliconFlow's
+OpenAI-compatible API. `AGENTSEEK_MODEL_PROVIDER=openai` selects the adapter;
+`.env.example` pre-fills `OPENAI_API_BASE=https://api.siliconflow.cn/v1`.
+Copy it to `.env` and put your SiliconFlow key in `AGENTSEEK_MODEL_API_KEY`;
+credentials are left blank. Real-model verification called both calculator
+transports and checked local publication approve/reject log deltas. This
+narrow calculator result does not establish accuracy for other tasks.
+
+For official OpenAI, choose an OpenAI model, replace the key and clear the
+pre-filled `OPENAI_API_BASE`. For native Anthropic or Gemini, change the
+provider and model and fill the corresponding base-URL block. Keep
+`AGENTSEEK_MODEL_API_KEY` as the selected provider's lifecycle credential.
+Blank provider base URLs use official endpoints.
+
 Set `AGENTSEEK_MODEL_PROVIDER` and `AGENTSEEK_MODEL` for the DeepAgents graph.
 `DEEPAGENTS_MODEL` and `BUB_MODEL` are model-name compatibility aliases.
 `AGENTSEEK_MODEL_API_KEY` is the lifecycle credential and is passed explicitly
@@ -144,3 +158,27 @@ interrupt_on={
 
 This example does not enable automatic HITL. An application contributor must add
 and test the policy when assembling the graph.
+
+## Course version boundary and approval experiment
+
+This original MCP template stays on **Deep Agents 0.6.12**. It is not the
+0.7 course baseline. The main UI graph does not enable interrupt_on and the
+frontend has no approve/reject controls. Use content-builder or research
+for the locked 0.7.8 planning exercises.
+
+Run `agentseek task mcp-smoke` to discover and call the bundled stdio and
+Streamable HTTP calculators. Run `agentseek task mcp-approval-smoke` for the
+model-free SDK approval experiment. No chat-provider credential is needed.
+`approval_smoke.py` uses the same build_graph/Profile as the app, the actual
+MCP discovery, a local publish_calculation tool and InMemorySaver. It checks
+__interrupt__, resumes the same thread with Command(resume=...), and reads
+the actual JSONL side effect: approve writes stdio=95/http=2146 once, reject
+writes nothing. The temporary logs are inspected before cleanup; the printed
+counts show the result. The SDK checkpoint lasts for this process only;
+the application server owns its own configured checkpoint backend.
+
+A future 0.7 MCP upgrade must review the reserved built-in tool names
+(including delete and opt-in write_todos), disabled general-purpose subagent
+Harness Profile behavior, tool discovery/calls on both transports, and
+approval/resume regression together. This change preserves the reviewed
+0.6.12 reserved-name list and profile.

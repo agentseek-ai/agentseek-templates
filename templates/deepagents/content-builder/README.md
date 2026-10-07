@@ -1,7 +1,7 @@
 # DeepAgents — content-builder template
 
 Scaffolds a `deepagents.create_deep_agent(...)` content writing agent with
-brand memory, skills, subagents, image generation, and an AgentSeek lifecycle
+brand memory, skills, local text sources, optional research/images, and an AgentSeek lifecycle
 spec. The generated project runs through `agentseek info`, `agentseek doctor`,
 `agentseek dev`, and `agentseek task`.
 
@@ -32,12 +32,31 @@ through `agentseek task --list`.
 | `project_slug` | Python package / directory name (auto-derived). |
 | `author` | Project author. |
 | `default_model_provider` | Default `init_chat_model(..., model_provider=...)` provider. Ships as `openai`. |
-| `default_model` | Default model id for the selected provider. Ships empty — user must set `AGENTSEEK_MODEL` in `.env`. |
+| `default_model` | Default model id. Ships as `deepseek-ai/DeepSeek-V3.2` through the `openai` adapter and SiliconFlow endpoint. |
 | `google_image_model` | Gemini model for image generation. Ships as `gemini-3.1-flash-image-preview`. |
 | `tavily_max_results` | Default `web_search` result limit. |
 | `tavily_topic` | Tavily topic filter (`general` or `news`). |
 | `langgraph_port` | Default backend port for `agentseek-api dev`. |
 | `frontend_port` | Default Vite dev-server port. |
+
+## Default model connection
+
+The default model is `deepseek-ai/DeepSeek-V3.2`, served by SiliconFlow's
+OpenAI-compatible API. The `openai` provider value selects the LangChain
+adapter; `.env.example` pre-fills `OPENAI_API_BASE=https://api.siliconflow.cn/v1`.
+Copy it to `.env` and put your SiliconFlow key in `OPENAI_API_KEY`. Credentials
+are left blank in the template. `AGENTSEEK_PARALLEL_TOOL_CALLS=false` requests
+sequential tool calls for the course exercise.
+
+To use official OpenAI, choose a model served by OpenAI, replace the key, and
+clear the pre-filled `OPENAI_API_BASE`. For Anthropic or Gemini, change
+`AGENTSEEK_MODEL_PROVIDER` and `AGENTSEEK_MODEL`, then fill the matching key
+and base-URL variables. Blank provider base URLs use official endpoints.
+
+The default was exercised with real model calls. Check actual tool results,
+saved artifacts and final todos for each run; model choice does not guarantee
+correctness. Research artifacts required source review and manual correction
+of unsupported claims during rehearsal.
 
 ## Generated layout
 
@@ -45,6 +64,11 @@ through `agentseek task --list`.
 {{ project_slug }}/
   README.md
   pyproject.toml
+  uv.lock
+  COURSE.md
+  sources/
+  memory/preferences.md
+  tests/
   .agentseek/lifecycle.toml
   langgraph.json
   .env.example
@@ -60,6 +84,8 @@ through `agentseek task --list`.
     __init__.py
     agent.py
     tools.py
+    lesson_tools.py
+    approval_demo.py
     webapp.py
   frontend/
     package.json
@@ -104,3 +130,15 @@ through `agentseek task --list`.
   leaving planning updates buried in generic tool-call JSON.
 - Declares local development processes and project tasks in
   `.agentseek/lifecycle.toml`.
+
+## Deep Agents 0.7 course
+
+The main agent explicitly opts into TodoListMiddleware on deepagents==0.7.8.
+Generated projects ship uv.lock, COURSE.md and model-free graph checks.
+Run agentseek task sync (uv sync --frozen), then agentseek task course-check.
+Record the full template commit and use CLI 0.1.2 for the cohort.
+
+The default CONTENT_MODE=text reads four fixed sources, saves and reads back
+text without search/image credentials. Full mode uses explicit search/image
+opt-ins. COURSE.md includes durable preference and SDK approve/reject
+exercises with observable local files and a publication log.

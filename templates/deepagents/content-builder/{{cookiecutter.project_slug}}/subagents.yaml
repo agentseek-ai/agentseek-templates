@@ -6,7 +6,7 @@
 
 researcher:
   description: >
-    ALWAYS use this first to research any topic before writing content.
+    Use for web research only when the runtime enables search.
     Searches the web for current information, statistics, and sources.
     When delegating, tell it the topic AND the file path to save results
     (e.g., 'Research renewable energy and save to research/renewable-energy.md').

@@ -181,7 +181,7 @@ export default function App() {
             </div>
             <div className="activity-card__copy">
               <strong>Content generation in progress</strong>
-              <span>Waiting for research, writing, and image generation.</span>
+              <span>Waiting for sources, writing, and verification.</span>
             </div>
           </div>
         )}
@@ -193,7 +193,7 @@ export default function App() {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask to write a blog post, LinkedIn post, or tweet…"
+          placeholder="Write a report using planning.md, files.md and memory.md…"
           disabled={stream.isLoading}
           autoFocus
         />

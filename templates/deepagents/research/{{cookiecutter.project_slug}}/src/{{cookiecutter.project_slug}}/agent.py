@@ -17,6 +17,7 @@ from datetime import datetime
 
 from deepagents import create_deep_agent
 from dotenv import load_dotenv
+from langchain.agents.middleware import TodoListMiddleware
 from langchain.chat_models import init_chat_model
 
 from {{ cookiecutter.project_slug }}.prompts import (
@@ -139,6 +140,11 @@ if MODEL_PROVIDER == "openai":
     if _nonempty_env("OPENAI_API_BASE"):
         MODEL_INIT_KWARGS["base_url"] = _nonempty_env("OPENAI_API_BASE")
     MODEL_INIT_KWARGS["stream_chunk_timeout"] = STREAM_CHUNK_TIMEOUT_S
+    parallel_tool_calls = _nonempty_env("AGENTSEEK_PARALLEL_TOOL_CALLS")
+    if parallel_tool_calls is not None:
+        if parallel_tool_calls.lower() not in {"true", "false"}:
+            raise ValueError("AGENTSEEK_PARALLEL_TOOL_CALLS must be true or false")
+        MODEL_INIT_KWARGS["model_kwargs"] = {"parallel_tool_calls": parallel_tool_calls.lower() == "true"}
 elif MODEL_PROVIDER == "anthropic":
     if _nonempty_env("ANTHROPIC_API_KEY"):
         MODEL_INIT_KWARGS["api_key"] = _nonempty_env("ANTHROPIC_API_KEY")
@@ -152,9 +158,16 @@ elif MODEL_PROVIDER == "google_genai":
 
 model = init_chat_model(**MODEL_INIT_KWARGS)
 
-graph = create_deep_agent(
-    model=model,
-    tools=[tavily_search, think_tool],
-    system_prompt=INSTRUCTIONS,
-    subagents=[research_sub_agent],
-)
+def build_graph(chat_model, *, checkpointer=None):
+    """Use the same planning configuration in the app and SDK verification."""
+    return create_deep_agent(
+        model=chat_model,
+        middleware=[TodoListMiddleware()],
+        tools=[tavily_search, think_tool],
+        system_prompt=INSTRUCTIONS,
+        subagents=[research_sub_agent],
+        checkpointer=checkpointer,
+    )
+
+
+graph = build_graph(model)
