@@ -8,8 +8,10 @@ import pytest
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain_typesafe.client import TypeSafeAPIResponseValidationError, TypeSafeInternalServerError
 
 from {{cookiecutter.project_slug}} import agent
+from {{cookiecutter.project_slug}}.middleware import ObservedAutoModeMiddleware, SelectableModelRouterMiddleware
 
 
 class ScriptedModel(FakeMessagesListChatModel):
@@ -35,7 +37,7 @@ def offline_environment(monkeypatch):
     monkeypatch.setenv("TYPESAFE_BASE_URL", "http://127.0.0.1:1")
 
 
-def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", parallel=False):
+def setup_harness(monkeypatch, *, probability=0.01, fail=None, malformed=None, choice="fast", parallel=False):
     requests = []
     tool_calls = [{"name": "read_service_status", "args": {}, "id": "read-1", "type": "tool_call"}]
     if parallel:
@@ -56,6 +58,8 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
         question = next(iter(payload["questions"]))
         if fail == question:
             return httpx2.Response(503, json={"error": "fixture outage"})
+        if malformed == question:
+            return httpx2.Response(200, json={"model": payload["model"], "answers": {question: {"type": "noul", "noul": 1.5}}})
         if question == "model_route":
             selected = choice if isinstance(choice, str) else choice.pop(0)
             answer = {
@@ -72,16 +76,16 @@ def setup_harness(monkeypatch, *, probability=0.01, fail=None, choice="fast", pa
             if parallel:
                 risk = 0.99 if payload["state"]["tool_call"]["name"] == "delete_backups" else 0.01
             answer = {"type": "noul", "noul": risk}
-        return httpx2.Response(200, json={"model": payload["model"] + "-fixture", "answers": {question: answer}})
+        return httpx2.Response(200, json={"model": payload["model"] + "-fixture", "answers": {question: answer}, "usage": {"input_tokens": 12, "output_tokens": 3}})
 
     original = agent.make_middleware
 
     def make_middleware(models):
         middleware = original(models)
         for item in middleware:
-            if hasattr(item, "classifier"):
-                classifier = getattr(item, "risk_classifier", item.classifier)
-                for provider in getattr(classifier, "classifiers", {"legacy": classifier}).values():
+            if isinstance(item, (SelectableModelRouterMiddleware, ObservedAutoModeMiddleware)):
+                classifier = item.risk_classifier if isinstance(item, ObservedAutoModeMiddleware) else item.classifier
+                for provider in classifier.classifiers.values():
                     provider.client.close()
                     provider.client = httpx2.Client(transport=httpx2.MockTransport(transport))
                     provider.async_client = httpx2.AsyncClient(transport=httpx2.MockTransport(transport))
@@ -140,18 +144,20 @@ def test_reroutes_followup_and_restores_checkpoint(monkeypatch):
 
 
 @pytest.mark.parametrize("failure", ["model_route", "is_risky"])
+@pytest.mark.parametrize("malformed", [False, True])
 @pytest.mark.parametrize("asynchronous", [False, True])
-def test_classifier_failure_stops_run_without_execution(monkeypatch, failure, asynchronous):
-    graph, models, _ = setup_harness(monkeypatch, fail=failure)
+def test_classifier_failure_stops_run_without_execution(monkeypatch, failure, malformed, asynchronous):
+    graph, models, requests = setup_harness(monkeypatch, **{"malformed" if malformed else "fail": failure})
     args = (
         {"messages": [{"role": "user", "content": "Read status."}]},
         {"configurable": {"thread_id": "failure"}},
     )
-    with pytest.raises(Exception, match="503"):
+    with pytest.raises(TypeSafeAPIResponseValidationError if malformed else TypeSafeInternalServerError):
         asyncio.run(graph.ainvoke(*args)) if asynchronous else graph.invoke(*args)
     state = graph.get_state(args[1]).values
     assert not any(isinstance(m, ToolMessage) for m in state["messages"])
     assert models["fast"].calls == (0 if failure == "model_route" else 1)
+    assert len(requests) == (1 if failure == "model_route" else 2)
 
 
 async def test_parallel_tools_have_independent_decisions(monkeypatch):
@@ -305,14 +311,25 @@ def test_decision_selection_reaches_both_gates_with_separate_credentials(monkeyp
 
 
 async def test_concurrent_runs_keep_provider_choice_local(monkeypatch):
-    graph, _, requests = setup_harness(monkeypatch)
-    async def run(selection):
+    # Different contexts/outcomes catch provider or response leakage even if
+    # both isolated requests happen to return a valid classifier response.
+    graph, models, requests = setup_harness(monkeypatch, probability=lambda s: 0.03 if s["messages"][0]["content"] == "I authorize staging restart." else 0.97)
+    for model in models.values():
+        model.responses = [AIMessage(content="Explained.")]
+    async def run(selection, prompt):
         result = await graph.ainvoke(
-            {"messages": [{"role": "user", "content": "Read status."}]},
+            {"messages": [{"role": "user", "content": prompt}], "proposal_id": "restart-approved"},
             {"configurable": {"thread_id": selection, "decision_model": selection}},
         )
-        return result["route_report"]["decision_model"]["selection"]
-    assert await asyncio.gather(run("semif"), run("jev")) == ["semif", "jev"]
+        audit = next(m.artifact["auto_mode"] for m in result["messages"] if isinstance(m, ToolMessage))
+        assert audit["decision_model"] == result["route_report"]["decision_model"]
+        assert audit["raw_answer"]["noul"] == audit["risk_probability"]
+        return audit["decision_model"]["selection"], audit["decision"], audit["risk_probability"], audit["executed"]
+    assert await asyncio.gather(run("kev-4b", "I authorize staging restart."), run("jev", "Diagnosis only. Do not restart.")) == [("kev-4b", "allowed", 0.03, True), ("jev", "blocked", 0.97, False)]
+    assert len(requests) == 4
+    for request in requests:
+        prompt = request["state"].get("content") or request["state"]["messages"][0]["content"]
+        assert request["model"] == ("kev-4b" if prompt == "I authorize staging restart." else "jev-latest")
 
 
 @pytest.mark.parametrize("selection", ["https://untrusted.example", "not-a-model"])

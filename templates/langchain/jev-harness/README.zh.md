@@ -60,8 +60,9 @@ npm install --prefix frontend
 
 ## 实现边界与资料
 
-模板固定使用 `langchain-typesafe[experimental]==0.0.1a2`、`langchain==1.3.15`、
-`langgraph==1.2.11`。中间件为实验接口，构造适配器复用固定版本的私有配置类型；升级后需重新验证。
+模板固定使用 `langchain-typesafe[experimental]==0.0.1a3`、`langchain==1.3.15`、
+`langgraph==1.2.11`。分类器按 0.0.1a3 接口在每次调用中接收 `{state, questions}`。
+中间件为实验接口，构造适配器复用固定版本的私有配置类型；升级后需重新验证。
 模型路由读取最新用户消息并在一次运行内保留选择；工具检查使用最近 30 条消息，风险概率达到 0.5
 时拦截。所有暴露的工具都在受检查列表中，分类错误会传播，不会静默放行或切换模型。
 
@@ -72,4 +73,4 @@ Auto Mode 不提供人工审批，也不是沙箱或风险判断正确性的保�
 - [SiliconFlow System One API](https://api-docs.siliconflow.cn/docs/api/systemone-post)：Alpha 分类接口与托管模型。
 - [LangChain 文章](https://www.langchain.com/blog/building-a-harness-with-jev)及 [TypeSafe 集成](https://docs.langchain.com/oss/python/integrations/providers/typesafe)。
 - [TypeSafe 快速开始](https://docs.typesafe.ai/introduction/quickstart)、[状态](https://docs.typesafe.ai/concepts/state)、[confidence](https://docs.typesafe.ai/confidence)。
-- [固定版本集成包](https://pypi.org/project/langchain-typesafe/0.0.1a2/)：实现与行为核查依据。
+- [固定版本集成包](https://pypi.org/project/langchain-typesafe/0.0.1a3/)：实现与行为核查依据。

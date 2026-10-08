@@ -25,8 +25,9 @@ The generated README records the earlier HTTP 503 and the limits of this sample.
 The backend lifecycle starts with `--no-browser`.
 
 The template adapts the constructors of `ModelRouterMiddleware` and `AutoModeMiddleware`
-from `langchain-typesafe[experimental]==0.0.1a2`, with `langchain==1.3.15` and
-`langgraph==1.2.11`. The middleware is experimental. Revalidate the generated
+from `langchain-typesafe[experimental]==0.0.1a3`, with `langchain==1.3.15` and
+`langgraph==1.2.11`. Classification now supplies `{state, questions}` on each
+invocation, matching the 0.0.1a3 API. The middleware is experimental. Revalidate the generated
 tests and live behavior when upgrading. These decision models are classifiers; a separate
 OpenAI-compatible chat model generates the answer. Defaults are SiliconFlow's
 DeepSeek V4 Flash and Pro, with thinking disabled for this tool-calling demo.
@@ -83,7 +84,7 @@ change when using your own provider.
   why untrusted incident content belongs in state rather than instructions.
 - [Confidence](https://docs.typesafe.ai/confidence) distinguishes route confidence
   from option probability. A Noul answer has a probability, not confidence.
-- [Released integration source](https://pypi.org/project/langchain-typesafe/0.0.1a2/)
+- [Released integration source](https://pypi.org/project/langchain-typesafe/0.0.1a3/)
   was inspected for hook behavior: latest human message only, route retained
   throughout the run, fixed risk threshold of 0.5, last 30 messages for tool
   context, unlisted tools bypassed, and classifier errors propagated.

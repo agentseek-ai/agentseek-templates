@@ -39,7 +39,7 @@ class DecisionClassifier(RunnableLambda):
     explicitly; there is no fallback that could disguise a different model's answer.
     """
 
-    def __init__(self, questions):
+    def __init__(self):
         self.classifiers = {}
         credentials = {"siliconflow": siliconflow_key(), "typesafe": os.getenv("TYPESAFE_API_KEY", "").strip()}
         bases = {
@@ -49,7 +49,7 @@ class DecisionClassifier(RunnableLambda):
         for name, (provider, model, _) in MODELS.items():
             if credentials[provider]:
                 self.classifiers[name] = TypeSafeClassifier(
-                    questions=questions, api_key=credentials[provider], base_url=bases[provider],
+                    api_key=credentials[provider], base_url=bases[provider],
                     model=(os.getenv("TYPESAFE_MODEL") or model) if name == "jev" else model,
                     timeout=60,
                 )
@@ -62,11 +62,11 @@ class DecisionClassifier(RunnableLambda):
             raise ValueError(f"{MODELS[name][2]}: fill {setting} in the server .env, then restart.")
         return self.classifiers[name]
 
-    def _classify(self, state, config):
-        return self._client(config).invoke(state, config)
+    def _classify(self, request, config):
+        return self._client(config).invoke(request, config)
 
-    async def _aclassify(self, state, config):
-        return await self._client(config).ainvoke(state, config)
+    async def _aclassify(self, request, config):
+        return await self._client(config).ainvoke(request, config)
 
     @staticmethod
     def report(response, config=None):

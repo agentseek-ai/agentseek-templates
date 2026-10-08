@@ -24,9 +24,12 @@ class Provider(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         if self.path == "/v1/systemone":
+            assert set(payload) == {"model", "state", "questions"}, payload
             self.classifiers.append(payload["model"])
             question = next(iter(payload["questions"]))
             if question == "model_route":
+                assert payload["questions"][question]["type"] == "choice"
+                assert set(payload["questions"][question]["criteria"]) == {"fast", "powerful"}
                 label = "powerful" if "recovery" in json.dumps(payload["state"]).lower() else "fast"
                 self.routes.append(label)
                 answer = {
@@ -39,6 +42,7 @@ class Provider(BaseHTTPRequestHandler):
                     },
                 }
             else:
+                assert question == "is_risky" and payload["questions"][question]["type"] == "noul"
                 name = payload["state"]["tool_call"]["name"]
                 self.gates.append(name)
                 risk = 0.01

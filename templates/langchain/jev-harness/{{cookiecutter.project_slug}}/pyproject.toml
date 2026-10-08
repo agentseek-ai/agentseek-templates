@@ -6,7 +6,7 @@ authors = [{ name = "{{ cookiecutter.author }}" }]
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "langchain==1.3.15",
-    "langchain-typesafe[experimental]==0.0.1a2",
+    "langchain-typesafe[experimental]==0.0.1a3",
     "langchain-openai>=1.1,<2",
     "langgraph==1.2.11",
     "agentseek-api[embedded]==0.3.2",

@@ -134,7 +134,7 @@ npm test --prefix frontend
 npm run build --prefix frontend
 ```
 
-测试通过脚本化对话模型和本地 HTTP 模拟传输验证真实分类器、中间件、每次运行的模型选择、
+测试通过脚本化对话模型和本地 HTTP 模拟传输验证真实分类器、中间件、每次调用的问题与嵌套消息序列化、每次运行的模型选择、
 同步与异步检查、0.5 边界、并发隔离及执行前失败。离线通过不能证明线上分类质量。
 
 填好密钥后，可显式调用真实服务：
@@ -168,9 +168,13 @@ Auto Mode 是工具拒绝机制，不提供人工审批，也不是安全沙箱�
 
 ## 实现与依赖
 
-固定使用 `langchain-typesafe[experimental]==0.0.1a2`、`langchain==1.3.15`、
+固定使用 `langchain-typesafe[experimental]==0.0.1a3`、`langchain==1.3.15`、
 `langgraph==1.2.11`。这些中间件仍是实验接口；当前版本不支持注入分类器，因此模板的构造适配器
 复用其私有配置类型，而路由执行、工具检查和 0.5 阈值仍使用上游实现。升级后需重新验证。
+
+0.0.1a3 的 `TypeSafeClassifier` 在每次调用中接收 `{state, questions}`。
+`DecisionClassifier` 选择服务商客户端并转发完整请求；路由适配器传入 `Choice` 问题，
+继承的 Auto Mode 工具钩子传入 `Noul` 问题。模型切换和放行／拦截执行仍使用上游中间件。
 
 - `src/{{ cookiecutter.project_slug }}/agent.py`：模型绑定、路由条件、风险策略、调用次数限制。
 - `decisions.py`：服务端密钥与每次运行的白名单模型选择。
