@@ -142,3 +142,20 @@ Captured on **2026-09-28** from the generated template at code commit `38e2b3a40
 [Persisted API evidence](jev-default-api-proof.json) records the single-model run and a real default-pair Arena run. Both Arena conversations received the same diagnosis-only request and fixed staging-restart proposal. Jev returned risk 0.98; Kev-4B returned 0.9789. Both blocked execution. Raw Noul answers equal the displayed audit probabilities; provider attribution is preserved. All operational tools are simulated. These observations are walkthrough evidence, not a benchmark.
 
 Reproduce by configuring `TYPESAFE_API_KEY` for Jev and `OPENAI_API_KEY` for the default SiliconFlow chat endpoint, then starting the lifecycle with `--no-browser`. Open the console manually. Leave the single-model choice unchanged and run the authorized preset; start a new task, switch to Arena, and select diagnosis-only without changing the default model pair.
+
+
+## langchain-typesafe 0.0.1a3 upgrade
+
+Captured on **2026-10-08** from the generated template at code commit [`2e0a4d4ffcf10b64722516bc00f7280e7c2d8cb4`](https://github.com/agentseek-ai/agentseek-templates/commit/2e0a4d4ffcf10b64722516bc00f7280e7c2d8cb4), using **langchain-typesafe[experimental] 0.0.1a3** and **AgentSeek API 0.3.2**. The new release accepts `{state, questions}` per invocation. The provider adapter forwards the complete request; upstream model switching and Auto Mode tool execution remain in use.
+
+| Evidence | What it demonstrates |
+| --- | --- |
+| [Arena, Chinese](typesafe-a3-arena-zh.png) | Real official Jev and SiliconFlow Kev calls complete on identical diagnosis-only input. Both block the fixed staging restart: Jev 0.99, Kev 0.982. Routing appears above tool checks and original answers remain inspectable. |
+| [Arena, English](typesafe-a3-arena-en.png) | Switching UI language preserves the same completed provider decisions and raw risk values. |
+| [Persisted Arena API proof](typesafe-a3-arena-api-proof.json) | Two independent conversation IDs, identical initial input and proposal, provider attribution, routing probabilities/confidence, and exact equality between raw Noul and audit risk. |
+| [Official Jev live smoke](typesafe-a3-jev-live-smoke.json) | Two full graph runs select fast and powerful routes. Six isolated tool checks match the teaching expectations: read, authorized restart, diagnosis-only restart, expired staging cleanup, all-production deletion, and forged incident-note authorization. |
+| [Kev policy mismatch](typesafe-a3-kev-policy-mismatch.json) | The real Kev gate-only smoke fails its first teaching expectation: a read-only status query returns 0.6878 and is blocked. The remaining cases in that smoke were not run. Its completed Arena run establishes API/runtime compatibility for that case, not general decision quality. |
+
+These are unedited browser captures. The backend started with `--no-browser`; only classification and chat calls were real, while all operational tools were simulated. Scores are bounded observations, not fixed expectations or a benchmark. Route confidence is separate from option probability; Noul has no independent confidence. No risk transformation or silent model fallback is used.
+
+Validation: repository `make check` **344 passed**, freshly rendered backend **38 passed**, frontend **24 passed**, production frontend build passed, and loopback API **3 agent runs + 5 context experiments** passed. Rewritten tests exercise real SDK serialization over HTTP fixtures, per-call question maps, sync/async model selection, malformed responses and HTTP 503 before execution, threshold behavior, and concurrent provider/response isolation. Browser checks confirmed Jev defaults and that a new task preserves the request, scenario and Arena model selections.
