@@ -61,8 +61,13 @@ and restart. This is a local network workaround, not a template-wide proxy chang
 The middleware APIs are experimental. The constructor adapters reuse private config
 types from the pinned integration because this version has no classifier injection
 argument; routing execution and the Auto Mode threshold remain upstream. This project pins
-`langchain-typesafe[experimental]==0.0.1a2`, `langchain==1.3.15`, and
+`langchain-typesafe[experimental]==0.0.1a3`, `langchain==1.3.15`, and
 `langgraph==1.2.11` to the tested contract.
+
+In 0.0.1a3, `TypeSafeClassifier` receives `{state, questions}` per invocation.
+`DecisionClassifier` selects the provider client and forwards that complete request.
+The routing adapter supplies its `Choice` question; the inherited Auto Mode tool hooks
+supply their `Noul` question. Upstream model switching and allow/block execution remain in use.
 
 ## Validate offline
 
@@ -74,8 +79,9 @@ npm run build --prefix frontend
 
 These tests use scripted chat models and local HTTP mock transports, exercising
 the real TypeSafe-compatible classifier and middleware code without calling external providers.
-They verify per-run routing, follow-up rerouting, sync and async tool checks,
-the 0.5 boundary, concurrent tool decisions, and failures before execution.
+They verify per-invocation questions and nested message serialization, per-run routing,
+follow-up rerouting, sync and async tool checks, the 0.5 boundary, concurrent provider
+and tool decisions, and failures or malformed responses before execution.
 Passing offline tests does not establish live classification quality.
 
 ## Start the console

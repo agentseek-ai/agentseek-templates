@@ -7,9 +7,9 @@ from langchain.agents.middleware import AgentMiddleware, AgentState
 from langchain.agents.middleware.types import OmitFromSchema
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableLambda
-from langchain_typesafe import Choice, Noul
+from langchain_typesafe import Choice
 from langchain_typesafe.experimental.middleware import AutoModeMiddleware, ModelRouterMiddleware
-# Constructor-only adapters for the pinned 0.0.1a2 integration, which has no
+# Constructor adapters for the pinned 0.0.1a3 integration, which has no
 # classifier injection argument. Execution/threshold logic stays upstream.
 from langchain_typesafe.experimental.middleware.auto_mode import _AutoModeConfig
 from langchain_typesafe.experimental.middleware.model_router import _ModelRouterConfig
@@ -28,17 +28,18 @@ class SelectableModelRouterMiddleware(ModelRouterMiddleware):
     def __init__(self, *, choices, instructions):
         self.config = _ModelRouterConfig.model_validate({"choices": choices, "instructions": instructions})
         self.models = {key: value.model for key, value in self.config.choices.items()}
-        self.classifier = DecisionClassifier(questions={"model_route": Choice(
+        self.questions = {"model_route": Choice(
             instructions=self.config.instructions,
             criteria={key: value.criteria for key, value in self.config.choices.items()},
-        )})
+        )}
+        self.classifier = DecisionClassifier()
 
     def before_agent(self, state, runtime):
-        response = self.classifier.invoke(self._latest_human_message(state))
+        response = self.classifier.invoke({"state": self._latest_human_message(state), "questions": self.questions})
         return {"model_route": response.choices["model_route"], "decision_report": self.classifier.report(response)}
 
     async def abefore_agent(self, state, runtime):
-        response = await self.classifier.ainvoke(self._latest_human_message(state))
+        response = await self.classifier.ainvoke({"state": self._latest_human_message(state), "questions": self.questions})
         return {"model_route": response.choices["model_route"], "decision_report": self.classifier.report(response)}
 
 
@@ -78,9 +79,8 @@ class ObservedAutoModeMiddleware(AutoModeMiddleware):
 
     def __init__(self, **kwargs):
         self.config = _AutoModeConfig.model_validate(kwargs)
-        self.classifier = DecisionClassifier(questions={"is_risky": Noul(
-            instructions=self.config.instructions, criteria=self.config.criteria,
-        )})
+        # Upstream Auto Mode supplies both state and risk questions per call.
+        self.classifier = DecisionClassifier()
         self._responses = ContextVar("auto_mode_responses", default=None)
         self.risk_classifier = self.classifier
         self.classifier = self.risk_classifier | RunnableLambda(self._observe_response)

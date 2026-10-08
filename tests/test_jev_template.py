@@ -32,7 +32,7 @@ def test_jev_harness_renders_with_explicit_live_credentials(tmp_path: Path) -> N
     assert lifecycle["tasks"]["test"]["command"] == ["uv", "run", "--group", "test", "pytest"]
     assert lifecycle["tasks"]["live-smoke"]["command"][-1] == "custom_harness.live_smoke"
     dependencies = tomllib.loads((generated / "pyproject.toml").read_text())["project"]["dependencies"]
-    assert "langchain-typesafe[experimental]==0.0.1a2" in dependencies
+    assert "langchain-typesafe[experimental]==0.0.1a3" in dependencies
     assert "langchain==1.3.15" in dependencies
     assert "agentseek-api[embedded]==0.3.2" in dependencies
     env = (generated / ".env.example").read_text()
