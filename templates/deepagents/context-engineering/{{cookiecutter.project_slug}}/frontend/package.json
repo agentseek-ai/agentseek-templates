@@ -1,0 +1,6 @@
+{
+  "name": "context-lab-ui",
+  "displayName": "Context Lab Compare",
+  "private": true,
+  "description": "Static bilingual model comparison UI served by the same local FastAPI process. No Node build or dependencies."
+}

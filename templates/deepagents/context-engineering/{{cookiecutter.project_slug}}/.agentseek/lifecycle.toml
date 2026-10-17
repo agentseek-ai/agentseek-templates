@@ -1,0 +1,100 @@
+version = 2
+template = "deepagents/context-engineering"
+name = "{{ cookiecutter.project_name }}"
+description = "Bilingual Context Lab Compare: independent models with frozen inputs, inspectable context and approved memory."
+env_file = ".env"
+guide = "README.md"
+
+[tools]
+required = ["uv"]
+
+[paths]
+required = ["pyproject.toml", "src/{{ cookiecutter.project_slug }}/server.py"]
+
+[env.AGENTSEEK_MODEL_PROVIDER]
+required = false
+default = "openai"
+description = "Model protocol: openai or anthropic."
+
+[env.OPENAI_API_KEY]
+required = false
+description = "Key for the selected OpenAI-compatible provider; required only for Live runs."
+
+[env.OPENAI_BASE_URL]
+required = false
+default = "https://api.openai.com/v1"
+aliases = ["OPENAI_API_BASE"]
+description = "OpenAI-compatible base URL (HTTPS or HTTP loopback) matching the selected service."
+
+[env.ANTHROPIC_API_KEY]
+required = false
+description = "Key for the selected Anthropic-compatible provider; required only for Live runs."
+
+[env.ANTHROPIC_BASE_URL]
+required = false
+default = "https://api.anthropic.com"
+aliases = ["ANTHROPIC_API_URL"]
+description = "Anthropic-compatible base URL (HTTPS or HTTP loopback) matching the selected service."
+
+[env.QUERIT_API_KEY]
+required = false
+description = "Querit key; required only for an explicit Live run."
+
+[env.AGENTSEEK_MODELS_BASE_URL]
+required = false
+description = "Optional separate SDK models.list catalog base; blank reuses inference base without altering inference requests."
+
+[env.LANGSMITH_TRACING]
+required = false
+default = "false"
+description = "Opt in to LangSmith traces for comparisons."
+
+[env.LANGSMITH_API_KEY]
+required = false
+description = "Optional LangSmith credential, required only when tracing is enabled."
+
+[env.LANGSMITH_ENDPOINT]
+required = false
+default = "https://apac.api.smith.langchain.com"
+description = "LangSmith regional API endpoint."
+
+[env.LANGSMITH_PROJECT]
+required = false
+default = "{{ cookiecutter.project_slug }}"
+description = "Project receiving opt-in compare traces."
+
+[env.CONTEXT_LAB_PORT]
+required = false
+default = "{{ cookiecutter.port }}"
+description = "Local browser application port."
+
+[services.app]
+name = "Context Lab"
+url = "http://127.0.0.1:{{ cookiecutter.port }}"
+kind = "web"
+display = "default"
+primary = true
+tech = "fastapi"
+description = "Local bilingual interactive Deep Agents context-engineering lab."
+
+[processes.app]
+command = ["uv", "run", "--frozen", "python", "-m", "{{ cookiecutter.project_slug }}.server"]
+
+[checks.app]
+type = "http"
+target = "http://127.0.0.1:{{ cookiecutter.port }}/health"
+service = "app"
+timeout = 2
+attempts = 3
+
+[tasks.sync]
+description = "Install Python dependencies."
+command = ["uv", "sync", "--frozen"]
+
+[tasks.setup]
+description = "Configure the protocol and endpoint, and enter model/search keys privately."
+command = ["uv", "run", "--frozen", "python", "-m", "{{ cookiecutter.project_slug }}.setup"]
+
+[tasks.test]
+description = "Run offline runtime and HTTP tests without provider calls."
+command = ["uv", "run", "--frozen", "--group", "test", "python", "-m", "pytest"]

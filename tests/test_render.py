@@ -55,6 +55,7 @@ REVIEWER_LOCAL_RUNTIME_TEMPLATES = {
     "langchain/rubric",
 }
 EXPECTED_CORE_DEPENDENCIES = {
+    "deepagents/context-engineering": set(),
     "bub/default": {"agentseek-ag-ui"},
     "deepagents/content-builder": set(),
     "deepagents/default": {"agentseek-ag-ui", "agentseek-langchain"},
@@ -76,6 +77,11 @@ EXPECTED_CORE_DEPENDENCIES = {
     "langchain/rubric": set(),
 }
 EXPECTED_NORMALIZED_TOPOLOGY = {
+    "deepagents/context-engineering": {
+        "services": (("app", "web", "default", True, ("process:app",), ("app",), ()),),
+        "effects": {},
+        "actions": ("project:start_dev", "service:app:open"),
+    },
     "bub/default": {
         "services": (
             ("app", "web", "default", True, ("process:frontend",), ("frontend",), ()),
