@@ -23,6 +23,18 @@ def validate_reasoning_effort(value):
     return value
 
 
+def _env_integer(env, name, default, minimum, maximum):
+    raw = (env.get(name) or "").strip()
+    message = f"{name} must be an integer from {minimum} to {maximum}."
+    try:
+        value = int(raw) if raw else default
+    except ValueError as error:
+        raise ValueError(message) from error
+    if not minimum <= value <= maximum:
+        raise ValueError(message)
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     provider: str = "openai"
@@ -32,6 +44,14 @@ class Settings:
     models_base_url: str = ""
     tracing_enabled: bool = False
     trace_project: str = "context-lab"
+    max_output_tokens: int = 3000
+    recursion_limit: int = 32
+    run_timeout_seconds: int = 180
+
+    @property
+    def context_policy(self):
+        return dict(CONTEXT_POLICY, max_output_tokens=self.max_output_tokens,
+                    recursion_limit=self.recursion_limit, run_timeout_seconds=self.run_timeout_seconds)
 
     @classmethod
     def from_env(cls, env=None):
@@ -43,6 +63,9 @@ class Settings:
         alias = "OPENAI_API_BASE" if provider == "openai" else "ANTHROPIC_API_URL"
         base = (env.get(f"{prefix}_BASE_URL") or env.get(alias) or PROVIDER_BASES[provider]).strip().rstrip("/")
         models_base = (env.get("AGENTSEEK_MODELS_BASE_URL") or "").strip().rstrip("/")
+        max_output_tokens = _env_integer(env, "CONTEXT_LAB_MAX_OUTPUT_TOKENS", 3000, 128, 32768)
+        recursion_limit = _env_integer(env, "CONTEXT_LAB_RECURSION_LIMIT", 32, 8, 256)
+        run_timeout_seconds = _env_integer(env, "CONTEXT_LAB_RUN_TIMEOUT_SECONDS", 180, 30, 1800)
         for url in (base, models_base):
             if not url:
                 continue
@@ -64,7 +87,9 @@ class Settings:
         return cls(provider=provider, api_key=(env.get(f"{prefix}_API_KEY") or "").strip(),
                    querit_key=(env.get("QUERIT_API_KEY") or "").strip(), base_url=base, models_base_url=models_base,
                    tracing_enabled=(env.get("LANGSMITH_TRACING") or "false").strip().lower() in {"true", "1", "yes", "on"},
-                   trace_project=(env.get("LANGSMITH_PROJECT") or "context-lab").strip())
+                   trace_project=(env.get("LANGSMITH_PROJECT") or "context-lab").strip(),
+                   max_output_tokens=max_output_tokens, recursion_limit=recursion_limit,
+                   run_timeout_seconds=run_timeout_seconds)
 
     def require_model_key(self):
         if not self.api_key:

@@ -2,12 +2,12 @@
 
 import shutil
 import subprocess
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
 
 NODE = shutil.which("node")
-pytestmark = pytest.mark.skipif(NODE is None, reason="Node.js is unavailable; optional offline UI checks skipped")
 APP = Path(__file__).resolve().parents[1] / "src" / "{{cookiecutter.project_slug}}" / "static" / "app.js"
 
 SCRIPT = r"""
@@ -80,7 +80,7 @@ function response(items=packets, interrupted=false) {
       items.map(item=>JSON.stringify(item)).join('\n')+'\n')};
   }})}};
 }
-let held=false, release;
+let held=false, release;const releases=new Map();
 const requests=[];let rerunPackets=[],interruptRerun=false;
 const context=vm.createContext({
   document:{getElementById:get,createElement:tag=>new Element(tag),documentElement:{},querySelectorAll:()=>localized},
@@ -91,7 +91,7 @@ const context=vm.createContext({
     if(url==='/api/compare')return held?new Promise(resolve=>{release=resolve;}):response();
     assert.match(url,/^\/api\/compare\/12345678-pair\/rerun\/(left|right)$/);
     if(scenario==='rerun-expired')return {ok:false,status:404};
-    return held?new Promise(resolve=>{release=resolve;}):response(rerunPackets,interruptRerun);
+    return held?new Promise(resolve=>{release=resolve;releases.set(url,resolve);}):response(rerunPackets,interruptRerun);
   }
 });
 vm.runInContext(fs.readFileSync(appPath,'utf8'),context);
@@ -190,6 +190,60 @@ const evaluate=source=>vm.runInContext(source,context);
       assert.equal(get('left-rerun').disabled,true);
       assert.match(get('left-rerun-hint').textContent,/new comparison/i);return;
     }
+    if(scenario.startsWith('rerun-concurrent')){
+      held=true;
+      get('left-model').value='updated-a';get('left-effort').value='medium';
+      const pendingA=get('left-rerun').click();
+      assert.equal(get('left-rerun').disabled,true);
+      assert.equal(get('right-rerun').disabled,false,'B must remain runnable while A is active');
+      assert.equal(get('right-model').disabled,false,'The idle candidate can still be selected');
+      await evaluate("rerun('left')");assert.equal(requests.length,2,'Duplicate same-side starts must be blocked');
+      await evaluate("compare('live')");assert.equal(requests.length,2,'A new pair must not replace active reruns');
+      assert.equal(get('prompt').disabled,true);assert.equal(get('material').disabled,true);
+      assert.equal(get('language').disabled,true);assert.equal(get('download-pair').disabled,true);
+      get('right-model').value='updated-b';get('right-effort').value='low';
+      const pendingB=get('right-rerun').click();
+      assert.equal(requests.length,3,'A and B requests must both start before either finishes');
+      assert.equal(get('right-rerun').disabled,true);
+      const packetsFor=(side,failed)=>[
+        {type:'side_start',side,run_id:'concurrent-'+side,model_id:side==='left'?'updated-a':'updated-b'},
+        {type:'event',side,run_id:'concurrent-'+side,event:{kind:'tool',name:'read_file',detail:'finished'}},
+        ...(failed?[{type:'error',side,run_id:'concurrent-'+side,code:'side_run_failed',message:'Run failed'}]:[
+          {type:'result',side,run_id:'concurrent-'+side,result:{...result,
+            model:side==='left'?'updated-a':'updated-b',answer:side+' updated answer',
+            effective_options:{reasoning_effort:side==='left'?'medium':'low'},
+            files:{'/reports/brief.md':side+' updated report'}}}]),
+        {type:'side_end',side,run_id:'concurrent-'+side,outcome:failed?'error':'complete'}];
+      const failed=scenario!=='rerun-concurrent',interrupted=scenario==='rerun-concurrent-interrupted';
+      const aPackets=packetsFor('left',failed);
+      releases.get('/api/compare/12345678-pair/rerun/left')(response(interrupted?aPackets.slice(0,2):aPackets,interrupted));
+      await pendingA;
+      assert.equal(evaluate('state.left.phase'),failed?'error':'complete');
+      assert.equal(evaluate('state.right.phase'),'running');
+      assert.equal(get('left-rerun').disabled,false,'A may be retried while B continues');
+      assert.equal(get('right-rerun').disabled,true);
+      assert.equal(get('compare-status').textContent,'Running','One completed side must not finish the toolbar status');
+      assert.equal(get('download-pair').disabled,true,'Export waits for all active candidates');
+      const completedA=evaluate('JSON.stringify(state.left)');
+      releases.get('/api/compare/12345678-pair/rerun/right')(response(packetsFor('right',false)));
+      await pendingB;
+      assert.equal(evaluate('JSON.stringify(state.left)'),completedA,'B completion must not modify A evidence or errors');
+      assert.equal(evaluate('state.right.phase'),'complete');
+      assert.equal(evaluate('state.right.run_id'),'concurrent-right');
+      assert.equal(get('left-rerun').disabled,false);assert.equal(get('right-rerun').disabled,false);
+      assert.equal(get('download-pair').disabled,false);assert.equal(get('prompt').disabled,false);
+      assert.equal(evaluate('pair.outcomes.left'),failed?'error':'complete');
+      assert.equal(evaluate('pair.outcomes.right'),'complete');
+      if(failed){
+        assert.notEqual(get('notice').textContent,'','A failure must remain visible after B succeeds');
+        assert.notEqual(get('left-notice').textContent,'');assert.equal(get('right-notice').textContent,'');
+      }else{
+        assert.match(get('compare-status').textContent,/finished/i);
+        assert.equal(get('notice').textContent,'');get('language').click();
+        assert.equal(get('notice').textContent,'','Concurrent completion must keep the duplicate banner hidden');
+      }
+      return;
+    }
     const selected=scenario==='rerun-right'?'right':'left',other=selected==='left'?'right':'left';
     evaluate(`selectFile('${other}','/reports/brief.md')`);
     const untouched=evaluate(`JSON.stringify(state.${other})`),otherEvents=get(other+'-events').children,
@@ -209,7 +263,8 @@ const evaluate=source=>vm.runInContext(source,context);
     else rerunPackets.push({type:'result',side:selected,run_id:'run-replacement',result:nextResult},
       {type:'side_end',side:selected,run_id:'run-replacement',outcome:'complete'});
     held=true;const pending=get(selected+'-rerun').click();
-    assert.equal(get('left-rerun').disabled,true);assert.equal(get('right-rerun').disabled,true);
+    assert.equal(get(selected+'-rerun').disabled,true);assert.equal(get(other+'-rerun').disabled,false,
+      'The other side must remain independently runnable');
     assert.equal(get('compare').disabled,true,'Only one request can run at a time');
     assert.equal(evaluate(`state.${selected}.result`),undefined,'Only the rerun candidate should reset');
     assert.equal(evaluate(`JSON.stringify(state.${other})`),untouched);
@@ -267,14 +322,54 @@ const evaluate=source=>vm.runInContext(source,context);
 """
 
 
+@pytest.mark.skipif(NODE is None, reason="Node.js is unavailable; optional offline UI checks skipped")
 @pytest.mark.parametrize(
     "scenario",
     [
         "completed-notice", "repeat", "ownership", "evidence", "rerun-left", "rerun-right", "rerun-error",
-        "rerun-interrupted", "rerun-blocked", "rerun-expired", "effort-warning",
+        "rerun-concurrent", "rerun-concurrent-error", "rerun-concurrent-interrupted", "rerun-interrupted", "rerun-blocked", "rerun-expired", "effort-warning",
         "effort-anthropic", "effort-server-default",
     ],
 )
 def test_comparison_ui_state_and_ownership(scenario):
     result = subprocess.run([NODE, "-e", SCRIPT, str(APP), scenario], capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_both_reasoning_selects_parse_to_the_same_complete_options():
+    class SelectParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.select = None
+            self.option = None
+            self.options = {}
+            self.unmatched_closes = 0
+
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag == "select" and attrs.get("id") in {"left-effort", "right-effort"}:
+                self.select = attrs["id"]
+                self.options[self.select] = []
+            elif tag == "option" and self.select:
+                assert self.option is None, "Each reasoning option must close before the next opens"
+                self.option = [attrs.get("value"), ""]
+                self.options[self.select].append(self.option)
+
+        def handle_data(self, data):
+            if self.option is not None:
+                self.option[1] += data
+
+        def handle_endtag(self, tag):
+            if tag == "option" and self.select:
+                if self.option is None:
+                    self.unmatched_closes += 1
+                self.option = None
+            elif tag == "select" and self.select:
+                assert self.option is None, "The last reasoning option must be closed"
+                self.select = None
+
+    parser = SelectParser()
+    parser.feed(APP.with_name("index.html").read_text(encoding="utf-8"))
+    expected = [["", "提供方默认"], ["low", "low"], ["medium", "medium"], ["high", "high"], ["max", "max"]]
+    assert parser.options == {"left-effort": expected, "right-effort": expected}
+    assert parser.unmatched_closes == 0

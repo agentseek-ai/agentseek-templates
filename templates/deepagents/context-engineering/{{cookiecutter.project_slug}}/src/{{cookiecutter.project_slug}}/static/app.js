@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id), sides=['left','right'];
 const copy={
-zh:{headline:'相同上下文，比较不同模型。',subtitle:'左右独立选择模型，把任务、材料、记忆与上下文策略固定下来，再查看各自的真实执行。',connection:'连接与预算',budget:'每次模型调用最多 3,000 输出 Token；每侧：4 次搜索 × 3 条结果 · 6,000 Token 触发摘要 · 180 秒总限时',setupNote:'密钥只在本地终端填写，修改配置后重启服务。',sharedTask:'共同任务',frozen:'比较开始时冻结输入',addMaterial:'添加共同材料，保留完整原文',materialNote:'每侧独立保存相同原文，任务只携带文件路径与 300 字符预览。',memoryTitle:'已批准的长期记忆',memoryNote:'两侧读取同一份已保存快照，模型不能修改它。',saveMemory:'批准并保存',refresh:'刷新可用模型',discoveryInitial:'从当前目录端点读取真实模型列表，也可手填精确 ID。',modelNote:'目录不保证聊天或工具调用能力，以实际端点支持为准。推理档位仅 OpenAI 兼容协议且服务支持时生效。',comparisonNote:'按左、右顺序运行，降低并发限流。动态检索可能不同；共同输入不等于严格基准。',download:'导出比较',fixture:'离线示例',compare:'开始比较',left:'左侧模型',right:'右侧模型',modelId:'模型 ID',reasoning:'推理档位',providerDefault:'提供方默认',waiting:'等待开始',modelCalls:'模型调用',searchCalls:'搜索调用',elapsed:'用时',empty:'选择模型，或先用离线示例查看可检查的上下文机制。',trace:'执行轨迹',files:'可回读文件',capabilities:'同一上下文策略：原文外置 · 可恢复摘要 · 按需技能 · 子智能体 · 批准后记忆。配置不等于触发，实际轨迹只记录本次发生的事件。',prompt:'比较线程状态与长期记忆。检索官方 Deep Agents 资料，给出 3 条关键发现、来源链接和不确定性，并将简报写入 /reports/brief.md。',saved:'记忆已保存；下次比较会同时读取。当前比较仍使用开始时的快照。',saveFailed:'保存失败，请检查内容后重试。',keysMissing:'实时比较前，请在终端填写所选模型提供方与 Querit 密钥。离线示例无需密钥。',refreshing:'正在读取真实目录…',discoveryFailed:'当前目录端点不支持读取、未授权或暂时不可用。请手填精确模型 ID；推理端点没有改变。',modelsFound:n=>`目录返回 ${n} 个模型 ID。可选择或继续手填；目录不保证当前账户可调用。`,partialList:'当前列表有分页上限，可手填其他精确 ID。',modelKeyMissing:'读取目录前请填写所选模型提供方密钥。',catalogSource:'模型目录',inferenceSource:'推理端点',tracingOn:'LangSmith 已启用：比较 ID、侧别与模型会标记在轨迹中。',tracingOff:'LangSmith 未启用。',running:'运行中',queued:'等待左侧结束',complete:'已完成',incomplete:'输出未完成',failed:'本侧失败',fixtureBadge:'离线示意',fixtureNotice:'机制示意：没有模型或搜索请求，不能用来比较速度、成本或效果。',incompleteNotice:'模型输出达到当前上限，结果未完成。实际用量和部分文件已保留；可缩小任务或调整模型支持的推理档位后重试。',sideFailed:'本侧运行失败，可能已产生用量。另一侧继续运行；已完成结果会保留。',runningNotice:'正在使用同一份输入与批准记忆快照进行独立执行。',pairFinished:'比较已结束，请分别查看两侧状态、证据与用量。',streamFailed:'连接中断或比较未完整结束。已收到的另一侧结果会保留，请检查本地服务。',validationError:'请填写共同任务和两侧精确模型 ID，并检查连接配置。',notReported:'未返回',notMeasured:'未测量',noAnswer:'最终模型消息没有文本，请查看文件与执行轨迹。',started:'开始',finished:'结束'},
-en:{headline:'Same context. Compare your models.',subtitle:'Choose each model independently. Freeze the task, source material, approved memory and context strategy, then inspect each real execution.',connection:'Connection and budgets',budget:'Up to 3,000 output tokens per model call; each side: 4 searches × 3 results · summarize at 6,000 tokens · 180 seconds total',setupNote:'Enter keys privately in your local terminal. Restart the service after changing configuration.',sharedTask:'Shared task',frozen:'Inputs freeze when comparison starts',addMaterial:'Add shared material; keep the complete original',materialNote:'Each graph receives its own copy of the same source. The task carries a file path and a 300-character preview.',memoryTitle:'Approved persistent memory',memoryNote:'Both sides read the same saved snapshot. Models cannot modify it.',saveMemory:'Approve and save',refresh:'Refresh available models',discoveryInitial:'Read actual model IDs from the configured catalog, or enter an exact ID manually.',modelNote:'A catalog entry does not guarantee chat or tool-call support. Reasoning levels apply only to OpenAI-compatible services that support them.',comparisonNote:'Runs left, then right to reduce concurrent rate limits. Dynamic search can differ; shared inputs are not a controlled benchmark.',download:'Export comparison',fixture:'Offline example',compare:'Compare models',left:'Left model',right:'Right model',modelId:'Model ID',reasoning:'Reasoning level',providerDefault:'Provider default',waiting:'Ready to begin',modelCalls:'Model calls',searchCalls:'Search calls',elapsed:'Elapsed',empty:'Choose a model, or explore inspectable context mechanisms in the offline example.',trace:'Execution trace',files:'Retrievable files',capabilities:'Shared context strategy: offload · recoverable summaries · on-demand skills · subagents · approved memory. Configuration does not imply execution; live traces show observed events only.',prompt:'Compare thread state and long-term memory. Search official Deep Agents sources, return 3 findings with source links and uncertainty, and write /reports/brief.md.',saved:'Memory saved for both sides of the next comparison. The current comparison keeps its original snapshot.',saveFailed:'Could not save memory. Check the content and retry.',keysMissing:'Before comparing live, enter the selected provider and Querit keys in your terminal. Offline examples need no keys.',refreshing:'Reading the actual model catalog…',discoveryFailed:'This catalog endpoint is unsupported, unauthorized or temporarily unavailable. Enter exact IDs manually; the inference endpoint has not changed.',modelsFound:n=>`The catalog returned ${n} model IDs. Choose one or enter an exact ID; entries do not guarantee account access.`,partialList:'The list reached a pagination limit; additional exact IDs can be entered manually.',modelKeyMissing:'Enter the selected model provider key before reading the catalog.',catalogSource:'Model catalog',inferenceSource:'Inference endpoint',tracingOn:'LangSmith enabled: traces carry the comparison ID, side and model.',tracingOff:'LangSmith is disabled.',running:'Running',queued:'Waiting for left side',complete:'Complete',incomplete:'Incomplete output',failed:'This side failed',fixtureBadge:'Offline illustration',fixtureNotice:'Illustrative mechanisms only: no model or search calls. This example cannot compare speed, cost or quality.',incompleteNotice:'The model reached its output limit. Actual usage and partial files are preserved. Narrow the task or adjust a reasoning level supported by your model before retrying.',sideFailed:'This candidate failed and may have incurred usage. The other side continues; completed results remain available.',runningNotice:'Independent graphs are using the same input and approved-memory snapshot.',pairFinished:'Comparison finished. Review each side’s status, evidence and usage.',streamFailed:'The connection ended before the comparison finished. Received results remain available; check the local service.',validationError:'Enter a shared task and two exact model IDs, and check connection settings.',notReported:'Not reported',notMeasured:'Not measured',noAnswer:'The final model message contained no text. Inspect files and execution events.',started:'started',finished:'finished'}
+zh:{headline:'相同上下文，比较不同模型。',subtitle:'左右独立选择模型，把任务、材料、记忆与上下文策略固定下来，再查看各自的真实执行。',connection:'连接与预算',budget:'每次模型调用最多 3,000 输出 Token；每侧：4 次搜索 × 3 条结果 · 6,000 Token 触发摘要 · 180 秒总限时',setupNote:'密钥只在本地终端填写，修改配置后重启服务。',sharedTask:'共同任务',frozen:'比较开始时冻结输入',addMaterial:'添加共同材料，保留完整原文',materialNote:'每侧独立保存相同原文，任务只携带文件路径与 300 字符预览。',memoryTitle:'已批准的长期记忆',memoryNote:'两侧读取同一份已保存快照，模型不能修改它。',saveMemory:'批准并保存',refresh:'刷新可用模型',discoveryInitial:'从当前目录端点读取真实模型列表，也可手填精确 ID。',modelNote:'目录不保证聊天或工具调用能力，以实际端点支持为准。推理档位仅 OpenAI 兼容协议且服务支持时生效。',comparisonNote:'两侧并行执行。独立检索的结果可能不同；共同输入不等于严格基准。',download:'导出比较',fixture:'离线示例',compare:'开始比较',left:'左侧模型',right:'右侧模型',modelId:'模型 ID',reasoning:'推理档位',providerDefault:'提供方默认',waiting:'等待开始',modelCalls:'模型调用',searchCalls:'搜索调用',elapsed:'用时',empty:'选择模型，或先用离线示例查看可检查的上下文机制。',trace:'执行轨迹',files:'可回读文件',capabilities:'同一上下文策略：原文外置 · 可恢复摘要 · 按需技能 · 子智能体 · 批准后记忆。配置不等于触发，实际轨迹只记录本次发生的事件。',prompt:'比较线程状态与长期记忆。检索官方 Deep Agents 资料，给出 3 条关键发现、来源链接和不确定性，并将简报写入 /reports/brief.md。',saved:'记忆已保存；下次比较会同时读取。当前比较仍使用开始时的快照。',saveFailed:'保存失败，请检查内容后重试。',keysMissing:'实时比较前，请在终端填写所选模型提供方与 Querit 密钥。离线示例无需密钥。',refreshing:'正在读取真实目录…',discoveryFailed:'当前目录端点不支持读取、未授权或暂时不可用。请手填精确模型 ID；推理端点没有改变。',modelsFound:n=>`目录返回 ${n} 个模型 ID。可选择或继续手填；目录不保证当前账户可调用。`,partialList:'当前列表有分页上限，可手填其他精确 ID。',modelKeyMissing:'读取目录前请填写所选模型提供方密钥。',catalogSource:'模型目录',inferenceSource:'推理端点',tracingOn:'LangSmith 已启用：比较 ID、侧别与模型会标记在轨迹中。',tracingOff:'LangSmith 未启用。',running:'运行中',queued:'等待开始',complete:'已完成',incomplete:'输出未完成',failed:'本侧失败',fixtureBadge:'离线示意',fixtureNotice:'机制示意：没有模型或搜索请求，不能用来比较速度、成本或效果。',incompleteNotice:'模型输出达到当前上限，结果未完成。实际用量和部分文件已保留；可缩小任务或调整模型支持的推理档位后重试。',sideFailed:'本侧运行失败，可能已产生用量。两侧独立执行，已收到的结果会保留。',runningNotice:'正在使用同一份输入与批准记忆快照进行独立执行。',pairFinished:'比较已结束，请分别查看两侧状态、证据与用量。',streamFailed:'连接中断或比较未完整结束。已收到的另一侧结果会保留，请检查本地服务。',validationError:'请填写共同任务和两侧精确模型 ID，并检查连接配置。',notReported:'未返回',notMeasured:'未测量',noAnswer:'最终模型消息没有文本，请查看文件与执行轨迹。',started:'开始',finished:'结束'},
+en:{headline:'Same context. Compare your models.',subtitle:'Choose each model independently. Freeze the task, source material, approved memory and context strategy, then inspect each real execution.',connection:'Connection and budgets',budget:'Up to 3,000 output tokens per model call; each side: 4 searches × 3 results · summarize at 6,000 tokens · 180 seconds total',setupNote:'Enter keys privately in your local terminal. Restart the service after changing configuration.',sharedTask:'Shared task',frozen:'Inputs freeze when comparison starts',addMaterial:'Add shared material; keep the complete original',materialNote:'Each graph receives its own copy of the same source. The task carries a file path and a 300-character preview.',memoryTitle:'Approved persistent memory',memoryNote:'Both sides read the same saved snapshot. Models cannot modify it.',saveMemory:'Approve and save',refresh:'Refresh available models',discoveryInitial:'Read actual model IDs from the configured catalog, or enter an exact ID manually.',modelNote:'A catalog entry does not guarantee chat or tool-call support. Reasoning levels apply only to OpenAI-compatible services that support them.',comparisonNote:'Both sides run concurrently. Independent search results may differ; shared inputs are not a controlled benchmark.',download:'Export comparison',fixture:'Offline example',compare:'Compare models',left:'Left model',right:'Right model',modelId:'Model ID',reasoning:'Reasoning level',providerDefault:'Provider default',waiting:'Ready to begin',modelCalls:'Model calls',searchCalls:'Search calls',elapsed:'Elapsed',empty:'Choose a model, or explore inspectable context mechanisms in the offline example.',trace:'Execution trace',files:'Retrievable files',capabilities:'Shared context strategy: offload · recoverable summaries · on-demand skills · subagents · approved memory. Configuration does not imply execution; live traces show observed events only.',prompt:'Compare thread state and long-term memory. Search official Deep Agents sources, return 3 findings with source links and uncertainty, and write /reports/brief.md.',saved:'Memory saved for both sides of the next comparison. The current comparison keeps its original snapshot.',saveFailed:'Could not save memory. Check the content and retry.',keysMissing:'Before comparing live, enter the selected provider and Querit keys in your terminal. Offline examples need no keys.',refreshing:'Reading the actual model catalog…',discoveryFailed:'This catalog endpoint is unsupported, unauthorized or temporarily unavailable. Enter exact IDs manually; the inference endpoint has not changed.',modelsFound:n=>`The catalog returned ${n} model IDs. Choose one or enter an exact ID; entries do not guarantee account access.`,partialList:'The list reached a pagination limit; additional exact IDs can be entered manually.',modelKeyMissing:'Enter the selected model provider key before reading the catalog.',catalogSource:'Model catalog',inferenceSource:'Inference endpoint',tracingOn:'LangSmith enabled: traces carry the comparison ID, side and model.',tracingOff:'LangSmith is disabled.',running:'Running',queued:'Waiting to begin',complete:'Complete',incomplete:'Incomplete output',failed:'This side failed',fixtureBadge:'Offline illustration',fixtureNotice:'Illustrative mechanisms only: no model or search calls. This example cannot compare speed, cost or quality.',incompleteNotice:'The model reached its output limit. Actual usage and partial files are preserved. Narrow the task or adjust a reasoning level supported by your model before retrying.',sideFailed:'This candidate failed and may have incurred usage. Candidates run independently; received results remain available.',runningNotice:'Independent graphs are using the same input and approved-memory snapshot.',pairFinished:'Comparison finished. Review each side’s status, evidence and usage.',streamFailed:'The connection ended before the comparison finished. Received results remain available; check the local service.',validationError:'Enter a shared task and two exact model IDs, and check connection settings.',notReported:'Not reported',notMeasured:'Not measured',noAnswer:'The final model message contained no text. Inspect files and execution events.',started:'started',finished:'finished'}
 };
 Object.assign(copy.zh,{runFrom:'本次运行模型',resultFrom:'本次结果来自',fixtureIdentity:'离线示意：未调用任何模型。',nextSelection:'选择框用于下一次执行。'});
 Object.assign(copy.en,{runFrom:'Run candidate',resultFrom:'Result from',fixtureIdentity:'Offline illustration: no model was called.',nextSelection:'Selections apply to the next run.'});
@@ -25,7 +25,7 @@ Object.assign(copy.zh,{
   rerunFrozen:lang=>`只更新本侧；沿用原任务、材料、批准记忆和${lang==='zh'?'中文':'英文'}输出。`,
   rerunEdited:'共同任务或材料已改变，请开始新比较；单侧重跑使用原快照。',
   rerunModelMissing:'填写本侧精确模型 ID 后可重跑。',
-  rerunRunning:'正在重跑单侧，另一侧结果、文件与轨迹保持不变。',
+  rerunRunning:'模型正在独立重跑；每侧的结果、文件与轨迹分别更新。',
   rerunFailed:'本侧重跑未成功；另一侧结果已保留。可检查本地服务后重试。',
   snapshotMissing:'本地服务已没有这次比较的快照，请开始新比较。现有证据仍保留。',
   selectionDiffers:'当前选择与已展示结果配置不同；重新执行本侧后更新结果。',
@@ -39,7 +39,7 @@ Object.assign(copy.en,{
   rerunFrozen:lang=>`Updates this side only, keeping the original task, material, approved memory and ${lang==='zh'?'Chinese':'English'} output.`,
   rerunEdited:'Shared task or material changed. Start a new comparison; single-side reruns use the original snapshot.',
   rerunModelMissing:'Enter this side’s exact model ID to rerun.',
-  rerunRunning:'Rerunning one side. The other side’s result, files and trace stay unchanged.',
+  rerunRunning:'Rerunning candidates independently. Each side updates its own result, files and trace.',
   rerunFailed:'This rerun did not finish successfully. The other side is preserved. Check the local service and retry.',
   snapshotMissing:'The local service no longer has this snapshot. Start a new comparison; existing evidence is preserved.',
   selectionDiffers:'The current selection differs from the displayed result configuration. Rerun this side to update it.',
@@ -48,12 +48,28 @@ Object.assign(copy.en,{
   runId:'Run ID'
 });
 let language=localStorage.getItem('context-lab-language')==='en'?'en':'zh',config=null,busy=false,pair=null;
+let fullComparisonBusy=false;const activeSides=new Set();
 let state={left:{phase:'waiting',events:[]},right:{phase:'waiting',events:[]}};
 let discovery={phase:'initial',count:0,complete:true};
 const t=key=>copy[language][key]||key;
 function notify(message,error=false){$('notice').textContent=message;$('notice').className=error?'error':'';}
+function syncBusy(){
+  busy=fullComparisonBusy||activeSides.size>0;
+  if(pair)pair.activeSides=fullComparisonBusy?sides.filter(side=>state[side].phase==='running'):sides.filter(side=>activeSides.has(side));
+}
+function pairStatus(){
+  if(!pair)return;
+  const error=pair.error||Object.values(pair.rerunErrors||{})[0];
+  if(busy){
+    $('compare-status').textContent=t('running');
+    notify(t(fullComparisonBusy?(pair.execution==='fixture'?'fixtureNotice':'runningNotice'):'rerunRunning'));
+  }else{
+    $('compare-status').textContent=t(error||(pair.finished?'pairFinished':'running'));
+    notify(error?t(error):pair.execution==='fixture'?t('fixtureNotice'):'',Boolean(error));
+  }
+}
 function sharedInputsChanged(){return Boolean(pair&&($('prompt').value.trim()!==pair.input.prompt||$('material').value!==pair.input.material));}
-function rerunAllowed(side){return !busy&&pair?.finished&&pair.compare_id&&!pair.snapshotMissing&&!sharedInputsChanged()&&Boolean($(side+'-model').value.trim())&&(pair.execution!=='live'||config?.keys_ready);}
+function rerunAllowed(side){return !fullComparisonBusy&&!activeSides.has(side)&&pair?.finished&&pair.compare_id&&!pair.snapshotMissing&&!sharedInputsChanged()&&Boolean($(side+'-model').value.trim())&&(pair.execution!=='live'||config?.keys_ready);}
 function selectedCandidate(side){return {model_id:$(side+'-model').value.trim(),reasoning_effort:$(side+'-effort').value};}
 function candidateEffort(item){
   if(config?.provider!=='openai')return null;
@@ -77,12 +93,14 @@ function controls(){
   $('compare').disabled=busy||!config?.keys_ready||!ids;$('fixture').disabled=busy;
   $('refresh-models').disabled=busy||discovery.phase==='loading'||!config?.model_key_ready;$('language').disabled=busy;
   for(const side of sides){
-    $(side+'-model').disabled=busy;$(side+'-effort').disabled=busy||config?.provider==='anthropic';
+    const sideBusy=fullComparisonBusy||activeSides.has(side);
+    $(side+'-model').disabled=sideBusy;$(side+'-effort').disabled=sideBusy||config?.provider==='anthropic';
     $(side+'-rerun').disabled=!rerunAllowed(side);
     const hint=pair?.snapshotMissing?t('snapshotMissing'):!pair?.finished?t('rerunWait'):sharedInputsChanged()?t('rerunEdited'):!$(side+'-model').value.trim()?t('rerunModelMissing'):t('rerunFrozen')(pair.input.language);
     $(side+'-rerun-hint').textContent=hint;
   }
-  $('prompt').disabled=busy;$('material').disabled=busy;runWarnings();
+  $('prompt').disabled=busy;$('material').disabled=busy;
+  $('download-pair').disabled=busy||!pair||(!pair.finished&&!sides.some(side=>state[side].result));runWarnings();
 }
 
 function discoveryText(){let message=t('discoveryInitial');if(discovery.phase==='loading')message=t('refreshing');if(discovery.phase==='failed')message=t('discoveryFailed');if(discovery.phase==='missing')message=t('modelKeyMissing');if(discovery.phase==='ready')message=t('modelsFound')(discovery.count)+(discovery.complete?'':' '+t('partialList'));$('discovery-status').textContent=message;}
@@ -91,7 +109,7 @@ function connectionLink(id,value){
   try{const url=new URL(value);if(url.protocol==='https:'||url.protocol==='http:'){link.setAttribute('href',url.href);return;}}catch{}
   link.removeAttribute('href');
 }
-function translate(){document.documentElement.lang=language==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));$('language').textContent=language==='zh'?'English':'中文';if(!$('prompt').value)$('prompt').value=t('prompt');if(config){connectionLink('inference-endpoint',config.base_url);connectionLink('catalog-endpoint',config.models_base_url);if(!config.keys_ready&&!pair)notify(t('keysMissing'));}if(pair){notify(t(pair.error||pair.rerunError||(pair.activeSide?'rerunRunning':pair.execution==='fixture'?'fixtureNotice':pair.finished?'':'runningNotice')),Boolean(pair.error||pair.rerunError));$('compare-status').textContent=t(pair.error||pair.rerunError||(pair.finished&&!pair.activeSide?'pairFinished':'running'));}discoveryText();for(const side of sides)renderSide(side);controls();}
+function translate(){document.documentElement.lang=language==='zh'?'zh-CN':'en';document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));$('language').textContent=language==='zh'?'English':'中文';if(!$('prompt').value)$('prompt').value=t('prompt');if(config){connectionLink('inference-endpoint',config.base_url);connectionLink('catalog-endpoint',config.models_base_url);if(!config.keys_ready&&!pair)notify(t('keysMissing'));}if(pair)pairStatus();discoveryText();for(const side of sides)renderSide(side);controls();}
 function renderMarkdown(element,text){
   element.classList.add('markdown-body');
   if(globalThis.ContextMarkdown?.render){element.innerHTML=globalThis.ContextMarkdown.render(String(text));}
@@ -208,8 +226,7 @@ function consume(item,onlySide=null){
   }
   if(item.type==='compare_end'){
     pair.outcomes=item.outcomes;pair.finished=true;
-    $('compare-status').textContent=t('pairFinished');notify(pair.execution==='fixture'?t('fixtureNotice'):'');
-    $('download-pair').disabled=false;
+    pairStatus();
   }
 }
 async function readPackets(response,onPacket){
@@ -229,9 +246,9 @@ async function compare(execution){
   if(!prompt||(execution==='live'&&sides.some(side=>!$(side+'-model').value.trim()))){notify(t('validationError'),true);return;}
   const payload={execution,language,prompt,material:$('material').value};
   for(const side of sides)payload[side]=selectedCandidate(side);
-  state={left:{phase:'waiting',events:[],candidate:{...payload.left}},right:{phase:'queued',events:[],candidate:{...payload.right}}};
+  state={left:{phase:'running',events:[],candidate:{...payload.left}},right:{phase:'running',events:[],candidate:{...payload.right}}};
   pair={execution,input:payload};$('compare-status').textContent=t('running');$('pair-id').textContent='';
-  $('download-pair').disabled=true;busy=true;
+  $('download-pair').disabled=true;fullComparisonBusy=true;syncBusy();
   for(const side of sides)renderSide(side);
   controls();notify(t(execution==='fixture'?'fixtureNotice':'runningNotice'));let ended=false;
   try{
@@ -244,14 +261,14 @@ async function compare(execution){
     pair.error=error.message==='validation'?'validationError':'streamFailed';
     $('compare-status').textContent=t(pair.error);notify(t(pair.error),true);
     $('download-pair').disabled=!sides.some(side=>state[side].result);
-  }finally{busy=false;controls();}
+  }finally{fullComparisonBusy=false;syncBusy();pairStatus();controls();}
 }
 async function rerun(side){
   if(!sides.includes(side)||!rerunAllowed(side)){controls();return;}
   const candidate=selectedCandidate(side),previous=state[side],previousOutcome=pair.outcomes[side];
   state[side]={phase:'running',events:[],candidate};
-  pair.activeSide=side;delete pair.rerunError;busy=true;$('download-pair').disabled=true;
-  $('compare-status').textContent=t('running');notify(t('rerunRunning'));renderSide(side);controls();
+  pair.rerunErrors=pair.rerunErrors||{};delete pair.rerunErrors[side];
+  activeSides.add(side);syncBusy();pairStatus();renderSide(side);controls();
   let ended=false;
   try{
     const response=await fetch(`/api/compare/${encodeURIComponent(pair.compare_id)}/rerun/${side}`,{
@@ -262,20 +279,17 @@ async function rerun(side){
       consume(item,side);if(item.type==='side_end'&&item.side===side)ended=true;
     });
     if(!ended)throw new Error('rerunFailed');
-    if(state[side].phase==='error')pair.rerunError='rerunFailed';
+    if(state[side].phase==='error')pair.rerunErrors[side]='rerunFailed';
   }catch(error){
     if(error.message==='snapshotMissing'){
-      pair.snapshotMissing=true;pair.rerunError='snapshotMissing';state[side]=previous;pair.outcomes[side]=previousOutcome;
+      pair.snapshotMissing=true;pair.rerunErrors[side]='snapshotMissing';state[side]=previous;pair.outcomes[side]=previousOutcome;
     }else{
       state[side].phase='error';state[side].error={code:'rerun_failed',message:'Rerun did not finish'};
-      pair.outcomes[side]='error';pair.rerunError='rerunFailed';
+      pair.outcomes[side]='error';pair.rerunErrors[side]='rerunFailed';
     }
     renderSide(side);
   }finally{
-    delete pair.activeSide;busy=false;
-    $('compare-status').textContent=t(pair.rerunError||'pairFinished');
-    notify(pair.rerunError?t(pair.rerunError):pair.execution==='fixture'?t('fixtureNotice'):'',Boolean(pair.rerunError));
-    $('download-pair').disabled=false;controls();
+    activeSides.delete(side);syncBusy();pairStatus();controls();
   }
 }
 $('language').addEventListener('click',()=>{const wasDefault=$('prompt').value===t('prompt');language=language==='zh'?'en':'zh';localStorage.setItem('context-lab-language',language);if(wasDefault&&!pair)$('prompt').value=t('prompt');translate();});$('refresh-models').addEventListener('click',refreshModels);sides.forEach(side=>{

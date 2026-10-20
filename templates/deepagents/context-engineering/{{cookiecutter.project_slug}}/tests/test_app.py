@@ -312,17 +312,56 @@ def test_rerun_rejects_unknown_expired_and_invalid_requests(tmp_path):
     assert client.post(f"{url}/left", json={}).status_code == 404
 
 
-def test_active_rerun_blocks_full_and_side_runs_until_the_stream_finishes(tmp_path):
+def test_full_compare_starts_both_sides_before_either_finishes_and_interleaves_events(tmp_path):
     import httpx
 
     async def exercise():
-        started = asyncio.Event()
+        started = set()
+        both_started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def runner(settings, model_id, *args, metadata, **kwargs):
+            started.add(metadata["side"])
+            if started == {"left", "right"}:
+                both_started.set()
+            yield {"type": "event", "event": {"kind": "tool", "name": "read_file", "detail": model_id}}
+            await release.wait()
+            yield {"type": "result", "result": {"status": "complete", "answer": model_id, "files": {}}}
+
+        app = create_app(settings=Settings(api_key="model", querit_key="search"),
+            memory_path=tmp_path / "memory.json", run_events=runner)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            running = asyncio.create_task(client.post("/api/compare", json={"execution": "live", "prompt": "Same task",
+                "left": {"model_id": "a"}, "right": {"model_id": "b"}}))
+            try:
+                await asyncio.wait_for(both_started.wait(), timeout=2)
+            finally:
+                release.set()
+                response = await running
+            items = packets(response)
+            first_result = next(i for i, item in enumerate(items) if item["type"] == "result")
+            assert {item["side"] for item in items[:first_result] if item["type"] == "event"} == {"left", "right"}
+            assert items[-1] == {"type": "compare_end", "compare_id": items[0]["compare_id"],
+                                 "outcomes": {"left": "complete", "right": "complete"}}
+            assert len({item["run_id"] for item in items if item["type"] == "side_start"}) == 2
+
+    asyncio.run(exercise())
+
+
+def test_same_pair_reruns_can_overlap_but_duplicate_side_and_new_full_pair_are_blocked(tmp_path):
+    import httpx
+
+    async def exercise():
+        started = set()
+        both_started = asyncio.Event()
         release = asyncio.Event()
         hold = False
 
-        async def runner(settings, model_id, *args, **kwargs):
+        async def runner(settings, model_id, *args, metadata, **kwargs):
             if hold:
-                started.set()
+                started.add(metadata["side"])
+                if started == {"left", "right"}:
+                    both_started.set()
                 await release.wait()
             yield {"type": "result", "result": {"status": "complete", "answer": model_id, "files": {}}}
 
@@ -334,16 +373,67 @@ def test_active_rerun_blocks_full_and_side_runs_until_the_stream_finishes(tmp_pa
             initial = packets(await client.post("/api/compare", json=payload))
             url = f"/api/compare/{initial[0]['compare_id']}/rerun"
             hold = True
-            running = asyncio.create_task(client.post(f"{url}/left", json={"model_id": "a"}))
+            running = [asyncio.create_task(client.post(f"{url}/{side}", json={"model_id": side}))
+                       for side in ("left", "right")]
             try:
-                await asyncio.wait_for(started.wait(), timeout=5)
+                await asyncio.wait_for(both_started.wait(), timeout=2)
                 assert (await client.post("/api/compare", json=payload)).status_code == 409
+                assert (await client.post(f"{url}/left", json={"model_id": "a"})).status_code == 409
                 assert (await client.post(f"{url}/right", json={"model_id": "b"})).status_code == 409
             finally:
                 release.set()
-                response = await running
-            assert packets(response)[-1]["outcome"] == "complete"
+                responses = await asyncio.gather(*running)
+            assert all(response.status_code == 200 for response in responses)
+            assert all(packets(response)[-1]["outcome"] == "complete" for response in responses)
+            assert {item["side"] for item in packets(responses[0])} == {"left"}
+            assert {item["side"] for item in packets(responses[1])} == {"right"}
             assert (await client.post(f"{url}/right", json={"model_id": "b"})).status_code == 200
+
+    asyncio.run(exercise())
+
+
+def test_cancelled_full_compare_closes_both_graphs_and_releases_busy_sides(tmp_path):
+    import httpx
+
+    async def exercise():
+        started = set()
+        closed = set()
+        both_started = asyncio.Event()
+        release = asyncio.Event()
+        hold = True
+
+        async def runner(settings, model_id, *args, metadata, **kwargs):
+            side = metadata["side"]
+            if hold:
+                started.add(side)
+                if started == {"left", "right"}:
+                    both_started.set()
+                try:
+                    await release.wait()
+                finally:
+                    closed.add(side)
+            yield {"type": "result", "result": {"status": "complete", "answer": model_id, "files": {}}}
+
+        app = create_app(settings=Settings(api_key="model", querit_key="search"),
+            memory_path=tmp_path / "memory.json", run_events=runner)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            payload = {"execution": "live", "prompt": "Same task", "left": {"model_id": "a"},
+                       "right": {"model_id": "b"}}
+            running = asyncio.create_task(client.post("/api/compare", json=payload))
+            try:
+                await asyncio.wait_for(both_started.wait(), timeout=2)
+                running.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await running
+                assert closed == {"left", "right"}
+                hold = False
+                response = await client.post("/api/compare", json=payload)
+                assert response.status_code == 200
+                assert packets(response)[-1]["outcomes"] == {"left": "complete", "right": "complete"}
+            finally:
+                release.set()
+                if not running.done():
+                    await running
 
     asyncio.run(exercise())
 

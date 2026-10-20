@@ -44,19 +44,21 @@ For another compatible gateway, set its documented base and account key. The sam
 1. Enter one shared task and optionally paste source material. Choose 中文 or English for both UI and requested output language.
 2. Click **刷新可用模型 / Refresh available models**, or manually enter exact IDs on the left and right. No ID is preselected.
 3. Each side has its own optional reasoning level, initially blank / provider default. Blank omits an explicit override; the same default label does not mean different models have equal actual reasoning budgets. Different explicit levels compare both models and parameters, which the UI flags. Supported levels depend on the actual model/service. The parser allows `minimal`, `low`, `medium`, `high`, `max`, `none`, `xhigh`; the UI exposes the common `low`, `medium`, `high`, `max` choices. Anthropic requests never receive this OpenAI parameter. Changing a model requires reviewing its reasoning choice.
-4. Click **开始比较 / Compare models**. The server freezes the task, full material, language and approved-memory snapshot once. It runs left, then right with the same budgets and context middleware. Each graph has independent messages and file state. A left-side error does not stop the right side; a completed right-side result is retained if the other side fails.
+4. Click **开始比较 / Compare models**. The server freezes the task, full material, language and approved-memory snapshot once, then runs both sides concurrently with the same application budgets and context middleware. Each graph has independent messages, file state and run ID. Either side can finish first; one side's failure does not stop the other or erase its evidence.
 5. Inspect each side's answer, actual tool events, files, model/search calls, provider-reported tokens and elapsed time. File navigation opens the report by default when available; expand any trace event to inspect its exact recorded fields. A final `finish_reason=length` or `stop_reason=max_tokens` marks that side `incomplete`; partial evidence remains visible. Empty final messages do not fall back to older drafts.
-6. After the pair finishes, change a side's model or reasoning level and click **重新执行 A / Rerun A** or **重新执行 B / Rerun B**. Only that side runs again using its current selection; the other side's result, files and trace stay unchanged. The original shared task, material, output language and approved memory remain frozen. Changed common task/material require a new comparison. Changing the UI language or saving memory does not change an existing snapshot. Offline pairs remain offline when rerun.
+6. After the pair finishes, change a side's model or reasoning level and click **重新执行 A / Rerun A** or **重新执行 B / Rerun B**. Only that side runs again using its current selection; the other side's result, files and trace stay unchanged unless separately rerun. A and B reruns can run concurrently, but the same side cannot start a duplicate run. The original shared task, material, output language and approved memory remain frozen. Changed common task/material require a new comparison. Changing the UI language or saving memory does not change an existing snapshot. Offline pairs remain offline when rerun.
 7. Click **导出比较 / Export comparison** to download `context-lab-compare-<short-id>.json`, including the original submitted inputs/candidate choices, shared hashes/policy, and each side's latest result/events/errors, candidate and run ID. A rerun replaces that side's displayed/exported attempt; the export is not an attempt history. The export contains user materials and approved memory when present, but no provider keys.
 8. Edit a durable preference and click **批准并保存 / Approve and save**. A fresh comparison reads the new snapshot on both sides. A save during an active pair takes effect on the next pair; it cannot change the current pair's frozen memory.
 
-推理档位默认不显式传参；两侧都显示“提供方默认”不代表实际推理预算相同。显式档位不同意味着同时比较模型与参数，界面会提示。单侧重跑使用本侧当前模型/档位，沿用原始共同输入与已批准记忆，只替换本侧结果；另一侧的回答、文件与轨迹不变。共同任务或材料改变后需开始新比较。每次执行都有新的 `run_id`。
+推理档位默认不显式传参；两侧都显示“提供方默认”不代表实际推理预算相同。显式档位不同意味着同时比较模型与参数，界面会提示。整组比较并行运行 A/B；单侧重跑使用本侧当前模型/档位，沿用原始共同输入与已批准记忆，只替换本侧结果。A/B 可同时独立重跑，同一侧不重复启动，每次执行都有新的 `run_id`，错误互不影响。共同任务或材料改变后需开始新比较。
+
+任何一侧运行期间，新比较、模型目录刷新和导出暂时禁用。整组比较完成后，单侧重跑期间仍可启动另一侧重跑。 New comparisons, model discovery and export are disabled while either side is running. After the initial pair finishes, one side's rerun does not block the other side's rerun.
 
 比较快照仅保留在当前服务进程内，最多保留最近 16 组；重启服务或旧快照被淘汰后，需开始新比较。已展示的证据不会因此清空。 Snapshots are process-local and limited to the latest 16 comparisons. After a restart or eviction, start a new comparison; existing browser evidence remains available.
 
 模型回答与 `.md` / `.markdown` 文件支持标题、表格、代码块和链接。原始 HTML 不执行，远程图片以链接显示；其他文件以纯文本显示。 Answers and Markdown files render headings, tables, code blocks and links with raw HTML disabled. Remote images appear as links; other files remain plain text.
 
-两侧共享的是相同输入、批准记忆与上下文策略，不是模型行为或检索结果。它们各自决定搜索词与调用顺序，网络内容、缓存和时间也可能变化。因此这里是可检查的应用比较，不是受控性能排名；不要仅凭一次 Token 或耗时差异宣称模型优劣。默认顺序执行用于减少并发限流，也意味着两侧开始时间不同。
+两侧共享的是相同输入、批准记忆与上下文策略，不是模型行为或检索结果。它们各自决定搜索词与调用顺序，网络内容、缓存和时间也可能变化。因此这里是可检查的应用比较，不是受控性能排名；不要仅凭一次 Token 或耗时差异宣称模型优劣。并行执行也可能受到端点并发限流影响。 Both sides execute concurrently; endpoint concurrency limits may affect either run.
 
 **离线示例 / Offline example** returns clearly labeled illustrative files and mechanisms for both sides without any model/search calls. It does not measure quality, cost, tokens or speed, and it does not assert the real harness ran. Every example path shown in its events can be inspected.
 
@@ -64,13 +66,17 @@ For another compatible gateway, set its documented base and account key. The sam
 
 | Policy applied independently to each side | Value |
 | --- | --- |
-| Output limit per model call (not per comparison) | 3,000 tokens |
+| Output limit per model call (not per comparison) | 3,000 tokens by default; configurable |
 | Querit search budget | 4 query attempts, 3 results each |
 | Approximate summarization trigger | 6,000 tokens |
 | Messages retained verbatim | latest 6 |
-| Graph recursion limit | 32 |
+| Graph recursion limit | 32 by default; configurable |
 | Model request timeout / transient retries | 60 seconds / 1 |
-| Side execution timeout | 180 seconds |
+| Side execution timeout | 180 seconds by default; configurable |
+
+Optionally set `CONTEXT_LAB_MAX_OUTPUT_TOKENS=3000` in local `.env` and restart the server to change the output cap per model call. The app accepts integers from 128 to 32,768. The same configured cap applies to both sides; reasoning tokens may consume it, and each model/endpoint must support the chosen value. 可在 `.env` 配置该变量并重启，默认 3,000，允许整数范围 128–32,768；两侧使用同一应用输出上限，推理 Token 也可能消耗该预算，实际支持值以模型与端点为准。
+
+The same `.env` also accepts `CONTEXT_LAB_RECURSION_LIMIT=32` (integer 8–256) and `CONTEXT_LAB_RUN_TIMEOUT_SECONDS=180` (integer 30–1,800). Restart after editing. These are shared application limits applied independently to each side, not separate A/B settings. A longer task may need more graph steps or time; increasing either limit can also allow more calls and usage. 同一 `.env` 可配置图步数上限和每侧总时限；默认分别为 32 步、180 秒，允许范围分别为 8–256、30–1,800 秒。两侧使用相同配置，独立计量；提高上限也可能增加调用与用量。
 
 - `StateBackend` gives each graph its own virtual filesystem, without host files or a shell. Shared pasted material is preserved in full at `/sources/user-material.md`; the initial task carries its path and a 300-character preview. This explicit source offload is distinct from native large-tool-result offloading.
 - The original `/skills/research-brief/SKILL.md` supplies research procedure through Deep Agents' on-demand skill loading. `researcher` can isolate noisy research in a subagent. The model may choose not to delegate or load the skill; configuration alone is not evidence of execution.
@@ -108,7 +114,7 @@ The default explicitly disables LangSmith tracing. If enabled with the appropria
 }
 ```
 
-The response is newline-delimited JSON: `compare_start` with shared policy and SHA-256 hashes of the task, material and memory; `side_start`; side-specific `event`, `result` or `error`; `side_end` with its outcome; then `compare_end` with per-side outcomes. Every packet has `compare_id`; side packets also have `side=left|right` and the attempt's fresh `run_id`. Each final result includes its configured `model`, `provider`, `status`, `finish_reason`, actual metrics, state files, observed events and effective options. The app does not infer a provider alias's underlying model identity. The local HTTP surface enforces same-origin requests and loopback hostnames.
+The response is newline-delimited JSON: `compare_start` with shared policy and SHA-256 hashes of the task, material and memory; each side's `side_start`, `event`, `result` or `error`, and `side_end`; then `compare_end` after both sides finish. Side packets may interleave because execution is concurrent. Every packet has `compare_id`; side packets also have `side=left|right` and the attempt's fresh `run_id`. Each final result includes its configured `model`, `provider`, `status`, `finish_reason`, actual metrics, state files, observed events and effective options. The app does not infer a provider alias's underlying model identity. The local HTTP surface enforces same-origin requests and loopback hostnames.
 
 `POST /api/compare/{compare_id}/rerun/left` or `/rerun/right` accepts only the new candidate selection:
 
@@ -116,7 +122,7 @@ The response is newline-delimited JSON: `compare_start` with shared policy and S
 {"model_id": "your-selected-model", "reasoning_effort": ""}
 ```
 
-The server reuses its frozen snapshot; task, material, memory or language fields in a rerun body cannot replace it. The stream contains only that side's `side_start`, `event`/`result`/`error` and `side_end`, with the original `compare_id` and a new `run_id`. Only one pair or side can execute at a time (`409` when busy); a missing/evicted snapshot returns `404` and requires a new pair. 单侧重跑接口仅提交模型与档位，复用服务端快照；不会重跑另一侧。服务忙时返回 `409`，快照不存在时返回 `404`，需重新开始比较。
+The server reuses its frozen snapshot; task, material, memory or language fields in a rerun body cannot replace it. The stream contains only that side's `side_start`, `event`/`result`/`error` and `side_end`, with the original `compare_id` and a new `run_id`. Reruns of different sides of the same comparison may execute concurrently; a duplicate run of an active side returns `409`. A new/different comparison cannot start while runs are active (`409`). A missing/evicted snapshot returns `404` and requires a new pair. 单侧接口仅提交模型与档位，复用服务端快照；同一比较的 A/B 可同时重跑。同一侧重复启动或运行期间新建/切换比较返回 `409`；快照不存在返回 `404`，需新建比较。
 
 ## 离线验证 / Offline tests
 

@@ -34,7 +34,7 @@ def create_model(settings, model_id, reasoning_effort=""):
     model_id = settings.require_live(model_id, reasoning_effort)
     options = dict(model=model_id, base_url=settings.base_url, api_key=settings.api_key,
                    timeout=CONTEXT_POLICY["request_timeout_seconds"], max_retries=CONTEXT_POLICY["request_max_retries"],
-                   max_tokens=CONTEXT_POLICY["max_output_tokens"])
+                   max_tokens=settings.max_output_tokens)
     if settings.provider == "openai":
         from langchain_openai import ChatOpenAI
         effort = settings.effective_options(reasoning_effort)["reasoning_effort"]
@@ -116,6 +116,7 @@ async def live_events(settings, model_id, prompt, language, memory, material="",
                       reasoning_effort="", metadata=None, model=None, search_tool=None):
     """Yield actual harness events and final graph-state files; do not infer mechanisms."""
     started = time.perf_counter()
+    policy = settings.context_policy
     graph, searches = build_agent(settings, model_id, reasoning_effort, model=model, search_tool=search_tool)
     events, state = [], {}
     usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
@@ -127,9 +128,9 @@ async def live_events(settings, model_id, prompt, language, memory, material="",
         yield {"type": "event", "event": event}
     from langsmith import tracing_context
     with tracing_context(enabled=settings.tracing_enabled, project_name=settings.trace_project):
-        async with asyncio.timeout(CONTEXT_POLICY["run_timeout_seconds"]):
+        async with asyncio.timeout(policy["run_timeout_seconds"]):
             async for event in graph.astream_events(seed_input(prompt, language, memory, material),
-                                                   config={"recursion_limit": CONTEXT_POLICY["recursion_limit"],
+                                                   config={"recursion_limit": policy["recursion_limit"],
                                                            "metadata": metadata or {},
                                                            "tags": ["context-lab-compare", (metadata or {}).get("side", "standalone")]}, version="v2"):
                 kind, name, data = event["event"], event.get("name", ""), event.get("data", {})
@@ -167,7 +168,7 @@ async def live_events(settings, model_id, prompt, language, memory, material="",
               "answer": answer, "files": files, "events": events,
               "status": "incomplete" if incomplete else "complete", "finish_reason": finish_reason,
               "warning": "output_token_limit" if incomplete else None,
-              "effective_options": settings.effective_options(reasoning_effort), "context_policy": dict(CONTEXT_POLICY),
+              "effective_options": settings.effective_options(reasoning_effort), "context_policy": settings.context_policy,
               "metrics": {"provider_calls": calls, "search_calls": searches["count"],
                           "tokens": usage if reported else None,
                           "elapsed_ms": round((time.perf_counter() - started) * 1000)}}
