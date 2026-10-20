@@ -5,6 +5,8 @@ import asyncio
 import hashlib
 import json
 import os
+from collections import OrderedDict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
@@ -20,6 +22,7 @@ from .context import CONTEXT_POLICY, MemoryStore, Settings, fixture_run, validat
 
 load_dotenv(interpolate=False)
 STATIC = Path(__file__).parent / "static"
+MAX_COMPARISONS = 16
 
 
 class CandidateInput(BaseModel):
@@ -41,11 +44,23 @@ class MemoryInput(BaseModel):
     approved: bool = False
 
 
+@dataclass(frozen=True)
+class ComparisonSnapshot:
+    execution: str
+    language: str
+    prompt: str
+    material: str
+    memory: str
+    shared: dict
+
+
 def create_app(*, settings=None, memory_path=None, run_events=None, models_loader=None):
     settings = settings or Settings.from_env()
     memory = MemoryStore(memory_path or Path(".context-lab/memory.json"))
     app = FastAPI(title="Context Lab Compare")
     lock = asyncio.Lock()
+    # Keep only recent inputs in this local process, never in browser-controlled payloads.
+    comparisons: OrderedDict[str, ComparisonSnapshot] = OrderedDict()
 
     def read_memory():
         try:
@@ -99,65 +114,102 @@ def create_app(*, settings=None, memory_path=None, run_events=None, models_loade
             raise HTTPException(400, str(error)) from None
         return {"saved": True}
 
+    def validate_candidates(execution, candidates):
+        try:
+            for candidate in candidates:
+                validate_reasoning_effort(candidate.reasoning_effort)
+                if execution == "live":
+                    settings.require_live(candidate.model_id, candidate.reasoning_effort)
+        except ValueError as error:
+            raise HTTPException(400, str(error)) from None
+
+    def packet(item, compare_id, side=None):
+        return json.dumps({**item, "compare_id": compare_id, **({"side": side} if side else {})}, ensure_ascii=False) + "\n"
+
+    async def side_events(compare_id, side, candidate, snapshot, *, rerun=False):
+        from .agent import live_events
+
+        run_id = str(uuid4())
+        outcome = "incomplete"
+        yield {"type": "side_start", "run_id": run_id, "model_id": candidate.model_id,
+               "execution": snapshot.execution, "shared": snapshot.shared,
+               "effective_options": settings.effective_options(candidate.reasoning_effort)}
+        try:
+            if snapshot.execution == "fixture":
+                result = fixture_run(snapshot.prompt, snapshot.language, candidate.model_id, snapshot.memory)
+                result["context_policy"] = dict(CONTEXT_POLICY)
+                result["effective_options"] = settings.effective_options(candidate.reasoning_effort)
+                outcome = "fixture"
+                yield {"type": "result", "run_id": run_id, "result": result}
+            else:
+                metadata = {"compare_id": compare_id, "run_id": run_id, "side": side,
+                            "model_id": candidate.model_id, "language": snapshot.language,
+                            "execution": snapshot.execution, "rerun": rerun,
+                            **{key: value for key, value in snapshot.shared.items() if key.endswith("_sha256")}}
+                async for item in (run_events or live_events)(
+                    settings, candidate.model_id, snapshot.prompt, snapshot.language, snapshot.memory, snapshot.material,
+                    reasoning_effort=candidate.reasoning_effort, metadata=metadata,
+                ):
+                    if item.get("type") == "result":
+                        outcome = item["result"].get("status", "complete")
+                    yield {**item, "run_id": run_id}
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            outcome = "error"
+            yield {"type": "error", "run_id": run_id, "code": "side_run_failed",
+                   "message": "This candidate failed; usage may have been incurred."}
+        yield {"type": "side_end", "run_id": run_id, "outcome": outcome}
+
     @app.post("/api/compare")
     async def compare(body: CompareInput):
         if not body.prompt.strip():
             raise HTTPException(400, "Task must not be empty.")
-        try:
-            for candidate in (body.left, body.right):
-                validate_reasoning_effort(candidate.reasoning_effort)
-                if body.execution == "live":
-                    settings.require_live(candidate.model_id, candidate.reasoning_effort)
-        except ValueError as error:
-            raise HTTPException(400, str(error)) from None
+        validate_candidates(body.execution, (body.left, body.right))
         if lock.locked():
             raise HTTPException(409, "A comparison is already active.")
         # Freeze memory once for the pair, even if a Save action happens between sides.
-        snapshot = read_memory()
+        approved_memory = read_memory()
         await lock.acquire()
         compare_id = str(uuid4())
         shared = {"language": body.language, "context_policy": dict(CONTEXT_POLICY),
-                  "memory_sha256": hashlib.sha256(snapshot.encode("utf-8")).hexdigest(),
+                  "memory_sha256": hashlib.sha256(approved_memory.encode("utf-8")).hexdigest(),
                   "prompt_sha256": hashlib.sha256(body.prompt.encode("utf-8")).hexdigest(),
                   "material_sha256": hashlib.sha256(body.material.encode("utf-8")).hexdigest(),
                   "retrieval": "independent_dynamic_search"}
+        snapshot = ComparisonSnapshot(body.execution, body.language, body.prompt, body.material, approved_memory, shared)
+        comparisons[compare_id] = snapshot
+        while len(comparisons) > MAX_COMPARISONS:
+            comparisons.popitem(last=False)
 
         async def stream():
-            def packet(item, side=None):
-                return json.dumps({"compare_id": compare_id, **({"side": side} if side else {}), **item}, ensure_ascii=False) + "\n"
-
             outcomes = {}
             try:
-                from .agent import live_events
-                yield packet({"type": "compare_start", "shared": shared})
+                yield packet({"type": "compare_start", "shared": shared}, compare_id)
                 for side in ("left", "right"):
-                    candidate = getattr(body, side)
-                    yield packet({"type": "side_start", "model_id": candidate.model_id}, side)
-                    try:
-                        if body.execution == "fixture":
-                            result = fixture_run(body.prompt, body.language, candidate.model_id, snapshot)
-                            result["context_policy"] = dict(CONTEXT_POLICY)
-                            result["effective_options"] = settings.effective_options(candidate.reasoning_effort)
-                            outcomes[side] = "fixture"
-                            yield packet({"type": "result", "result": result}, side)
-                        else:
-                            metadata = {"compare_id": compare_id, "side": side,
-                                        "model_id": candidate.model_id, "language": body.language}
-                            async for item in (run_events or live_events)(
-                                settings, candidate.model_id, body.prompt, body.language, snapshot, body.material,
-                                reasoning_effort=candidate.reasoning_effort, metadata=metadata,
-                            ):
-                                if item.get("type") == "result":
-                                    outcomes[side] = item["result"].get("status", "complete")
-                                yield packet(item, side)
-                            outcomes.setdefault(side, "incomplete")
-                    except asyncio.CancelledError:
-                        raise
-                    except Exception:
-                        outcomes[side] = "error"
-                        yield packet({"type": "error", "code": "side_run_failed",
-                                      "message": "This candidate failed; usage may have been incurred. The other side continues."}, side)
-                yield packet({"type": "compare_end", "outcomes": outcomes})
+                    async for item in side_events(compare_id, side, getattr(body, side), snapshot):
+                        if item["type"] == "side_end":
+                            outcomes[side] = item["outcome"]
+                        yield packet(item, compare_id, side)
+                yield packet({"type": "compare_end", "outcomes": outcomes}, compare_id)
+            finally:
+                lock.release()
+        return StreamingResponse(stream(), media_type="application/x-ndjson")
+
+    @app.post("/api/compare/{compare_id}/rerun/{side}")
+    async def rerun_side(compare_id: str, side: Literal["left", "right"], body: CandidateInput):
+        snapshot = comparisons.get(compare_id)
+        if snapshot is None:
+            raise HTTPException(404, "Comparison unavailable or expired. Start a new comparison.")
+        validate_candidates(snapshot.execution, (body,))
+        if lock.locked():
+            raise HTTPException(409, "A comparison is already active.")
+        await lock.acquire()
+
+        async def stream():
+            try:
+                async for item in side_events(compare_id, side, body, snapshot, rerun=True):
+                    yield packet(item, compare_id, side)
             finally:
                 lock.release()
         return StreamingResponse(stream(), media_type="application/x-ndjson")

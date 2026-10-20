@@ -233,6 +233,121 @@ def test_compare_freezes_same_inputs_and_memory_separates_options_and_continues_
     assert "private provider error" not in response.text
 
 
+def test_single_side_rerun_keeps_frozen_inputs_and_gives_each_attempt_its_own_identity(tmp_path):
+    path = tmp_path / "memory.json"
+    MemoryStore(path).save("Approved before compare", approved=True)
+    observed = []
+
+    async def runner(settings, model_id, prompt, language, memory, material, *, reasoning_effort, metadata):
+        observed.append((model_id, prompt, language, memory, material, reasoning_effort, metadata))
+        yield {"type": "event", "event": {"kind": "tool", "name": "read_file", "detail": "started"}}
+        yield {"type": "result", "result": {"status": "complete", "answer": model_id, "files": {}}}
+
+    client = TestClient(create_app(settings=Settings(api_key="model", querit_key="search"), memory_path=path,
+                                  run_events=runner))
+    original = packets(client.post("/api/compare", json={"execution": "live", "language": "en",
+        "prompt": "Original task", "material": "Original source", "left": {"model_id": "a"},
+        "right": {"model_id": "b"}}))
+    compare_id = original[0]["compare_id"]
+    client.put("/api/memory", json={"text": "New preference after compare", "approved": True})
+    rerun = packets(client.post(f"/api/compare/{compare_id}/rerun/left", json={"model_id": "a-new",
+        "reasoning_effort": "high", "prompt": "Injected task", "memory": "Injected preference"}))
+
+    assert len(observed) == 3
+    assert observed[-1][:6] == ("a-new", "Original task", "en", "Approved before compare", "Original source", "high")
+    assert {item["side"] for item in rerun} == {"left"}
+    assert {item["compare_id"] for item in rerun} == {compare_id}
+    assert [item["type"] for item in rerun] == ["side_start", "event", "result", "side_end"]
+    assert rerun[0]["shared"] == original[0]["shared"]
+    assert rerun[0]["model_id"] == "a-new"
+    assert rerun[0]["effective_options"] == {"reasoning_effort": "high"}
+    assert rerun[-1]["outcome"] == "complete"
+    starts = [item for item in original + rerun if item["type"] == "side_start"]
+    assert len({item["run_id"] for item in starts}) == 3
+    assert {item["run_id"] for item in rerun} == {starts[-1]["run_id"]}
+    assert observed[-1][6]["run_id"] == starts[-1]["run_id"]
+    assert observed[-1][6]["rerun"] is True
+    assert observed[-1][6]["prompt_sha256"] == original[0]["shared"]["prompt_sha256"]
+
+
+def test_failed_side_rerun_unlocks_the_pair_for_the_other_side(tmp_path):
+    observed = []
+
+    async def runner(settings, model_id, *args, **kwargs):
+        observed.append(model_id)
+        if model_id == "fail":
+            raise RuntimeError("private provider message")
+        yield {"type": "result", "result": {"status": "complete", "answer": model_id, "files": {}}}
+
+    client = TestClient(create_app(settings=Settings(api_key="model", querit_key="search"),
+        memory_path=tmp_path / "memory.json", run_events=runner))
+    original = packets(client.post("/api/compare", json={"execution": "live", "prompt": "Same task",
+        "left": {"model_id": "a"}, "right": {"model_id": "b"}}))
+    url = f"/api/compare/{original[0]['compare_id']}/rerun"
+    failed = client.post(f"{url}/left", json={"model_id": "fail"})
+    failed_packets = packets(failed)
+    assert failed_packets[-1]["type"] == "side_end"
+    assert failed_packets[-1]["outcome"] == "error"
+    assert any(item["type"] == "error" for item in failed_packets)
+    assert "private provider message" not in failed.text
+    successful = client.post(f"{url}/right", json={"model_id": "right-new"})
+    assert successful.status_code == 200
+    assert packets(successful)[-1]["outcome"] == "complete"
+    assert observed == ["a", "b", "fail", "right-new"]
+
+
+def test_rerun_rejects_unknown_expired_and_invalid_requests(tmp_path):
+    client = TestClient(create_app(settings=Settings(), memory_path=tmp_path / "memory.json"))
+    assert client.post("/api/compare/missing/rerun/left", json={}).status_code == 404
+    original = packets(client.post("/api/compare", json={"prompt": "First fixture"}))
+    url = f"/api/compare/{original[0]['compare_id']}/rerun"
+    assert client.post(f"{url}/other", json={}).status_code == 422
+    assert client.post(f"{url}/left", json={"reasoning_effort": "turbo"}).status_code == 400
+    assert client.post(f"{url}/left", json={"model_id": "x" * 121}).status_code == 422
+    fixture = packets(client.post(f"{url}/right", json={"model_id": "new-fixture-model"}))
+    assert fixture[-1]["outcome"] == "fixture"
+    assert fixture[1]["result"]["metrics"]["provider_calls"] == 0
+    for number in range(16):
+        client.post("/api/compare", json={"prompt": f"New fixture {number}"})
+    assert client.post(f"{url}/left", json={}).status_code == 404
+
+
+def test_active_rerun_blocks_full_and_side_runs_until_the_stream_finishes(tmp_path):
+    import httpx
+
+    async def exercise():
+        started = asyncio.Event()
+        release = asyncio.Event()
+        hold = False
+
+        async def runner(settings, model_id, *args, **kwargs):
+            if hold:
+                started.set()
+                await release.wait()
+            yield {"type": "result", "result": {"status": "complete", "answer": model_id, "files": {}}}
+
+        app = create_app(settings=Settings(api_key="model", querit_key="search"),
+            memory_path=tmp_path / "memory.json", run_events=runner)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver") as client:
+            payload = {"execution": "live", "prompt": "Same task", "left": {"model_id": "a"},
+                       "right": {"model_id": "b"}}
+            initial = packets(await client.post("/api/compare", json=payload))
+            url = f"/api/compare/{initial[0]['compare_id']}/rerun"
+            hold = True
+            running = asyncio.create_task(client.post(f"{url}/left", json={"model_id": "a"}))
+            try:
+                await asyncio.wait_for(started.wait(), timeout=5)
+                assert (await client.post("/api/compare", json=payload)).status_code == 409
+                assert (await client.post(f"{url}/right", json={"model_id": "b"})).status_code == 409
+            finally:
+                release.set()
+                response = await running
+            assert packets(response)[-1]["outcome"] == "complete"
+            assert (await client.post(f"{url}/right", json={"model_id": "b"})).status_code == 200
+
+    asyncio.run(exercise())
+
+
 def test_http_fixture_gate_memory_and_same_origin(tmp_path):
     path = tmp_path / "memory.json"
     client = TestClient(create_app(settings=Settings(), memory_path=path))
