@@ -1,10 +1,10 @@
 """Exercise the shipped UI offline; Node is optional and not an app dependency."""
-from pathlib import Path
+
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
-
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="Node.js is unavailable; optional offline UI checks skipped")
@@ -19,10 +19,12 @@ const [appPath, scenario] = process.argv.slice(1);
 class Element {
   constructor(tag='div') {
     this.tagName=tag; this.value=''; this.textContent=''; this.children=[];
-    this.dataset={}; this.listeners={}; this.classList={toggle(){},add(){}};
+    this.dataset={}; this.listeners={}; this.attributes={}; this.classList={toggle(){},add(){}};
   }
   append(...items) { this.children.push(...items); }
   replaceChildren(...items) { this.children=[...items]; }
+  setAttribute(name, value) { this.attributes[name]=value; }
+  removeAttribute(name) { delete this.attributes[name]; }
   addEventListener(event, callback) { this.listeners[event]=callback; }
   querySelectorAll(tag) { return this.children.filter(item=>item.tagName===tag); }
   click() { return this.listeners.click?.(); }
@@ -49,12 +51,19 @@ const packets=[{type:'compare_start',compare_id:'12345678-pair',shared:{}},
   {type:'error',side:'left',code:'side_run_failed',message:'Candidate failed'},
   {type:'side_start',side:'right'}, {type:'result',side:'right',result},
   {type:'compare_end',outcomes:{left:'error',right:'complete'}}];
+if(scenario==='evidence'){
+  result.answer='# Findings\n\nCompleted answer';
+  result.files={'/sources/raw.txt':'<script>never execute</script>',
+    '/reports/brief.md':'# Brief\n\n| Finding | Source |\n| --- | --- |\n| One | Official docs |'};
+  result.events=[{kind:'tool',name:'read_file',detail:'finished',scope:'researcher',phase:'finished'}];
+}
 const configuration={keys_ready:true,model_key_ready:true,provider:'openai',memory:'',
   base_url:'https://example.test/v1',models_base_url:'https://example.test/v1',tracing_enabled:false};
 function response() {
   let sent=false;
   return {ok:true,body:{getReader:()=>({read:async()=>sent?{done:true}:
-    (sent=true,{done:false,value:new TextEncoder().encode(packets.map(item=>JSON.stringify(item)).join('\n')+'\n')})})}};
+    (sent=true,{done:false,value:new TextEncoder().encode(
+      packets.map(item=>JSON.stringify(item)).join('\n')+'\n')})})}};
 }
 let held=false, release;
 const context=vm.createContext({
@@ -85,18 +94,50 @@ const evaluate=source=>vm.runInContext(source,context);
     get('left-model').value='next-a'; get('left-effort').value='max';
     get('right-model').value='next-b'; get('right-effort').value='low';
     get('language').click();
-    assert.match(get('left-result-from').textContent,/submitted-a.*low/, 'Failed runs must retain their submitted identity');
+    assert.match(get('left-result-from').textContent,/submitted-a.*low/,
+      'Failed runs must retain their submitted identity');
     assert.doesNotMatch(get('left-result-from').textContent,/next-a|max/);
-    assert.match(get('right-result-from').textContent,/submitted-b.*high/, 'Completed results must retain their actual identity');
+    assert.match(get('right-result-from').textContent,/submitted-b.*high/,
+      'Completed results must retain their actual identity');
     assert.doesNotMatch(get('right-result-from').textContent,/next-b/);
-    assert.equal(get('left-events').children[0].children[0].textContent,'querit_search');
+    assert.equal(get('left-events').children[0].children[0].children[0].children[0].textContent,'querit_search');
     assert.equal(get('right-answer').textContent,'Completed answer');
+  } else if (scenario==='evidence') {
+    const calls=[];
+    context.ContextMarkdown={render:text=>{calls.push(text);return `<article>${text}</article>`;}};
+    await evaluate("compare('live')");
+    assert.ok(calls.includes(result.answer), 'Model answers must use the safe Markdown renderer');
+    assert.ok(calls.includes(result.files['/reports/brief.md']), 'Report preview must use the same renderer');
+    assert.equal(get('right-file-path').textContent,'/reports/brief.md', 'Reports should open by default');
+    assert.equal(get('right-file-format').textContent,'Markdown');
+    const buttons=get('right-files').children;
+    assert.equal(buttons[1].attributes['aria-pressed'],'true');
+    assert.equal(buttons[1].children[0].textContent,'brief.md');
+    assert.equal(buttons[1].children[1].textContent,'/reports/');
+    buttons[0].click();
+    assert.equal(get('right-file-path').textContent,'/sources/raw.txt');
+    assert.equal(get('right-file-content').children[0].textContent,'<script>never execute</script>',
+      'Non-Markdown source content must be inserted as text');
+    assert.equal(buttons[0].attributes['aria-pressed'],'true');
+    const event=get('right-events').children[0].children[0];
+    assert.match(event.children[0].children[1].textContent,/Tool.*finished.*researcher/);
+    assert.deepEqual(JSON.parse(event.children[1].textContent),result.events[0],
+      'Expanded trace detail must preserve the exact observed event');
+    get('language').click();
+    assert.equal(get('right-file-path').textContent,'/sources/raw.txt','Language changes must preserve file selection');
+    assert.equal(get('right-file-format').textContent,'纯文本');
+    assert.equal(get('right-event-count').textContent,1);
+    assert.equal(get('left-event-count').textContent,1,'Failed candidates must retain observed events');
+    assert.equal(get('inference-endpoint').attributes.href,configuration.base_url);
+    assert.equal(get('catalog-endpoint').attributes.href,configuration.models_base_url);
+    assert.doesNotMatch(html,/<details class="connection"/,'Connections must be visible without expanding a panel');
+    assert.doesNotMatch(html,/id="tracing"|data-i18n="budget"|data-i18n="setupNote"/);
   } else { throw new Error(`Unknown scenario: ${scenario}`); }
 })().catch(error=>{ console.error(error); process.exitCode=1; });
 """
 
 
-@pytest.mark.parametrize("scenario", ["repeat", "ownership"])
+@pytest.mark.parametrize("scenario", ["repeat", "ownership", "evidence"])
 def test_comparison_ui_state_and_ownership(scenario):
     result = subprocess.run([NODE, "-e", SCRIPT, str(APP), scenario], capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr

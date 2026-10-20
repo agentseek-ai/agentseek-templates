@@ -1,0 +1,13 @@
+markdown-it 15.0.2 (MIT)
+https://github.com/markdown-it/markdown-it
+https://registry.npmjs.org/markdown-it/-/markdown-it-15.0.2.tgz
+
+markdown-it.min.js is the unmodified package file:
+  dist/browser/markdown-it.umd.min.js
+Its SHA-256 is:
+  635972b985228e8af9f0143647c68616b7a3bb09f6946e7e4a52e43dcf5e7be5
+
+The complete upstream license is included in markdown-it.LICENSE.txt.
+This browser bundle is vendored so the template works without a runtime CDN.
+The wrapper in markdown.js disables raw HTML, restricts outgoing URL schemes,
+and displays image references as links without loading remote image resources.

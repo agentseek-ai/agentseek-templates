@@ -10,7 +10,7 @@ uv run --frozen python -m {{ cookiecutter.project_slug }}.setup
 uv run --frozen python -m {{ cookiecutter.project_slug }}.server
 ```
 
-Open `http://127.0.0.1:{{ cookiecutter.port }}`. AgentSeek users may run `agentseek task sync`, `agentseek task setup`, then `agentseek dev`. One FastAPI process serves both the API and static browser UI. `frontend/package.json` is metadata only; no Node build is required.
+Open `http://127.0.0.1:{{ cookiecutter.port }}`. AgentSeek users may run `agentseek task sync`, `agentseek task setup`, then `agentseek dev`. One FastAPI process serves both the API and static browser UI. Markdown rendering uses the bundled local `markdown-it==15.0.2`; no Node build or runtime CDN is required. `frontend/package.json` is metadata only.
 
 Setup asks for the protocol, its base URL, its hidden key and the hidden Querit key. It preserves the other protocol's configuration and custom variables. Secrets are stored only in local `.env` with owner-only permissions, ignored by Git and never returned to the browser. Restart after changing configuration. There are no model presets: choose both model IDs in the UI for each comparison.
 
@@ -23,7 +23,7 @@ Setup asks for the protocol, its base URL, its hidden key and the hidden Querit 
 | `AGENTSEEK_MODEL_PROVIDER=openai` | `OPENAI_API_KEY` | `OPENAI_BASE_URL` | `OPENAI_API_BASE` |
 | `AGENTSEEK_MODEL_PROVIDER=anthropic` | `ANTHROPIC_API_KEY` | `ANTHROPIC_BASE_URL` | `ANTHROPIC_API_URL` |
 
-Canonical values take precedence over aliases. Defaults are the official provider bases `https://api.openai.com/v1` and `https://api.anthropic.com`. `ChatOpenAI` uses Chat Completions (`use_responses_api=False`); `ChatAnthropic` uses the Anthropic Messages protocol. Compatible HTTPS endpoints and HTTP loopback endpoints (`localhost`, `127.0.0.1`, `[::1]`) can be configured with matching credentials and callable model IDs. For a local server that does not authenticate, use a non-secret placeholder key such as `local`; the SDK requires a non-empty key.
+Canonical values take precedence over aliases. Defaults are the official provider bases `https://api.openai.com/v1` and `https://api.anthropic.com`. The UI shows the configured inference and model-catalog endpoints directly. `ChatOpenAI` uses Chat Completions (`use_responses_api=False`); `ChatAnthropic` uses the Anthropic Messages protocol. Compatible HTTPS endpoints and HTTP loopback endpoints (`localhost`, `127.0.0.1`, `[::1]`) can be configured with matching credentials and callable model IDs. For a local server that does not authenticate, use a non-secret placeholder key such as `local`; the SDK requires a non-empty key.
 
 `AGENTSEEK_MODELS_BASE_URL` optionally separates the model directory base from the inference base. Leave it blank to reuse the selected protocol's inference base. The server calls the selected SDK's `models.list()` with the same selected key, a 15-second overall timeout and no automatic retry. Pagination is bounded to 10 pages / approximately 500 IDs; a partial list is labeled as such. The directory is not filtered by guessed capabilities: it can include embedding, OCR or models unavailable to the account. A catalog ID does not guarantee chat or tool-call support.
 
@@ -45,9 +45,11 @@ For another compatible gateway, set its documented base and account key. The sam
 2. Click **刷新可用模型 / Refresh available models**, or manually enter exact IDs on the left and right. No ID is preselected.
 3. Each side has its own optional reasoning level, initially blank / provider default. It is sent only through OpenAI-compatible adapters and only if explicitly chosen. Supported levels depend on the actual model/service. The parser allows `minimal`, `low`, `medium`, `high`, `max`, `none`, `xhigh`; the UI exposes the common `low`, `medium`, `high`, `max` choices. Anthropic requests never receive this OpenAI parameter. Changing a model requires reviewing its reasoning choice.
 4. Click **开始比较 / Compare models**. The server freezes the task, full material, language and approved-memory snapshot once. It runs left, then right with the same budgets and context middleware. Each graph has independent messages and file state. A left-side error does not stop the right side; a completed right-side result is retained if the other side fails.
-5. Inspect each side's answer, actual tool events, files, model/search calls, provider-reported tokens and elapsed time. A final `finish_reason=length` or `stop_reason=max_tokens` marks that side `incomplete`; partial evidence remains visible. Empty final messages do not fall back to older drafts.
+5. Inspect each side's answer, actual tool events, files, model/search calls, provider-reported tokens and elapsed time. File navigation opens the report by default when available; expand any trace event to inspect its exact recorded fields. A final `finish_reason=length` or `stop_reason=max_tokens` marks that side `incomplete`; partial evidence remains visible. Empty final messages do not fall back to older drafts.
 6. Click **导出比较 / Export comparison** to download `context-lab-compare-<short-id>.json`, including the submitted shared task/material/language and candidate choices, shared hashes/policy, and both sides' original results/events/errors. The export contains user materials and approved memory when present, but no provider keys.
 7. Edit a durable preference and click **批准并保存 / Approve and save**. A fresh comparison reads the new snapshot on both sides. A save during an active pair takes effect on the next pair; it cannot change the current pair's frozen memory.
+
+模型回答与 `.md` / `.markdown` 文件支持标题、表格、代码块和链接。原始 HTML 不执行，远程图片以链接显示；其他文件以纯文本显示。 Answers and Markdown files render headings, tables, code blocks and links with raw HTML disabled. Remote images appear as links; other files remain plain text.
 
 两侧共享的是相同输入、批准记忆与上下文策略，不是模型行为或检索结果。它们各自决定搜索词与调用顺序，网络内容、缓存和时间也可能变化。因此这里是可检查的应用比较，不是受控性能排名；不要仅凭一次 Token 或耗时差异宣称模型优劣。默认顺序执行用于减少并发限流，也意味着两侧开始时间不同。
 
