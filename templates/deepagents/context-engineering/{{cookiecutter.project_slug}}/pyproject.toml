@@ -1,0 +1,31 @@
+[project]
+name = "{{ cookiecutter.project_slug }}"
+version = "0.1.0"
+description = "Bilingual Deep Agents context-engineering lab with Querit search."
+authors = [{ name = "{{ cookiecutter.author }}" }]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "deepagents==0.7.8",
+    "langchain-openai>=1.1,<2",
+    "langchain-anthropic>=1.3,<2",
+    "langchain-querit==0.0.3",
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.34,<1",
+    "python-dotenv>=1,<2",
+]
+
+[dependency-groups]
+test = ["pytest>=8.4,<10", "httpx>=0.28,<1"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"{{ cookiecutter.project_slug }}" = ["static/*"]

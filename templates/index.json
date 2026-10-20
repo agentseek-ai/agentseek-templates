@@ -1,6 +1,7 @@
 {
   "bub/default": "Lightweight Bub agent with AgentSeek lifecycle spec.",
   "deepagents/content-builder": "DeepAgents content builder with skills, subagents, image generation, streamed UI, and AgentSeek lifecycle spec.",
+  "deepagents/context-engineering": "Bilingual Deep Agents Compare with discovered or manually selected models, shared task and memory snapshots, independent context graphs, Querit search, and opt-in LangSmith traces.",
   "deepagents/default": "Local create_deep_agent runnable with AgentSeek lifecycle spec.",
   "deepagents/mcp": "DeepAgents MCP Tools app with validated stdio/HTTP configuration, a local calculator example, streamed UI, and AgentSeek lifecycle spec.",
   "deepagents/powercontext": "Deep Agents release assistant with PowerContext Memory on embedded seekdb, fresh-conversation recall comparisons, and inspectable bounded context.",
